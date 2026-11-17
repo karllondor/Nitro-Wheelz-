@@ -140,12 +140,7 @@ func _draw() -> void:
     draw_circle(center+Vector2(steer*radius*0.57,0),
         radius*0.38,Color(0.94,0.94,0.96,0.70))
     _button(Rect2(geo["drift"]),"DRIFT",handbrake>0.0,true)
-    var brake_box: Rect2 = Rect2(geo["brake"])
-    _button(brake_box,"BRAKE",brake>0.0)
-    var font: Font = get_theme_default_font()
-    draw_string(font,Vector2(brake_box.position.x,brake_box.position.y+brake_box.size.y*0.84),
-        "REVERSE",HORIZONTAL_ALIGNMENT_CENTER,brake_box.size.x,
-        int(17.0*_ui_scale()),Color(0.92,0.86,0.73))
+    _button(Rect2(geo["brake"]),"BRAKE",brake>0.0)
     _button(Rect2(geo["gas"]),"GAS",throttle>0.0)
     _button(Rect2(geo["pause"]),"Ⅱ",false,false,true)
     _button(Rect2(geo["camera"]),"CAM",false,false,true)
