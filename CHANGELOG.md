@@ -8,7 +8,7 @@
 - BRAKE reduces forward speed; holding BRAKE through a stop engages capped reverse. GAS brings the car forward from reverse.
 - Touch BRAKE button explicitly labels REVERSE; speedometer indicates R when backing.
 - Expanded deterministic physics regression tests for braking transitions, reverse, straight-line traction, speed-dependent steering, and slide recovery.
-- **Godot / Android / Web CI:** NOT RUN at authoring; require checks and hardware playtest before shipping.
+- **CI evidence:** Foundation, Godot 4.7.2 import/smoke/numerical physics, Android ARM64 APK export, and Web export all PASS for code SHA e975440ce2e3d24ab37bb89587a94ad489645ad7. Real Android playtest NOT RUN.
 
 
 ## [0.1.1] — Mobile UI + low-poly Lada hotfix
