@@ -5,12 +5,15 @@ class_name NitroRaceTouch
 
 signal camera_requested
 signal pause_requested
+signal restart_requested
+signal menu_requested
 
 var steer: float = 0.0
 var throttle: float = 0.0
 var brake: float = 0.0
 var handbrake: float = 0.0
 var active_joystick: bool = false
+var overlay_visible: bool = false
 
 var contacts: Dictionary = {}
 var tap_guard: Dictionary = {}
@@ -32,6 +35,10 @@ func _input(event: InputEvent) -> void:
                 camera_requested.emit()
             elif zone == "pause":
                 pause_requested.emit()
+            elif zone == "restart":
+                restart_requested.emit()
+            elif zone == "menu":
+                menu_requested.emit()
         else:
             contacts.erase(touch.index)
         _recompute()
@@ -51,9 +58,14 @@ func _zone_at(pos: Vector2) -> String:
     var radius: float = minf(screen.x,screen.y)*0.19
     if pos.distance_to(Vector2(cx,cy)) < radius*1.35:
         return "steering"
-    if pos.x > screen.x*0.82 and pos.y < screen.y*0.16:
+    if overlay_visible and pos.x > screen.x*0.30 and pos.x < screen.x*0.74:
+        if pos.y > screen.y*0.52 and pos.y < screen.y*0.61:
+            return "restart"
+        if pos.y > screen.y*0.62 and pos.y < screen.y*0.71:
+            return "menu"
+    if pos.x > screen.x*0.79 and pos.y > screen.y*0.15 and pos.y < screen.y*0.22:
         return "pause"
-    if pos.x > screen.x*0.75 and pos.y < screen.y*0.29:
+    if pos.x > screen.x*0.75 and pos.y > screen.y*0.22 and pos.y < screen.y*0.32:
         return "camera"
     if pos.y > screen.y*(0.76 if portrait else 0.71):
         if pos.x > screen.x*0.79:
@@ -107,6 +119,15 @@ func _draw() -> void:
     _control(drift_rect,"DRIFT",handbrake>0.0)
     _control(brake_rect,"BRAKE",brake>0.0)
     _control(gas_rect,"GAS",throttle>0.0)
+    _control(Rect2(Vector2(screen.x*0.82,screen.y*0.15),
+        Vector2(screen.x*0.15,screen.y*0.07)),"II",false)
+    _control(Rect2(Vector2(screen.x*0.78,screen.y*0.23),
+        Vector2(screen.x*0.19,screen.y*0.085)),"CAM",false)
+    if overlay_visible:
+        _control(Rect2(Vector2(screen.x*0.30,screen.y*0.52),
+            Vector2(screen.x*0.44,screen.y*0.09)),"RESTART",false)
+        _control(Rect2(Vector2(screen.x*0.30,screen.y*0.62),
+            Vector2(screen.x*0.44,screen.y*0.09)),"MENU",false)
 
 func _control(rect: Rect2,text: String,active: bool) -> void:
     draw_rect(rect,Color(0.65,0.38,0.13,0.72) if active else Color(0.08,0.09,0.12,0.55))
