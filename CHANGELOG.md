@@ -11,7 +11,8 @@
 - Enlarged DRIFT hit zone and rebuilt GAS/BRAKE as thicker trapezoidal pedal controls with tactile rib styling. All hit areas match their displayed controls.
 - Added CI tests for start heading, straight start, collision bounce on both sides, instant DRIFT, steering responsiveness, and synthetic portrait touch geometry.
 - Car visual identity, two cameras and BRAKE-to-reverse retained. **Android driving feel still requires owner playtest.**
-- **Build/test status:** pending CI when authored.
+- **Build/test status:** Foundation, Godot, Android debug APK and Web export PASS on CI. Physical Android handling, screen appearance and vibration NOT RUN.
+- Build evidence and checksum in HANDOFF.md.
 
 
 ## [0.1.3] — Camera framing and speed-aware steering
