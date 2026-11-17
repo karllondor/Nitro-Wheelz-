@@ -141,7 +141,7 @@ func _make_ui() -> void:
     touch.name = "Steering / Drift / Brake / Gas"
     touch_layer.add_child(touch)
     touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    touch.visible = OS.has_feature("mobile")
+    touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     touch.camera_requested.connect(_toggle_camera)
     touch.pause_requested.connect(_toggle_pause)
     touch.restart_requested.connect(_restart)
