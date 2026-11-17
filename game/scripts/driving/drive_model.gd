@@ -134,10 +134,11 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
         engine *= clampf(1.0 - (speed - 45.0) / 5.0, 0.0, 1.0)
     if sliding:
         engine *= 0.60
-    var braking: float = BRAKE_ACCEL * brake
-    if local_forward < -0.1:
-        braking *= -1.0
-    var longitudinal_accel: float = engine - braking - ROLLING_DRAG * signf(local_forward)
+    # Apply brakes only against existing velocity; never drive backwards from rest.
+    var effective_brake: float = 0.0
+    if absf(local_forward) > 0.001:
+        effective_brake = minf(BRAKE_ACCEL * brake, absf(local_forward) / dt) * signf(local_forward)
+    var longitudinal_accel: float = engine - effective_brake - ROLLING_DRAG * signf(local_forward)
     var acceleration: Vector2 = f * longitudinal_accel
     acceleration += r * (front_lateral_accel + rear_lateral_accel)
     acceleration -= velocity * speed * DRAG_COEFF
