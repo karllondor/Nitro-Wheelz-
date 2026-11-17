@@ -4,14 +4,14 @@ class_name NitroLadaLowPoly
 ## red Lada concept sheet. Front of vehicle is LOCAL -Z, world heading is
 ## handled by the race controller. No third-party geometry or texture is used.
 
-const RED := Color(0.62, 0.025, 0.085)
-const BRIGHT_RED := Color(0.89, 0.035, 0.092)
-const SHADOW_RED := Color(0.38, 0.018, 0.05)
-const GLASS := Color(0.055, 0.075, 0.13)
-const CHROME := Color(0.70, 0.74, 0.77)
-const RUBBER := Color(0.055, 0.055, 0.068)
-const BLACK := Color(0.035, 0.04, 0.055)
-const LAMP := Color(1.0, 0.96, 0.75)
+const RED = Color(0.62, 0.025, 0.085)
+const BRIGHT_RED = Color(0.89, 0.035, 0.092)
+const SHADOW_RED = Color(0.38, 0.018, 0.05)
+const GLASS = Color(0.055, 0.075, 0.13)
+const CHROME = Color(0.70, 0.74, 0.77)
+const RUBBER = Color(0.055, 0.055, 0.068)
+const BLACK = Color(0.035, 0.04, 0.055)
+const LAMP = Color(1.0, 0.96, 0.75)
 
 var front_wheels: Array[Node3D] = []
 var rolling_wheels: Array[Node3D] = []
