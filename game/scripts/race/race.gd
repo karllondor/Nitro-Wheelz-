@@ -6,6 +6,7 @@ const TRACK = preload("res://scripts/world/drift_track.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
+const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 
 var model: NitroDriveModel
 var track: NitroDriftTrack
@@ -49,52 +50,10 @@ func _ready() -> void:
     _update_visuals()
 
 func _make_car() -> void:
-    car_root = Node3D.new()
-    car_root.name = "Kumo Coupe - Prototype"
+    # Visual-only original low-poly car. The driving model owns physics.
+    car_root = LADA.new()
+    car_root.name = "NITRO WHEELZ Lada-inspired four-door"
     add_child(car_root)
-    _box(car_root, "Body",Vector3(1.84,0.48,3.75),Vector3(0,0.65,0),
-        Color(0.86,0.29,0.19))
-    _box(car_root, "Roof",Vector3(1.49,0.33,1.7),Vector3(0,1.02,0.08),
-        Color(0.17,0.18,0.24))
-    _box(car_root, "Windshield",Vector3(1.36,0.035,0.66),Vector3(0,1.20,-0.51),
-        Color(0.09,0.12,0.18))
-    _box(car_root, "Rear window",Vector3(1.36,0.035,0.50),Vector3(0,1.20,0.59),
-        Color(0.09,0.12,0.18))
-    _box(car_root, "Front hood line",Vector3(1.65,0.022,0.08),Vector3(0,0.91,-1.21),
-        Color(0.98,0.41,0.26))
-    for x_side in [-1.0,1.0]:
-        _box(car_root,"Headlight",Vector3(0.47,0.15,0.07),
-            Vector3(x_side*0.57,0.67,-1.91),Color(1.0,0.97,0.79),true)
-        _box(car_root,"Tail lamp",Vector3(0.50,0.16,0.08),
-            Vector3(x_side*0.56,0.69,1.92),Color(0.95,0.15,0.13),true)
-        for z in [-1.26,1.26]:
-            var steering_pivot := Node3D.new()
-            steering_pivot.position = Vector3(x_side*1.01,0.39,z)
-            car_root.add_child(steering_pivot)
-            _box(steering_pivot,"Tyre",Vector3(0.41,0.67,0.80),
-                Vector3.ZERO,Color(0.055,0.060,0.065))
-            _box(steering_pivot,"Wheel centre",Vector3(0.08,0.36,0.38),
-                Vector3(x_side*0.22,0,0),Color(0.58,0.59,0.62))
-            if z < 0.0:
-                front_wheels.append(steering_pivot)
-
-func _box(parent: Node3D, item_name: String, dimensions: Vector3,
-        local_position: Vector3, tint: Color, unshaded: bool=false) -> MeshInstance3D:
-    var instance := MeshInstance3D.new()
-    instance.name = item_name
-    var mesh := BoxMesh.new()
-    mesh.size = dimensions
-    instance.mesh = mesh
-    instance.position = local_position
-    var mat := StandardMaterial3D.new()
-    mat.albedo_color = tint
-    mat.metallic = 0.12
-    mat.roughness = 0.5
-    if unshaded:
-        mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    instance.material_override = mat
-    parent.add_child(instance)
-    return instance
 
 func _make_cameras() -> void:
     overhead = Camera3D.new()
@@ -254,9 +213,10 @@ func _update_visuals() -> void:
     if car_root == null:
         return
     car_root.position = Vector3(model.position.x,0.0,model.position.y)
-    car_root.rotation.y = model.heading
-    for wheel in front_wheels:
-        wheel.rotation.y = model.steering_angle
+    # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
+    car_root.rotation.y = -model.heading
+    if car_root is NitroLadaLowPoly:
+        (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.speed_mps(), get_physics_process_delta_time())
     if hud != null:
         hud.race_time = time_elapsed
         hud.lap = lap
@@ -281,10 +241,10 @@ func _update_camera(delta: float) -> void:
     var forward_dir: Vector2 = model.forward()
     var f: Vector3 = Vector3(forward_dir.x,0.0,forward_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    overhead.size = 45.0 if portrait else 40.0
-    var overhead_target: Vector3 = car_position+Vector3(0,43,8)
+    overhead.size = 52.0 if portrait else 45.0
+    var overhead_target: Vector3 = car_position+Vector3(0,51,11)
     overhead.position = overhead.position.lerp(overhead_target,clampf(delta*7.0,0.0,1.0))
-    overhead.look_at(car_position+f*6.0,Vector3.UP)
+    overhead.look_at(car_position+f*7.0,Vector3.UP)
     var chase_target: Vector3 = car_position-f*9.5+Vector3(0,4.7,0)
     chase.position = chase.position.lerp(chase_target,clampf(delta*4.2,0.0,1.0))
     chase.look_at(car_position+f*11.0+Vector3.UP*1.5,Vector3.UP)
