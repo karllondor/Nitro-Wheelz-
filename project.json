@@ -1,0 +1,16 @@
+{
+  "game_name": "NEW_GAME_NAME",
+  "game_slug": "new-game-name",
+  "game_version": "0.1.0",
+  "starter_version": "0.1.0",
+  "profile": "quick-2d",
+  "targets": [
+    "windows",
+    "linux",
+    "android"
+  ],
+  "target_fps": 60,
+  "controller_support": "default-on",
+  "renderer": "gl_compatibility",
+  "status": "starter-source-unverified"
+}

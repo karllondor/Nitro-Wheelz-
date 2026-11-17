@@ -1,0 +1,27 @@
+name: Godot pinned import and smoke
+on:
+  push:
+    branches: [main, "starter/**", "agent/**"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  godot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download official pinned engine
+        shell: bash
+        run: |
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          echo "GODOT_BIN=$PWD/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Parse/import and run real scenes + input script
+        shell: bash
+        run: bash tools/run_godot_checks.sh
+

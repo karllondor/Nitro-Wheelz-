@@ -1,0 +1,21 @@
+name: Package immutable source artifact
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 tools/check_project.py
+      - run: python3 tools/package_release.py --platform Source
+      - uses: actions/upload-artifact@v4
+        with:
+          name: karll-game-starter-source
+          path: builds/*
+          if-no-files-found: error
+

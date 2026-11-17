@@ -1,0 +1,31 @@
+name: Foundation checks
+on:
+  push:
+    branches: [main, "starter/**", "agent/**"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run negative-control unit tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check project and protected assets against trusted history
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && git rev-parse HEAD^ >/dev/null 2>&1; then
+            python3 tools/check_project.py --base-ref HEAD^
+          elif [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            python3 tools/check_project.py --base-ref origin/main
+          else
+            python3 tools/check_project.py
+          fi
+

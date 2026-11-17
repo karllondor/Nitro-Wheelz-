@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd*)",
+      "Bash(rm -rf *)",
+      "Edit(assets/references/approved/**)",
+      "Write(assets/references/approved/**)"
+    ]
+  }
+}

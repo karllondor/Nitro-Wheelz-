@@ -1,0 +1,29 @@
+# Godot generated caches. Keep .uid files tracked.
+.godot/
+.import/
+.mono/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+# Tooling / IDE
+.vscode/
+.idea/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+# Generated binaries and release packages
+builds/
+dist/
+captures/
+*.apk
+*.aab
+*.exe
+*.app
+*.blend1
+*.blend2
+# Keep exported build artefacts as GitHub Releases, not git blobs
+
