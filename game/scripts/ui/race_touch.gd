@@ -1,7 +1,8 @@
 extends Control
 class_name NitroRaceTouch
-## Pointer-ID-aware touch input. Three fingers can steer, hold throttle and
-## handbrake simultaneously. Deliberately does not synthesize keyboard events.
+## Mobile-first controls: DRIFTIT-like proportions, large labels, rounded
+## buttons. Every visible control shares its exact Rect2 with touch detection.
+## Independent pointer IDs support steering, gas and handbrake simultaneously.
 
 signal camera_requested
 signal pause_requested
@@ -14,9 +15,7 @@ var brake: float = 0.0
 var handbrake: float = 0.0
 var active_joystick: bool = false
 var overlay_visible: bool = false
-
 var contacts: Dictionary = {}
-var tap_guard: Dictionary = {}
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -25,12 +24,59 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     queue_redraw()
 
+func _layout() -> Dictionary:
+    var s: Vector2 = get_viewport_rect().size
+    var portrait: bool = s.y > s.x
+    if portrait:
+        return {
+            "joystick_center": Vector2(s.x*0.215,s.y*0.833),
+            "joystick_radius": s.x*0.174,
+            "drift": Rect2(s.x*0.518,s.y*0.66,s.x*0.453,s.y*0.079),
+            "brake": Rect2(s.x*0.522,s.y*0.755,s.x*0.205,s.y*0.169),
+            "gas": Rect2(s.x*0.748,s.y*0.755,s.x*0.223,s.y*0.169),
+            "pause": Rect2(s.x*0.87,s.y*0.148,s.x*0.103,s.y*0.064),
+            "camera": Rect2(s.x*0.84,s.y*0.22,s.x*0.135,s.y*0.070),
+            "restart": Rect2(s.x*0.285,s.y*0.53,s.x*0.43,s.y*0.086),
+            "menu": Rect2(s.x*0.285,s.y*0.63,s.x*0.43,s.y*0.086)
+        }
+    return {
+        "joystick_center": Vector2(s.x*0.15,s.y*0.78),
+        "joystick_radius": s.y*0.19,
+        "drift": Rect2(s.x*0.70,s.y*0.59,s.x*0.27,s.y*0.12),
+        "brake": Rect2(s.x*0.70,s.y*0.74,s.x*0.12,s.y*0.20),
+        "gas": Rect2(s.x*0.84,s.y*0.74,s.x*0.13,s.y*0.20),
+        "pause": Rect2(s.x*0.92,s.y*0.16,s.x*0.06,s.y*0.10),
+        "camera": Rect2(s.x*0.84,s.y*0.16,s.x*0.065,s.y*0.10),
+        "restart": Rect2(s.x*0.33,s.y*0.51,s.x*0.34,s.y*0.12),
+        "menu": Rect2(s.x*0.33,s.y*0.65,s.x*0.34,s.y*0.12)
+    }
+
+func _zone_at(pos: Vector2) -> String:
+    var geo: Dictionary = _layout()
+    if overlay_visible:
+        if Rect2(geo["restart"]).has_point(pos):
+            return "restart"
+        if Rect2(geo["menu"]).has_point(pos):
+            return "menu"
+        if Rect2(geo["pause"]).has_point(pos):
+            return "pause"
+        return ""
+    if Rect2(geo["pause"]).has_point(pos):
+        return "pause"
+    if Rect2(geo["camera"]).has_point(pos):
+        return "camera"
+    if pos.distance_to(Vector2(geo["joystick_center"])) <= float(geo["joystick_radius"])*1.17:
+        return "steering"
+    for key in ["drift","brake","gas"]:
+        if Rect2(geo[key]).has_point(pos):
+            return key
+    return ""
+
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         var touch: InputEventScreenTouch = event
         if touch.pressed:
-            contacts[touch.index] = {"zone":_zone_at(touch.position),"pos":touch.position}
-            var zone: String = str(contacts[touch.index]["zone"])
+            var zone: String = _zone_at(touch.position)
             if zone == "camera":
                 camera_requested.emit()
             elif zone == "pause":
@@ -39,42 +85,17 @@ func _input(event: InputEvent) -> void:
                 restart_requested.emit()
             elif zone == "menu":
                 menu_requested.emit()
+            contacts[touch.index] = {"zone":zone,"pos":touch.position}
         else:
             contacts.erase(touch.index)
         _recompute()
     elif event is InputEventScreenDrag:
         var drag: InputEventScreenDrag = event
         if contacts.has(drag.index):
-            var data: Dictionary = contacts[drag.index]
-            data["pos"] = drag.position
-            contacts[drag.index] = data
+            var record: Dictionary = contacts[drag.index]
+            record["pos"] = drag.position
+            contacts[drag.index] = record
             _recompute()
-
-func _zone_at(pos: Vector2) -> String:
-    var screen: Vector2 = get_viewport_rect().size
-    var portrait: bool = screen.y > screen.x
-    var cx: float = screen.x*(0.22 if portrait else 0.15)
-    var cy: float = screen.y*(0.84 if portrait else 0.81)
-    var radius: float = minf(screen.x,screen.y)*0.19
-    if pos.distance_to(Vector2(cx,cy)) < radius*1.35:
-        return "steering"
-    if overlay_visible and pos.x > screen.x*0.30 and pos.x < screen.x*0.74:
-        if pos.y > screen.y*0.52 and pos.y < screen.y*0.61:
-            return "restart"
-        if pos.y > screen.y*0.62 and pos.y < screen.y*0.71:
-            return "menu"
-    if pos.x > screen.x*0.79 and pos.y > screen.y*0.15 and pos.y < screen.y*0.22:
-        return "pause"
-    if pos.x > screen.x*0.75 and pos.y > screen.y*0.22 and pos.y < screen.y*0.32:
-        return "camera"
-    if pos.y > screen.y*(0.76 if portrait else 0.71):
-        if pos.x > screen.x*0.79:
-            return "gas"
-        if pos.x > screen.x*0.56:
-            return "brake"
-    if pos.y > screen.y*(0.65 if portrait else 0.56) and pos.x > screen.x*0.52:
-        return "drift"
-    return ""
 
 func _recompute() -> void:
     steer = 0.0
@@ -82,16 +103,16 @@ func _recompute() -> void:
     brake = 0.0
     handbrake = 0.0
     active_joystick = false
-    var screen: Vector2 = get_viewport_rect().size
-    var portrait: bool = screen.y > screen.x
-    var center: Vector2 = Vector2(screen.x*(0.22 if portrait else 0.15),
-        screen.y*(0.84 if portrait else 0.81))
-    var radius: float = minf(screen.x,screen.y)*0.19
-    for data in contacts.values():
-        var zone: String = str(data["zone"])
+    if overlay_visible:
+        return
+    var geo: Dictionary = _layout()
+    var center: Vector2 = Vector2(geo["joystick_center"])
+    var radius: float = float(geo["joystick_radius"])
+    for record in contacts.values():
+        var zone: String = str(record["zone"])
         if zone == "steering":
             active_joystick = true
-            steer = clampf((Vector2(data["pos"]).x-center.x)/radius,-1.0,1.0)
+            steer = clampf((Vector2(record["pos"]).x-center.x)/radius,-1.0,1.0)
         elif zone == "gas":
             throttle = 1.0
         elif zone == "brake":
@@ -99,40 +120,46 @@ func _recompute() -> void:
         elif zone == "drift":
             handbrake = 1.0
 
+func release_all() -> void:
+    contacts.clear()
+    _recompute()
+
+func _ui_scale() -> float:
+    var s: Vector2 = get_viewport_rect().size
+    if s.y > s.x:
+        return clampf(s.x/700.0,1.0,2.2)
+    return clampf(s.y/700.0,0.95,1.6)
+
 func _draw() -> void:
-    var screen: Vector2 = get_viewport_rect().size
-    var portrait: bool = screen.y > screen.x
-    var center: Vector2 = Vector2(screen.x*(0.22 if portrait else 0.15),
-        screen.y*(0.84 if portrait else 0.81))
-    var radius: float = minf(screen.x,screen.y)*0.19
-    draw_circle(center,radius,Color(0.08,0.10,0.14,0.48))
-    draw_arc(center,radius,0.0,TAU,64,Color(0.84,0.84,0.86,0.54),2.0)
-    draw_circle(center+Vector2(steer*radius*0.6,0),radius*0.37,
-        Color(0.86,0.86,0.89,0.72))
-
-    var drift_rect: Rect2 = Rect2(Vector2(screen.x*0.54, screen.y*(0.65 if portrait else 0.56)),
-        Vector2(screen.x*0.42,screen.y*0.095))
-    var brake_rect: Rect2 = Rect2(Vector2(screen.x*0.55,screen.y*(0.78 if portrait else 0.71)),
-        Vector2(screen.x*0.18,screen.y*0.16))
-    var gas_rect: Rect2 = Rect2(Vector2(screen.x*0.77,screen.y*(0.78 if portrait else 0.71)),
-        Vector2(screen.x*0.20,screen.y*0.16))
-    _control(drift_rect,"DRIFT",handbrake>0.0)
-    _control(brake_rect,"BRAKE",brake>0.0)
-    _control(gas_rect,"GAS",throttle>0.0)
-    _control(Rect2(Vector2(screen.x*0.82,screen.y*0.15),
-        Vector2(screen.x*0.15,screen.y*0.07)),"II",false)
-    _control(Rect2(Vector2(screen.x*0.78,screen.y*0.23),
-        Vector2(screen.x*0.19,screen.y*0.085)),"CAM",false)
+    var geo: Dictionary = _layout()
+    var center: Vector2 = Vector2(geo["joystick_center"])
+    var radius: float = float(geo["joystick_radius"])
+    var active: Color = Color(0.80,0.48,0.20,0.67)
+    draw_circle(center,radius,Color(0.09,0.095,0.13,0.42))
+    draw_arc(center,radius,0.0,TAU,72,Color(0.94,0.93,0.95,0.68),3.0*_ui_scale())
+    draw_circle(center+Vector2(steer*radius*0.57,0),
+        radius*0.38,Color(0.94,0.94,0.96,0.70))
+    _button(Rect2(geo["drift"]),"DRIFT",handbrake>0.0,true)
+    _button(Rect2(geo["brake"]),"BRAKE",brake>0.0)
+    _button(Rect2(geo["gas"]),"GAS",throttle>0.0)
+    _button(Rect2(geo["pause"]),"Ⅱ",false,false,true)
+    _button(Rect2(geo["camera"]),"CAM",false,false,true)
     if overlay_visible:
-        _control(Rect2(Vector2(screen.x*0.30,screen.y*0.52),
-            Vector2(screen.x*0.44,screen.y*0.09)),"RESTART",false)
-        _control(Rect2(Vector2(screen.x*0.30,screen.y*0.62),
-            Vector2(screen.x*0.44,screen.y*0.09)),"MENU",false)
+        _button(Rect2(geo["restart"]),"RESTART",false)
+        _button(Rect2(geo["menu"]),"GARAGE / MENU",false)
 
-func _control(rect: Rect2,text: String,active: bool) -> void:
-    draw_rect(rect,Color(0.65,0.38,0.13,0.72) if active else Color(0.08,0.09,0.12,0.55))
-    draw_rect(rect,Color(0.85,0.85,0.85,0.4),false,2.0)
+func _button(rect: Rect2, label: String, pushed: bool,
+        highlight: bool=false, small: bool=false) -> void:
+    var scale: float = _ui_scale()
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.70,0.37,0.13,0.76) if pushed else Color(0.11,0.10,0.13,0.52)
+    style.border_color = Color(0.98,0.90,0.79,0.72)
+    style.set_border_width_all(int(maxf(2.0,2.0*scale)))
+    style.set_corner_radius_all(int(minf(rect.size.y*0.22,18.0*scale)))
+    draw_style_box(style,rect)
     var font: Font = get_theme_default_font()
-    draw_string(font,rect.position+Vector2(rect.size.x*0.22,rect.size.y*0.57),
-        text,HORIZONTAL_ALIGNMENT_LEFT,-1,21,Color.WHITE)
-
+    var font_size: int = int((21.0 if small else 31.0)*scale)
+    var text_color: Color = Color(1.0,0.72,0.32) if highlight else Color(0.97,0.97,0.97)
+    var baseline: float = rect.position.y + rect.size.y*0.5 + font.get_ascent(font_size)*0.37
+    draw_string(font,Vector2(rect.position.x,baseline),
+        label,HORIZONTAL_ALIGNMENT_CENTER,rect.size.x,font_size,text_color)

@@ -1,7 +1,7 @@
 extends Control
 class_name NitroRaceHUD
-## Adaptive HUD: wide desktop and portrait mobile. Decorative only (touch uses
-## a separate independent multitouch layer for reliable simultaneous controls).
+## Responsive, high-contrast mobile HUD. Size is based on the real viewport,
+## not small font defaults inherited from the desktop starter.
 
 var race_time: float = 0.0
 var lap: int = 1
@@ -15,71 +15,81 @@ var paused: bool = false
 var finished: bool = false
 var road_status: String = "ON TRACK"
 
+const LIGHT := Color(0.99,0.99,0.99)
+const ORANGE := Color(1.0,0.69,0.27)
+const MUTED := Color(0.79,0.83,0.88)
+
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _process(_delta: float) -> void:
     queue_redraw()
 
-func _draw() -> void:
-    var area: Vector2 = get_viewport_rect().size
-    var portrait: bool = area.y > area.x
-    var scale_factor: float = clampf(area.x / (720.0 if portrait else 1280.0), 0.75, 1.25)
+func _font_scale() -> float:
+    var view: Vector2 = get_viewport_rect().size
+    if view.y > view.x:
+        return clampf(view.x/700.0,1.0,2.25)
+    return clampf(view.y/700.0,0.95,1.6)
+
+func _panel(rect: Rect2) -> void:
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.04,0.05,0.09,0.73)
+    style.set_corner_radius_all(int(18.0*_font_scale()))
+    style.border_color = Color(0.94,0.85,0.78,0.12)
+    style.set_border_width_all(1)
+    draw_style_box(style,rect)
+
+func _print(rect: Rect2,text: String,rel_y: float,point_size: int,
+        tint: Color=LIGHT,center: bool=false) -> void:
     var font: Font = get_theme_default_font()
-    var white := Color(0.94,0.94,0.95)
-    var amber := Color(1.0,0.67,0.24)
-    var panel := Color(0.05,0.07,0.11,0.76)
-    var pad: float = 16.0 * scale_factor
-    var top_y: float = 16.0 * scale_factor
-    var left_w: float = minf(area.x*0.57, 410.0*scale_factor)
-    var panel_h: float = 128.0*scale_factor
-    draw_rect(Rect2(Vector2(pad,top_y),Vector2(left_w,panel_h)),panel)
-    var size_small: int = int(18.0 * scale_factor)
-    var size_big: int = int(39.0 * scale_factor)
-    var location: String = "SHIN-KAWA   •   LAP " + str(lap) + "/" + str(lap_limit)
-    draw_string(font,Vector2(pad*1.6,top_y+28.0*scale_factor),location,
-        HORIZONTAL_ALIGNMENT_LEFT,-1,size_small,white)
-    draw_string(font,Vector2(pad*1.6,top_y+83.0*scale_factor),
-        _time_string(race_time),HORIZONTAL_ALIGNMENT_LEFT,-1,size_big,white)
-    draw_string(font,Vector2(pad*1.6,top_y+111.0*scale_factor),
-        "JAPAN DRIFT NIGHTS",HORIZONTAL_ALIGNMENT_LEFT,-1,int(15*scale_factor),amber)
+    var sz: int = int(float(point_size)*_font_scale())
+    var baseline: float = rect.position.y + rect.size.y*rel_y + font.get_ascent(sz)*0.28
+    var x: float = rect.position.x if center else rect.position.x+16.0*_font_scale()
+    var width: float = rect.size.x if center else rect.size.x-24.0*_font_scale()
+    draw_string(font,Vector2(x,baseline),text,
+        HORIZONTAL_ALIGNMENT_CENTER if center else HORIZONTAL_ALIGNMENT_LEFT,
+        width,sz,tint)
 
-    var right_width: float = minf(area.x*0.30,210.0*scale_factor)
-    var score_x: float = area.x - right_width - pad
-    draw_rect(Rect2(Vector2(score_x,top_y),Vector2(right_width,panel_h)),panel)
-    draw_string(font,Vector2(score_x+14*scale_factor,top_y+28*scale_factor),
-        "DRIFT SCORE",HORIZONTAL_ALIGNMENT_LEFT,-1,size_small,white)
-    draw_string(font,Vector2(score_x+14*scale_factor,top_y+78*scale_factor),
-        str(score),HORIZONTAL_ALIGNMENT_LEFT,-1,size_big,amber)
-    draw_string(font,Vector2(score_x+14*scale_factor,top_y+111*scale_factor),
-        "COMBO  x" + str(snappedf(combo,0.1)),HORIZONTAL_ALIGNMENT_LEFT,-1,
-        int(16*scale_factor),white)
+func _draw() -> void:
+    var s: Vector2 = get_viewport_rect().size
+    var portrait: bool = s.y>s.x
+    var margin: float = s.x*(0.023 if portrait else 0.016)
+    var top: float = s.y*(0.015 if portrait else 0.026)
+    var left: Rect2 = Rect2(margin,top,s.x*(0.52 if portrait else 0.32),
+        s.y*(0.124 if portrait else 0.20))
+    var right: Rect2 = Rect2(s.x*(0.78 if portrait else 0.81),top,
+        s.x*(0.20 if portrait else 0.17),left.size.y)
+    _panel(left)
+    _panel(right)
 
-    var bottom_y: float = area.y * (0.62 if portrait else 0.78)
-    draw_rect(Rect2(Vector2(pad,bottom_y),Vector2(182*scale_factor,84*scale_factor)),panel)
-    draw_string(font,Vector2(pad+14*scale_factor,bottom_y+35*scale_factor),
-        str(int(speed)) + " KM/H",HORIZONTAL_ALIGNMENT_LEFT,-1,int(27*scale_factor),white)
-    draw_string(font,Vector2(pad+14*scale_factor,bottom_y+66*scale_factor),
-        str(int(absf(drift_degrees))) + "°  " + road_status,
-        HORIZONTAL_ALIGNMENT_LEFT,-1,int(14*scale_factor),amber)
+    _print(left,"SHIN-KAWA  •  LAP %d/%d" % [lap,lap_limit],
+        0.23,19,MUTED)
+    _print(left,_time_string(race_time),0.61,43,LIGHT)
+    _print(left,"JAPAN DRIFT NIGHTS",0.88,15,ORANGE)
 
-    draw_rect(Rect2(Vector2(area.x*0.35,area.y-38*scale_factor),
-        Vector2(area.x*0.30,29*scale_factor)),Color(0.05,0.07,0.11,0.70))
-    draw_string(font,Vector2(area.x*0.37,area.y-17*scale_factor),
-        mode + "  •  C / Xbox Y",HORIZONTAL_ALIGNMENT_LEFT,-1,
-        int(15*scale_factor),white)
+    _print(right,"SCORE",0.23,19,MUTED,true)
+    _print(right,str(score),0.59,39,LIGHT,true)
+    _print(right,"x%.1f" % combo,0.88,18,ORANGE,true)
 
-    if finished or paused:
-        draw_rect(Rect2(Vector2.ZERO,area),Color(0.02,0.03,0.05,0.62))
-        var heading: String = "FINISH — 3 LAPS" if finished else "PAUSED"
-        draw_string(font,Vector2(area.x*0.26,area.y*0.43),heading,
-            HORIZONTAL_ALIGNMENT_LEFT,-1,int(36*scale_factor),white)
-        draw_string(font,Vector2(area.x*0.26,area.y*0.49),
-            "Press R to restart · Esc / Menu to resume or exit",
-            HORIZONTAL_ALIGNMENT_LEFT,-1,int(18*scale_factor),amber)
+    var speedbox: Rect2 = Rect2(margin,s.y*(0.601 if portrait else 0.755),
+        s.x*(0.32 if portrait else 0.18),
+        s.y*(0.089 if portrait else 0.16))
+    _panel(speedbox)
+    _print(speedbox,"%d KM/H" % int(speed),0.43,31,LIGHT)
+    _print(speedbox,"%d°  %s" % [int(absf(drift_degrees)),road_status],
+        0.79,15,ORANGE)
+
+    if not portrait:
+        var tag: Rect2 = Rect2(s.x*0.39,s.y*0.915,s.x*0.21,s.y*0.06)
+        _panel(tag)
+        _print(tag,mode,0.58,17,MUTED,true)
+
+    if paused or finished:
+        draw_rect(Rect2(Vector2.ZERO,s),Color(0.015,0.018,0.03,0.60))
+        var popup: Rect2 = Rect2(s.x*0.19,s.y*0.38,s.x*0.62,s.y*0.16)
+        _panel(popup)
+        _print(popup,"FINISHED" if finished else "PAUSED",0.38,41,ORANGE,true)
+        _print(popup,"Tap RESTART or GARAGE / MENU",0.74,21,LIGHT,true)
 
 func _time_string(seconds: float) -> String:
-    var minutes: int = int(seconds / 60.0)
-    var rest: float = fmod(seconds,60.0)
-    return "%02d:%05.2f" % [minutes,rest]
-
+    return "%02d:%05.2f" % [int(seconds/60.0),fmod(seconds,60.0)]
