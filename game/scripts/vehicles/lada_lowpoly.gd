@@ -39,7 +39,7 @@ func _material(col: Color, metallic: float = 0.0, glow: bool = false) -> Standar
     return mat
 
 func _cube(label: String, pos: Vector3, size: Vector3,
-        color: Color, metallic: float = 0.0, parent: Node3D = self) -> MeshInstance3D:
+        color: Color, metallic: float = 0.0, parent: Node3D = null) -> MeshInstance3D:
     var part := MeshInstance3D.new()
     part.name = label
     var mesh := BoxMesh.new()
@@ -47,11 +47,17 @@ func _cube(label: String, pos: Vector3, size: Vector3,
     part.mesh = mesh
     part.position = pos
     part.material_override = _material(color, metallic)
-    parent.add_child(part)
+    if parent == null:
+        add_child(part)
+    else:
+        if parent == null:
+        add_child(part)
+    else:
+        parent.add_child(part)
     return part
 
 func _cylinder(label: String, pos: Vector3, radius: float,
-        length: float, col: Color, parent: Node3D = self,
+        length: float, col: Color, parent: Node3D = null,
         axis_x: bool = false) -> MeshInstance3D:
     var part := MeshInstance3D.new()
     part.name = label
@@ -66,7 +72,13 @@ func _cylinder(label: String, pos: Vector3, radius: float,
     if axis_x:
         part.rotation.z = PI * 0.5
     part.material_override = _material(col, 0.45 if col == CHROME else 0.0)
-    parent.add_child(part)
+    if parent == null:
+        add_child(part)
+    else:
+        if parent == null:
+        add_child(part)
+    else:
+        parent.add_child(part)
     return part
 
 func _make_body() -> void:
