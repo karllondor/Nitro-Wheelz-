@@ -1,19 +1,18 @@
-# Nitro Wheelz — 0.1.1 Android visual + UI hotfix
+# Nitro Wheelz v0.1.2 grip/reverse handoff
 
-Date: 2026-11-17
 Model: GPT-6
-Repository: https://github.com/karllondor/Nitro-Wheelz-
-Branch: agent/nitro-v0.1.1-mobile-lada
+Branch: agent/nitro-v0.1.2-grip-reverse
+Date: 2026-11-17
+Status: Pending CI, hardware playtest NOT RUN
 
-## Delivered
-Fixed inverse Godot Y-axis mesh yaw; added low-poly red four-door Lada-inspired procedural mesh based on the approved concept sheet; improved portrait mobile HUD/menu font scale and joystick / BRAKE / GAS / DRIFT control sizes; preserved top-down/chase; updated version, Android/Web export filenames and automated alignment/multitouch tests.
+Source videos: owner-provided Nitro Wheelz (1000075990.mp4) and DRIFTIT (1000075991.mp4). Owner reported excess drift/sliding and absence of BRAKE-to-REVERSE.
 
-## Evidence
-CI / APK / Web: NOT RUN at document write time. Update with exact GitHub workflow URLs after checks finish.
-Real Android installation and appearance: NOT RUN. Controller USB/Bluetooth: NOT RUN.
+Updated: original deterministic two-axle driving model rear traction under power (velocity dependent), yaw response and neutral steering recovery, back-to-forward transition, BRAKE reverse drive. Maintained camera, Lada, track, mobile touches, Xbox mapping.
+Source-validated mechanic references:
+https://driftit.app/guides/drifting-explained
+https://driftit.app/guides/drifting-with-a-controller
+https://driftit.app/blog/building-a-drift-game-in-threejs
 
-## Build note
-Previous v0.1.0 test APK used a random CI debug signing key. v0.1.1 build uses a newly generated debug key, so Android will probably require uninstalling v0.1.0 before installing v0.1.1. This can erase local app data. Production signing must eventually use stable secrets and release keystore management.
+Acceptance: CI Foundation / Godot physics tests / Web export / arm64 debug APK must pass. Real Android playtest must confirm feel and that reverse starts after braking to a stop. Can't assert exact feel match to proprietary DRIFTIT physics from articles alone.
 
-## Pending validation
-Start straight on race line and matching car heading; check true multi-finger throttle/steering/drift; large legible portrait UI; front/rear chase; no regressions to drift model. Mobile graphics and performance require owner-provided screenshots/video.
+Signing: CI generates a fresh debug signing key each run; old test build may need uninstall before new test APK. Stable Android signing is a separate pending improvement.
