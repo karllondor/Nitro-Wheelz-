@@ -27,6 +27,10 @@ var combo_timer: float = 0.0
 var paused: bool = false
 var finished: bool = false
 var offroad: bool = false
+var collision_cooldown: float = 0.0
+var camera_shake_strength: float = 0.0
+var camera_shake_phase: float = 0.0
+var wall_collision_count: int = 0
 
 var skid_mesh: ImmediateMesh
 var skid_material: StandardMaterial3D
@@ -110,6 +114,7 @@ func _physics_process(delta: float) -> void:
     if paused or finished:
         return
     time_elapsed += delta
+    collision_cooldown = maxf(0.0,collision_cooldown-delta)
 
     var steer: float = Input.get_axis("steer_left","steer_right")
     var gas: float = Input.get_action_strength("throttle")
@@ -126,22 +131,39 @@ func _physics_process(delta: float) -> void:
     model.step(delta*0.5,steer,gas,braking,handbrake)
     model.step(delta*0.5,steer,gas,braking,handbrake)
 
+    # Resolve physical contact against the SAME raised wall shown on screen.
+    # Never drive through the wall into sand and then teleport back.
+    var collision: Dictionary = track.resolve_wall(model.position,model.velocity)
+    if bool(collision["hit"]):
+        model.position = Vector2(collision["position"])
+        model.velocity = Vector2(collision["velocity"])
+        model.yaw_rate *= 0.35
+        model.slide_hold = 0.0
+        model.rear_traction = maxf(model.rear_traction,0.80)
+        had_skid = false
+        if float(collision["impact_speed"]) > 1.2:
+            _wall_feedback(float(collision["impact_speed"]))
     var info: Dictionary = track.sample_info(model.position)
-    var lateral_distance: float = float(info["distance"])
-    offroad = lateral_distance > track.HALF_ROAD_WIDTH
-    if offroad:
-        model.velocity *= maxf(0.0,1.0-1.15*delta)
-    if lateral_distance > track.HALF_ROAD_WIDTH+2.1:
-        var outward: Vector2 = model.position - Vector2(info["point"])
-        if outward.length_squared() > 0.001:
-            model.position = Vector2(info["point"]) + outward.normalized()*(track.HALF_ROAD_WIDTH+2.0)
-        model.velocity *= 0.45
-        model.yaw_rate *= 0.55
+    offroad = false
 
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     _drift_scoring(delta)
     _record_marks(delta)
     _update_visuals()
+
+func _wall_feedback(impact_speed: float) -> void:
+    if collision_cooldown > 0.0:
+        return
+    collision_cooldown = 0.35
+    wall_collision_count += 1
+    camera_shake_strength = clampf(impact_speed*0.035,0.16,0.43)
+    # On Android Godot requires the VIBRATE export permission. The user may
+    # disable vibrations in system accessibility settings.
+    if OS.has_feature("mobile"):
+        Input.vibrate_handheld(100,clampf(impact_speed/17.0,0.3,0.75))
+    var joypads: Array[int] = Input.get_connected_joypads()
+    if not joypads.is_empty():
+        Input.start_joy_vibration(joypads[0],0.20,0.42,0.14)
 
 func _lap_logic(progress: float, tangent: Vector2, _delta: float) -> void:
     # Count only a forward finish-line crossing after sufficient driving time.
@@ -233,6 +255,8 @@ func _update_visuals() -> void:
         touch.overlay_visible = paused or finished
 
 func _process(delta: float) -> void:
+    camera_shake_strength = move_toward(camera_shake_strength,0.0,delta*1.6)
+    camera_shake_phase += delta*36.0
     _update_camera(delta)
 
 func _update_camera(delta: float) -> void:
@@ -251,6 +275,12 @@ func _update_camera(delta: float) -> void:
     var chase_target: Vector3 = car_position-f*15.0+Vector3(0,6.5,0)
     chase.position = chase.position.lerp(chase_target,clampf(delta*4.2,0.0,1.0))
     chase.look_at(car_position+f*15.0+Vector3.UP*1.7,Vector3.UP)
+    # Short, reversible camera shake. Applies to either camera without
+    # changing its yaw or overwriting chase smoothing.
+    overhead.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.42
+    overhead.v_offset = cos(camera_shake_phase*1.3)*camera_shake_strength*0.42
+    chase.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.38
+    chase.v_offset = cos(camera_shake_phase*1.3)*camera_shake_strength*0.22
 
 func _toggle_camera() -> void:
     camera_mode = 1-camera_mode
@@ -278,6 +308,9 @@ func _restart() -> void:
     skid_segments.clear()
     skid_mesh.clear_surfaces()
     had_skid = false
+    collision_cooldown = 0.0
+    camera_shake_strength = 0.0
+    wall_collision_count = 0
     _update_visuals()
 
 func _unhandled_input(event: InputEvent) -> void:

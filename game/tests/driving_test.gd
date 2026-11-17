@@ -142,6 +142,19 @@ func _run() -> void:
         _fail("Car stopped responding to steering")
         return
 
+    # Immediate handbrake grab under steering, not a visibly delayed
+    # grip lerp after multiple rendering frames.
+    var flick: NitroDriveModel = DRIVE.new()
+    flick.reset(Vector2.ZERO,0.0)
+    flick.velocity = Vector2(0,-14.0)
+    flick.step(STEP,0.72,0.9,0.0,1.0)
+    if flick.rear_traction >= 0.70 or absf(flick.yaw_rate) <= 0.08:
+        _fail("DRIFT did not trigger rear release and yaw impulse immediately")
+        return
+    if absf(flick.steering_angle) <= 0.055:
+        _fail("Steering remains sluggish during the first driving tick")
+        return
+
     var track: NitroDriftTrack = TRACK.new()
     root.add_child(track)
     await process_frame
@@ -150,6 +163,39 @@ func _run() -> void:
         return
     if float(track.sample_info(track.start_position())["distance"]) > 0.1:
         _fail("Start does not lie on the road")
+        return
+    # The initial road MUST run up the portrait screen (-Z in world),
+    # with the first turn to the right after the vertical section.
+    var start_forward: Vector2 = (track.centerline[3]-track.centerline[0]).normalized()
+    if start_forward.distance_to(Vector2(0,-1)) > 0.09:
+        _fail("Start straight is not aligned vertically north")
+        return
+    if absf(track.centerline[24].x-track.centerline[0].x)>1.0:
+        _fail("Start starts turning before the first long straight")
+        return
+    var tangent: Vector2 = Vector2(track.sample_info(track.start_position())["tangent"])
+    var normal: Vector2 = Vector2(-tangent.y,tangent.x)
+    for sign_side in [-1.0,1.0]:
+        var outward: Vector2 = normal*sign_side
+        var penetrating_pos: Vector2 = track.start_position() + outward*(track.HALF_ROAD_WIDTH+2.0)
+        var moving_out: Vector2 = outward*12.0 + tangent*5.0
+        var collision: Dictionary = track.resolve_wall(penetrating_pos,moving_out)
+        if not bool(collision["hit"]):
+            _fail("Visible wall does not produce a collision")
+            return
+        if float(collision["impact_speed"]) < 11.5:
+            _fail("Wall did not record the impact speed")
+            return
+        if Vector2(collision["velocity"]).dot(outward) >= 0.0:
+            _fail("Wall failed to bounce car back toward track")
+            return
+        var corrected: Dictionary = track.sample_info(Vector2(collision["position"]))
+        if float(corrected["distance"]) > track.HALF_ROAD_WIDTH-track.CAR_WALL_CLEARANCE+0.08:
+            _fail("Collision left car center outside the visible wall")
+            return
+    var inner: Vector2 = track.start_position()+normal*2.0
+    if bool(track.resolve_wall(inner,normal*2.0)["hit"]):
+        _fail("Wall collision triggers on normal driving surface")
         return
     track.queue_free()
     print("PASS: reverse, brake transition, grip calibration, recoverable drift, deterministic physics and circuit")

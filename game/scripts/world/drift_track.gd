@@ -2,14 +2,20 @@ extends Node3D
 class_name NitroDriftTrack
 ## Original fictional Japanese circuit, built from spline samples. No real circuit map.
 
-const HALF_ROAD_WIDTH: float = 8.2
+const HALF_ROAD_WIDTH: float = 12.0
+const CAR_WALL_CLEARANCE: float = 1.18
 const SAMPLE_SUBDIVISIONS: int = 12
+# Start line follows a straight world-north (-Z) section; the first
+# meaningful turn is RIGHT. This is intentionally aligned with portrait
+# top-down navigation, not an arbitrary rotated camera.
 const CONTROL_POINTS: Array[Vector2] = [
-    Vector2(-65, -50), Vector2(-35, -78), Vector2(12, -84),
-    Vector2(63, -67), Vector2(85, -30), Vector2(79, 12),
-    Vector2(48, 32), Vector2(11, 26), Vector2(-10, 45),
-    Vector2(-13, 76), Vector2(-54, 78), Vector2(-83, 36),
-    Vector2(-90, -10)
+    Vector2(-70, 40), Vector2(-70, 0), Vector2(-70, -40),
+    Vector2(-45, -85), Vector2(10, -88), Vector2(58, -70),
+    Vector2(73, -30), Vector2(48, 10), Vector2(25, 30),
+    Vector2(55, 52), Vector2(73, 82), Vector2(55, 116),
+    Vector2(15, 125), Vector2(-15, 96), Vector2(-40, 122),
+    Vector2(-75, 118), Vector2(-94, 91), Vector2(-75, 72),
+    Vector2(-70, 65)
 ]
 
 var centerline: Array[Vector2] = []
@@ -169,22 +175,75 @@ func _build_start_line() -> void:
             board.material_override = material
             add_child(board)
 
+func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
+    # The visible wall is positioned at HALF_ROAD_WIDTH; clip the
+    # car centre slightly inside it to account for vehicle body width.
+    # Returned impulse is used by camera and device feedback.
+    var info: Dictionary = sample_info(pos)
+    var lateral: float = float(info["distance"])
+    var limit: float = HALF_ROAD_WIDTH - CAR_WALL_CLEARANCE
+    if lateral <= limit:
+        return {"hit":false,"position":pos,"velocity":travel_velocity,
+            "impact_speed":0.0,"normal":Vector2.ZERO}
+    var toward_wall: Vector2 = pos - Vector2(info["point"])
+    if toward_wall.length_squared() < 0.00001:
+        var tangent: Vector2 = Vector2(info["tangent"])
+        toward_wall = Vector2(-tangent.y,tangent.x)
+    toward_wall = toward_wall.normalized()
+    var outward_speed: float = maxf(travel_velocity.dot(toward_wall),0.0)
+    var reposition: Vector2 = Vector2(info["point"]) + toward_wall*limit
+    # Kill outward velocity, return a gentle 18% bounce, lose some
+    # tangential speed. No teleport-to-road or off-road sand penalty.
+    var v: Vector2 = (travel_velocity - toward_wall*(1.18*outward_speed))*0.80
+    return {"hit":true,"position":reposition,"velocity":v,
+        "impact_speed":outward_speed,"normal":toward_wall}
+
 func _build_barriers() -> void:
-    for i in range(0, centerline.size(), 4):
-        var tangent: Vector2 = _tangent(i)
-        var lateral: Vector2 = Vector2(-tangent.y,tangent.x)
+    # Continuous raised painted walls, not isolated boxes. Two triangles
+    # for the inside-facing upright and two for its visible top cap.
+    # One mesh draw call per material instead of 100+ MeshInstance nodes.
+    var surface := SurfaceTool.new()
+    surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var total: int = centerline.size()
+    for i in range(total):
+        var next_i: int = (i+1)%total
+        var tangent0: Vector2 = _tangent(i)
+        var tangent1: Vector2 = _tangent(next_i)
+        var lateral0: Vector2 = Vector2(-tangent0.y,tangent0.x)
+        var lateral1: Vector2 = Vector2(-tangent1.y,tangent1.x)
+        var colour: Color = Color(0.90,0.92,0.91) if int(i/3)%2==0 else Color(0.14,0.42,0.69)
         for side in [-1.0,1.0]:
-            var p: Vector2 = centerline[i] + lateral*(HALF_ROAD_WIDTH+1.4)*side
-            var item := MeshInstance3D.new()
-            var cube := BoxMesh.new()
-            cube.size = Vector3(3.5,0.55,0.45)
-            item.mesh = cube
-            item.position = Vector3(p.x,0.31,p.y)
-            item.rotation.y = atan2(tangent.x,-tangent.y) + PI/2.0
-            var mat := StandardMaterial3D.new()
-            mat.albedo_color = Color(0.95,0.75,0.3) if (i/4)%2 == 0 else Color(0.17,0.18,0.2)
-            item.material_override = mat
-            add_child(item)
+            var p: Vector2 = centerline[i] + lateral0*side*(HALF_ROAD_WIDTH+0.10)
+            var q: Vector2 = centerline[next_i] + lateral1*side*(HALF_ROAD_WIDTH+0.10)
+            var bottom_a := Vector3(p.x,0.065,p.y)
+            var bottom_b := Vector3(q.x,0.065,q.y)
+            var top_a := Vector3(p.x,1.30,p.y)
+            var top_b := Vector3(q.x,1.30,q.y)
+            _wall_tri(surface,bottom_a,bottom_b,top_a,colour)
+            _wall_tri(surface,top_a,bottom_b,top_b,colour)
+            var p_out: Vector2 = p+lateral0*side*0.36
+            var q_out: Vector2 = q+lateral1*side*0.36
+            var top_out_a := Vector3(p_out.x,1.30,p_out.y)
+            var top_out_b := Vector3(q_out.x,1.30,q_out.y)
+            _wall_tri(surface,top_a,top_b,top_out_a,colour)
+            _wall_tri(surface,top_out_a,top_b,top_out_b,colour)
+    var mesh: ArrayMesh = surface.commit()
+    var mat := StandardMaterial3D.new()
+    mat.vertex_color_use_as_albedo = true
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mesh.surface_set_material(0,mat)
+    var walls := MeshInstance3D.new()
+    walls.name = "Continuous wall collision boundary — blue white"
+    walls.mesh = mesh
+    add_child(walls)
+
+func _wall_tri(surface: SurfaceTool,a: Vector3,b: Vector3,
+        c: Vector3,col: Color) -> void:
+    for point in [a,b,c]:
+        surface.set_normal(Vector3.UP)
+        surface.set_color(col)
+        surface.add_vertex(point)
 
 func _build_track_props() -> void:
     # Sparse low-poly scenery; no branded venues or real-world circuit layouts.

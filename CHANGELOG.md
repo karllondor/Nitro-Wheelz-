@@ -1,5 +1,20 @@
 # Nitro Wheelz change history
 
+## [0.1.4] — Mobile track walls, rapid drift and portrait first straight
+- Rebuilt the fictional Shin-Kawa layout with a vertically northbound starting straight, followed by a right turn (natural rightward joystick action).
+- Widened racing road from 16.4 m total to 24 m total.
+- Replaced decorative disconnected barrier segments and the off-road sand penalty / invisible speed clamp with continuous raised blue-and-white walls and a vehicle-width-adjusted rebound at the same visible edge.
+- Wall contact consumes outward velocity, returns a mild 18% inward bounce, damps wall-skimming speed, and clears any active slide combo; strong impacts cause a short bounded camera shake and phone/controller haptic feedback.
+- Enabled Android VIBRATE export permission. Haptics still require real-device testing and may be disabled by system settings.
+- Made steering animation much faster and biased small analog thumb displacements toward earlier response.
+- Reduced handbrake rear-grip engagement time and added a one-shot yaw flick on press (only when moving and steering; no automatic repeated spin).
+- Enlarged DRIFT hit zone and rebuilt GAS/BRAKE as thicker trapezoidal pedal controls with tactile rib styling. All hit areas match their displayed controls.
+- Added CI tests for start heading, straight start, collision bounce on both sides, instant DRIFT, steering responsiveness, and synthetic portrait touch geometry.
+- Car visual identity, two cameras and BRAKE-to-reverse retained. **Android driving feel still requires owner playtest.**
+- **Build/test status:** Foundation, Godot, Android debug APK and Web export PASS on CI. Physical Android handling, screen appearance and vibration NOT RUN.
+- Build evidence and checksum in HANDOFF.md.
+
+
 ## [0.1.3] — Camera framing and speed-aware steering
 - Removed the user-unwanted REVERSE subtitle from the BRAKE button (braking and reversing remain functional).
 - Zoomed out portrait overhead camera (52 -> 78 world units) and landscape camera (45 -> 62), widened and backed off chase camera.
