@@ -11,7 +11,14 @@ func _run() -> void:
     var b: NitroDriveModel = DRIVE.new()
     a.reset(Vector2.ZERO,0.0)
     b.reset(Vector2.ZERO,0.0)
-    var idle: NitroDriveModel = DRIVE.new()\n    idle.reset(Vector2.ZERO,0.0)\n    for frame in range(120):\n        idle.step(1.0/240.0,1.0,0.0,1.0,0.0)\n    if idle.speed_mps()>0.01 or absf(idle.heading)>0.01:\n        _fail("Stopped car moved or rotated under brake/steer without throttle")\n        return\n    var starting_speed: float = a.speed_mps()
+    var idle: NitroDriveModel = DRIVE.new()
+    idle.reset(Vector2.ZERO,0.0)
+    for frame in range(120):
+        idle.step(1.0/240.0,1.0,0.0,1.0,0.0)
+    if idle.speed_mps()>0.01 or absf(idle.heading)>0.01:
+        _fail("Stopped car moved or rotated under brake/steer without throttle")
+        return
+    var starting_speed: float = a.speed_mps()
     for i in range(1600):
         var steer: float = 0.65 if i>300 and i<1050 else -0.25
         var gas: float = 1.0 if i<900 else 0.52
