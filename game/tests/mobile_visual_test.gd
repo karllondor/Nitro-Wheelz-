@@ -9,33 +9,35 @@ func _run() -> void:
     root.add_child(race)
     await process_frame
     await process_frame
-    var car: NitroLadaLowPoly = race.car_root as NitroLadaLowPoly
+    var model: NitroDriveModel = race.get("model")
+    var track: NitroDriftTrack = race.get("track")
+    var car: NitroLadaLowPoly = race.get("car_root") as NitroLadaLowPoly
     if car == null:
         _fail("Race does not contain the procedural low-poly Lada")
         return
     if car.rolling_wheels.size() != 4 or car.front_wheels.size() != 2:
         _fail("Wrong count of functional wheels")
         return
-    var forward2: Vector2 = race.model.forward()
+    var forward2: Vector2 = model.forward()
     var visible_front3: Vector3 = -car.global_transform.basis.z
     var visible_front2 := Vector2(visible_front3.x,visible_front3.z).normalized()
     if visible_front2.dot(forward2) < 0.999:
         _fail("Visual model points away from the driving model heading")
         return
-    var road: Dictionary = race.track.sample_info(race.model.position)
+    var road: Dictionary = track.sample_info(model.position)
     if forward2.dot(Vector2(road["tangent"])) < 0.96:
         _fail("Car spawns misaligned with road tangent")
         return
-    var before: Vector2 = race.model.position
-    race._toggle_camera()
-    if race.camera_mode != 1 or race.model.position.distance_to(before) > 0.00001:
+    var before: Vector2 = model.position
+    race.call("_toggle_camera")
+    if int(race.get("camera_mode")) != 1 or model.position.distance_to(before) > 0.00001:
         _fail("Chase camera altered driving state")
         return
     race._toggle_camera()
-    if race.camera_mode != 0:
+    if int(race.get("camera_mode")) != 0:
         _fail("Cannot return to default top-down camera")
         return
-    var controls: NitroRaceTouch = race.touch
+    var controls: NitroRaceTouch = race.get("touch")
     var rectangles: Dictionary = controls._layout()
     for name in ["drift","brake","gas","camera","pause"]:
         var control: Rect2 = Rect2(rectangles[name])
