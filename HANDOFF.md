@@ -1,24 +1,30 @@
-# NITRO WHEELZ handoff — 2026-11-17
+# Nitro Wheelz — handoff 2026-11-17
 
-**Model:** OpenAI GPT-6
-**Project:** karllondor/Nitro-Wheelz-
-**Version:** 0.1.0 first driving laboratory.
-**Development branch:** agent/nitro-v0.1-driving-lab
+Model: GPT-6
+Repository: https://github.com/karllondor/Nitro-Wheelz-
+Branch: agent/nitro-v0.1-driving-lab
+Game version: 0.1.0; Karll Game Starter base: 0.1.0
+Engine: Godot 4.7.2 stable, GL Compatibility, 120 Hz physics ticks and two 240 Hz substeps.
 
-## Scope
-Convert untouched Starter Pack into playable Japanese-style arcade drift prototype: top-down default and chase optional, independent two-axle original car physics, fictional Shin-Kawa circuit, lap timer, scoring, skid marks, PC, Xbox and touch input adapter.
+## Delivered
+Original independent two-axle physics inspired by publicly documented DRIFTIT principles; fictional Shin-Kawa drift circuit, procedural 3D car, overhead/chase cameras, lap time, drift scoring, rubber trail, input from keyboard/Xbox InputMap/touch, working Godot Web preview export and test harness.
 
-## Evidence
-- GitHub Actions Godot 4.7.2 import/smoke/driving tests: TO BE RECORDED after code pushed.
-- Physical Android install/play: NOT RUN.
-- Physical Xbox USB/Bluetooth: NOT RUN.
-- PC interactive visual/performance: NOT RUN.
-- Garage, car packs, night lights, ghosts and nitro: NOT IMPLEMENTED.
+## Verified
+- Foundation PASS: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44152482975
+- Godot 4.7.2 PASS (smoke, input test, deterministic physics + brake regression): https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44152482693
+- Web package BUILT: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44152482658
+- Artifact: Nitro-Wheelz_v0.1.0_Web.zip, browser files exported, not manually played.
 
-## Next steps
-1. Fix any CI errors with evidence.
-2. Examine rendered scene in actual engine, profile FPS, tune physics using long sweeper.
-3. Add checkpoint validation and camera-touch UI polish.
-4. Configure Android export and provide APK once build and install test evidence exists.
-5. Advance to v0.2 competition, then garage/creator packs only with proper rights.
+## NOT RUN / known limits
+- No physical Android APK, Xbox USB/Bluetooth, Windows/Linux native build.
+- No direct manual video evaluation of the visual scene or responsive car handling.
+- No final car textures, tuning, ownership, currency, ghost or licensed NIGHTRIDE / Drift Games packs.
+- Current lap crossing is provisional; add sequential checkpoints for competition mode in v0.2.
+- UI and virtual touch areas need real phone QA. Performance target 60 FPS, unmeasured.
 
+## Next actions
+1. Owner plays Web preview via HTTP host and reports handling/camera/HUD feedback.
+2. Compare grip/braking/oversteer to DRIFTIT from real controlled runs.
+3. Configure Android SDK/preset for an installable debug APK.
+4. Implement checkpoint laps, ghost and garages in subsequent milestone branches.
+5. Do not alter approved look or claim official creator association without permission.
