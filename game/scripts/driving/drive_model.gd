@@ -22,7 +22,7 @@ const HANDBRAKE_DECEL: float = 2.0
 const DRAG_COEFF: float = 0.009
 const ROLLING_DRAG: float = 0.45
 const YAW_DAMPING: float = 1.45
-const YAW_TORQUE_GAIN: float = 0.39
+const YAW_TORQUE_GAIN: float = 0.48
 const YAW_LATERAL_BUDGET: float = 12.0
 const SLIDE_YAW_BONUS: float = 1.4
 const LOW_SPEED_GRIP_START: float = 3.0
@@ -35,6 +35,7 @@ var rear_traction: float = 1.0
 var slide_hold: float = 0.0
 var drift_angle: float = 0.0
 var steering_angle: float = 0.0
+var handbrake_previously_held: bool = false
 
 func reset(p: Vector2, radians: float) -> void:
     position = p
@@ -45,6 +46,7 @@ func reset(p: Vector2, radians: float) -> void:
     slide_hold = 0.0
     drift_angle = 0.0
     steering_angle = 0.0
+    handbrake_previously_held = false
 
 func speed_mps() -> float:
     return velocity.length()
@@ -100,6 +102,8 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     gas = clampf(gas,0.0,1.0)
     brake = clampf(brake,0.0,1.0)
     handbrake = clampf(handbrake,0.0,1.0)
+    var drift_pressed: bool = handbrake > 0.35 and not handbrake_previously_held
+    handbrake_previously_held = handbrake > 0.35
 
     var f: Vector2 = forward()
     var r: Vector2 = right()
@@ -130,7 +134,8 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var target_traction: float = REAR_SLIDE_GRIP if sliding else 1.0
     if handbrake > 0.1 and speed > 1.5:
         target_traction = HANDBRAKE_GRIP
-    var response_seconds: float = 0.04 if target_traction < rear_traction else REATTACH_SECONDS
+    # Handbrake engages in the first 1–2 simulation ticks, not after a long lerp.
+    var response_seconds: float = 0.008 if handbrake > 0.35 else (0.025 if target_traction < rear_traction else REATTACH_SECONDS)
     rear_traction = move_toward(rear_traction,target_traction,dt/response_seconds)
 
     var travel_direction: float = atan2(local_side,slip_forward)
@@ -141,7 +146,7 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     )
     var steer_goal: float = lerpf(demanded_steer,assisted_steer,assist_strength)
     # Smooth stick/key motion. Letting go returns the wheel faster.
-    var steer_rate: float = 9.0 if absf(steer_goal)<absf(steering_angle) else 6.0
+    var steer_rate: float = 23.0 if absf(steer_goal)<absf(steering_angle) else 18.0
     steering_angle = move_toward(steering_angle,steer_goal,steer_rate*dt)
 
     var front_slip: float = atan2(front_side,slip_forward)-steering_angle
@@ -167,6 +172,10 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var recovery: float = slide_fraction*hands_off*clampf(speed/7.0,0.0,1.0)
     yaw_accel += travel_direction*recovery*2.7*(1.0-0.55*gas)
     yaw_rate += yaw_accel*dt
+    if drift_pressed and signed_speed > 4.0 and absf(steer) > 0.08:
+        # One-shot flick only on the rising handbrake edge. No repeated
+        # spin while the player keeps DRIFT held.
+        yaw_rate += steer*0.20*clampf(speed/14.0,0.0,1.0)
     yaw_rate *= exp(-(YAW_DAMPING+0.6*hands_off*(1.0-slide_fraction))*dt)
     var yaw_ceiling: float = _yaw_rate_limit(speed,slide_fraction)
     yaw_rate = clampf(yaw_rate,-yaw_ceiling,yaw_ceiling)
