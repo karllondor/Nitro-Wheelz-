@@ -242,8 +242,10 @@ func _update_camera(delta: float) -> void:
     var forward_dir: Vector2 = model.forward()
     var f: Vector3 = Vector3(forward_dir.x,0.0,forward_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    # Wider scene coverage on phones: more road visible before each corner.\n    overhead.size = 78.0 if portrait else 62.0
-    # Fixed north-up orientation; never rotate the top-down camera as the car yaws.\n    var overhead_target: Vector3 = car_position + Vector3(0,74,15)
+    # Wider scene coverage on phones: more road visible before each corner.
+    overhead.size = 78.0 if portrait else 62.0
+    # Fixed north-up orientation; never rotate the top-down camera as the car yaws.
+    var overhead_target: Vector3 = car_position + Vector3(0,74,15)
     overhead.position = overhead.position.lerp(overhead_target,clampf(delta*7.0,0.0,1.0))
     overhead.look_at(car_position + Vector3(0,0,-5.0),Vector3(0,0,-1))
     var chase_target: Vector3 = car_position-f*15.0+Vector3(0,6.5,0)
