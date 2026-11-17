@@ -1,5 +1,16 @@
 # Nitro Wheelz change history
 
+## [0.1.2] — Grip recovery and BRAKE / REVERSE
+- Reviewed two owner-provided real-device recordings: Nitro Wheelz chase-camera overslides compared with DRIFTIT mobile top-down.
+- Rebuilt rear power grip to decline with throttle and scale with speed (36 km/h full gas: 60% loss; 72 km/h: 37% loss), rather than multiplying the same 60% loss across all speeds and the rear sliding state.
+- Smoothed steering and strengthened lift-off/neutral countersteer recovery and yaw damping; slide reattaches after throttle release instead of retaining uncontrollable rotation.
+- Preserved the handbrake's separate low-grip rear axle state and deterministic fixed-step integrator.
+- BRAKE reduces forward speed; holding BRAKE through a stop engages capped reverse. GAS brings the car forward from reverse.
+- Touch BRAKE button explicitly labels REVERSE; speedometer indicates R when backing.
+- Expanded deterministic physics regression tests for braking transitions, reverse, straight-line traction, speed-dependent steering, and slide recovery.
+- **Godot / Android / Web CI:** NOT RUN at authoring; require checks and hardware playtest before shipping.
+
+
 ## [0.1.1] — Mobile UI + low-poly Lada hotfix
 - Fixed visual heading sign mismatch: Godot mesh forward (local -Z) now matches the physics heading, avoiding the car spawning sideways.
 - Replaced the primitive block car with an original procedural, red low-poly four-door Lada-inspired drift sedan: wide arches, 5-spoke deep-dish wheels, chrome, round lamps, exposed intake and drift lip.
