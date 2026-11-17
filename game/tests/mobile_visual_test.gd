@@ -37,6 +37,20 @@ func _run() -> void:
     if int(race.get("camera_mode")) != 0:
         _fail("Cannot return to default top-down camera")
         return
+    # Top-down camera is now substantially wider and its orientation is
+    # independent of yaw. Rotating the vehicle must not spin the track view.
+    var overhead: Camera3D = race.get("overhead")
+    race.call("_update_camera",1.0)
+    if overhead.size < 60.0:
+        _fail("Top-down camera is too close for a narrow/mobile screen")
+        return
+    var north_up: Vector3 = overhead.global_transform.basis.z
+    model.heading = wrapf(model.heading + PI*0.75,-PI,PI)
+    race.call("_update_camera",1.0)
+    if north_up.dot(overhead.global_transform.basis.z) < 0.9999:
+        _fail("Overhead camera rotation changes when car changes heading")
+        return
+
     var controls: NitroRaceTouch = race.get("touch")
     var rectangles: Dictionary = controls._layout()
     for name in ["drift","brake","gas","camera","pause"]:
