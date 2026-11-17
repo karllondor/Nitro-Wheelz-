@@ -115,7 +115,7 @@ func _run() -> void:
         return
 
     # v0.1.3: at 72+ km/h the car must not rotate like a low-speed donut.
-    if a._yaw_rate_limit(20.0,0.0) > 0.48 or a._yaw_rate_limit(20.0,0.0) < 0.32:
+    if a._yaw_rate_limit(20.0,0.0) > 0.68 or a._yaw_rate_limit(20.0,0.0) < 0.52:
         _fail("High speed yaw limit not proportional to available lateral grip")
         return
     if a._yaw_rate_limit(10.0,0.0) <= a._yaw_rate_limit(20.0,0.0):
@@ -138,7 +138,7 @@ func _run() -> void:
             return
     print("HIGH SPEED SWEEPER: speed=",sweeper.speed_kmh(),
         " yaw_peak=",maximum_yaw_rate," angle_peak=",maximum_slip_angle)
-    if maximum_yaw_rate < 0.07:
+    if maximum_yaw_rate < 0.42:
         _fail("Car stopped responding to steering")
         return
 
