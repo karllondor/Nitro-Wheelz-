@@ -50,9 +50,6 @@ func _cube(label: String, pos: Vector3, size: Vector3,
     if parent == null:
         add_child(part)
     else:
-        if parent == null:
-        add_child(part)
-    else:
         parent.add_child(part)
     return part
 
@@ -73,9 +70,6 @@ func _cylinder(label: String, pos: Vector3, radius: float,
         part.rotation.z = PI * 0.5
     part.material_override = _material(col, 0.45 if col == CHROME else 0.0)
     if parent == null:
-        add_child(part)
-    else:
-        if parent == null:
         add_child(part)
     else:
         parent.add_child(part)
