@@ -216,11 +216,12 @@ func _update_visuals() -> void:
     # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
     car_root.rotation.y = -model.heading
     if car_root is NitroLadaLowPoly:
-        (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.speed_mps(), get_physics_process_delta_time())
+        (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.signed_forward_speed_mps(), get_physics_process_delta_time())
     if hud != null:
         hud.race_time = time_elapsed
         hud.lap = lap
         hud.speed = model.speed_kmh()
+        hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
         hud.score = lap_score
         hud.combo = combo
