@@ -9,7 +9,7 @@ Uploaded current Nitro Wheelz gameplay (1000075993.mp4, approximately 84 seconds
 ## Implementation
 - No text 'REVERSE' on BRAKE; reversing continues to work.
 - Overhead orthographic camera portrait size 78 (was 52) and landscape 62 (was 45). Fixed orientation world north-up, no rotation following yaw; chase moved further back/higher with broader field of view.
-- Yaw rate now depends on lateral grip divided by speed; yaw torque reduced and damping increased; large high-speed spins should be harder to provoke while intentional slow drifts remain possible.
+- Yaw rate now depends on 12 m/s² nominal combined arcade lateral budget divided by speed (plus small bonus during active slides); yaw torque reduced and damping increased. Calibration is intended to permit roughly 0.6 rad/s at 72 km/h, allowing ~33 m sweepers while removing the original unlimited high-speed spin rate. This is a candidate, not proof of equivalent DRIFTIT handling.
 - Regression tests: 72 km/h steering sweeper, yaw rate cap, overhead fixed orientation during car yaw; prior braking, reverse, drift grip/recovery and Lada/touch tests retained.
 
 ## Validation
