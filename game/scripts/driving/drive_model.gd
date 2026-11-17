@@ -23,8 +23,8 @@ const DRAG_COEFF: float = 0.009
 const ROLLING_DRAG: float = 0.45
 const YAW_DAMPING: float = 1.45
 const YAW_TORQUE_GAIN: float = 0.39
-const YAW_LATERAL_BUDGET: float = 8.5
-const SLIDE_YAW_BONUS: float = 1.3
+const YAW_LATERAL_BUDGET: float = 12.0
+const SLIDE_YAW_BONUS: float = 1.4
 const LOW_SPEED_GRIP_START: float = 3.0
 
 var position: Vector2 = Vector2.ZERO
