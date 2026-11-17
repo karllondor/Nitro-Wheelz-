@@ -144,6 +144,8 @@ func _make_ui() -> void:
     touch.visible = OS.has_feature("mobile")
     touch.camera_requested.connect(_toggle_camera)
     touch.pause_requested.connect(_toggle_pause)
+    touch.restart_requested.connect(_restart)
+    touch.menu_requested.connect(func():get_tree().change_scene_to_file("res://scenes/boot.tscn"))
 
 func _physics_process(delta: float) -> void:
     if paused or finished:
@@ -266,6 +268,8 @@ func _update_visuals() -> void:
         hud.paused = paused
         hud.finished = finished
         hud.road_status = "OFF TRACK" if offroad else "ON TRACK"
+    if touch != null:
+        touch.overlay_visible = paused or finished
 
 func _process(delta: float) -> void:
     _update_camera(delta)
