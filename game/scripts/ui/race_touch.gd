@@ -24,8 +24,8 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     queue_redraw()
 
-func _layout() -> Dictionary:
-    var s: Vector2 = get_viewport_rect().size
+func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
+    var s: Vector2 = get_viewport_rect().size if size_override == Vector2.ZERO else size_override
     var portrait: bool = s.y > s.x
     if portrait:
         return {
