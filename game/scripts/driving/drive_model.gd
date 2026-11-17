@@ -118,7 +118,7 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
         rear_slip, deg_to_rad(10.0)
     )
 
-    # Differential lateral forces generate yaw. Damping limits endless spins.
+    # No tyre turning force while stationary: prevent steering in place.\n    var low_speed_grip: float = clampf(speed / 3.0, 0.0, 1.0)\n    front_lateral_accel *= low_speed_grip\n    rear_lateral_accel *= low_speed_grip\n\n    # Differential lateral forces generate yaw. Damping limits endless spins.
     var yaw_accel: float = (front_lateral_accel - rear_lateral_accel) * 0.65
     yaw_rate += yaw_accel * dt
     yaw_rate *= exp(-0.62 * dt)
