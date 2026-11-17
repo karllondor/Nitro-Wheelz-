@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.0 DRIVING LAB.** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.1 MOBILE POLISH.** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,5 +51,5 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.0_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.1_Platform and are never overwritten.
 
