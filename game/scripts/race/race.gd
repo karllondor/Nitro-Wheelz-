@@ -221,6 +221,7 @@ func _update_visuals() -> void:
         hud.race_time = time_elapsed
         hud.lap = lap
         hud.speed = model.speed_kmh()
+        hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
         hud.score = lap_score
         hud.combo = combo
