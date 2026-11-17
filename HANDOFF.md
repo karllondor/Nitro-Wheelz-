@@ -1,19 +1,21 @@
-# Nitro Wheelz — v0.1.3 Handling + Zoom
+# Nitro Wheelz v0.1.4 — Mobile gameplay feedback iteration
 
-Date: 2026-11-17. Model: GPT-6.
-Development branch: agent/nitro-v0.1.3-camera-handling.
+Model: GPT-6. Date: 2026-11-17.
+Branch: agent/nitro-v0.1.4-controls-walls.
+User footage: /mnt/data/1000076007.mp4 (Nitro Wheelz 55.9 s), /mnt/data/1000076008.mp4 (DRIFTIT 30.7 s). These are source footage, not the new build.
+Previous first race recorded off-road travel, unstable steering, thin/thumby pedal controls, and different camera-aligned start. DRIFTIT comparison shows larger road space and easier deliberate drifting.
 
-## User feedback / video evidence
-Uploaded current Nitro Wheelz gameplay (1000075993.mp4, approximately 84 seconds) and DRIFTIT reference gameplay (1000075991.mp4, approximately 49 seconds). Nitro shows multiple 80–100 km/h off-road approaches and narrow camera framing; user says handling remains odd and camera is too close. DRIFTIT reference shows a wider view and more controlled transitions. User explicitly requests removal of unnecessary 'REVERSE' caption.
+## Changes
+- Redesigned loop so spawn heading follows screen-up on portrait top-down camera, with a first right turn after a long straight.
+- Track half-width increased 8.2 -> 12.0 world units; wall collision corrected to coincide with a continuous visible raised blue/white perimeter (car clearance 1.18 m).
+- Wall bounce removes outward momentum, applies a restrained inward return, friction, and optional 100 ms haptic (VIBRATE permission) plus short camera shake. Contact does not allow entering the sand.
+- Joystick uses an analog response exponent 0.74 for short moves; steering rate rises to 18 rad/s and release recovery to 23 rad/s. Handbrake press releases rear grip in around 8 ms and triggers one short non-repeating yaw flick while steering.
+- Gas and brake have enlarged trapezoidal pedal face, deep controls; DRIFT larger.
+- Godot regression tests: straight northbound spawn, wall both-sides rebound, close-range portrait control geometry, immediate handbrake response, existing reverse/steering/physics/camera tests.
 
-## Implementation
-- No text 'REVERSE' on BRAKE; reversing continues to work.
-- Overhead orthographic camera portrait size 78 (was 52) and landscape 62 (was 45). Fixed orientation world north-up, no rotation following yaw; chase moved further back/higher with broader field of view.
-- Yaw rate now depends on 12 m/s² nominal combined arcade lateral budget divided by speed (plus small bonus during active slides); yaw torque reduced and damping increased. Calibration is intended to permit roughly 0.6 rad/s at 72 km/h, allowing ~33 m sweepers while removing the original unlimited high-speed spin rate. This is a candidate, not proof of equivalent DRIFTIT handling.
-- Regression tests: 72 km/h steering sweeper, yaw rate cap, overhead fixed orientation during car yaw; prior braking, reverse, drift grip/recovery and Lada/touch tests retained.
+## Constraints
+This is an original Godot physics model informed by public DRIFTIT principles, NOT a copy of its source. Real-device steering feel, collision haptics and real-world phone FPS need manual playtest. Track layout fictional. Revisit if first turn is too far or narrow despite the road width increase.
 
-## Validation
-CI statuses not yet updated. Physical Android feel NOT RUN. These changes use original GDScript, not DRIFTIT source.
-Public reference: https://driftit.app/blog/building-a-drift-game-in-threejs and https://driftit.app/guides/drifting-with-a-controller
-
-Next: verify Godot/Android/Web checks, publish APK, have owner test identical high-speed sweeper and handbrake entry again. Check not to overcorrect into understeer.
+## Build
+v0.1.4 Android ARM64 debug and Web; generated APKs use ephemeral CI signing keys, so previous install may need uninstall (with data loss) before installing.
+CI status not yet run when authored. Evidence links added after checks.
