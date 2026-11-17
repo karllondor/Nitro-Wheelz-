@@ -1,38 +1,55 @@
-# Karll Game Starter
+# NITRO WHEELZ
+### JAPAN DRIFT NIGHTS
 
-**Version 0.1.0 — reusable AI-assisted game production foundation**
+**A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-Game-agnostic production rules + **Godot 4.7.2** playable starter shell for Claude, Codex, Blender, REA, PC, Android and Xbox Wireless Controller.
+**Status: v0.1.0 DRIVING LAB.** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
-## Game generated from this template
-NEW_GAME_NAME
+## Concept
+Nitro Wheelz combines:
+- **DRIFTIT-like mechanical principles:** a separately implemented deterministic two-axle car model, rear traction hysteresis, power oversteer, handbrake and assisted countersteering. Its developer-published numeric parameters provide initial tuning targets, not a claim of identical code or handling.
+- **Japanese drift-circuit culture:** original fictional layouts inspired by Ebisu, Nikko and Meihan; the first track is Shin-Kawa Drift Park.
+- **NIGHTRIDEPL and Drift Games cultural references:** the passion of collecting, building and tuning individual JDM cars, atmospheric night sessions and garages. There is no official partnership or branded car pack.
+- **Clean HD-2.5D presentation:** actual 3D roads and cars with readable, selectively stylized surfaces. Default camera high top-down like the user's DRIFTIT mobile screenshots; chase camera is an option.
 
-## Create a game
-1. On GitHub choose **Use this template** and create the new game's repo.
-2. Clone it, run python3 tools/initialize.py --name "Your Game" --dry-run, then repeat without --dry-run.
-3. Edit PROJECT_BRIEF.md and project.json; game/project.godot remains authoritative for engine settings.
-4. Run python3 tools/doctor.py; python3 tools/check_project.py; python3 -m unittest discover -s tests.
-5. Open game/project.godot in Godot 4.7.2, then run the sample menu and input monitor.
-6. Run bash tools/run_godot_checks.sh when the pinned Godot binary is available.
-7. Complete hardware QA before claiming Xbox USB/Bluetooth, Android or desktop exports work.
-8. Use agent/* branches/worktrees and keep HANDOFF.md current.
+## Launch
+Open game/project.godot in Godot **4.7.2 stable**, press F5, choose **START DRIFT SESSION**. For engine checks use:
 
-## Implemented foundation
-- Godot menu + moveable test object + prototype touchscreen controls + Xbox/keyboard raw-input monitor.
-- InputMap with left stick/WASD, A/Space, X/E, Start/Escape, built-in ui_* menu actions.
-- Python tools: structural validator, approved-art registry with trusted-base comparison, safe setup, version bump, environment doctor, build stamp, immutable release packaging, evidence logger.
-- CI: Python structural/negative-control tests, pinned Godot import and scene/input smoke checks; manual source artifact workflow.
-- Production contracts: approved assets, Blender/sprites, REA, QA evidence, rollback, versions, agent isolation, device testing, performance and licensing.
+```bash
+python3 -m unittest discover -s tests -v
+python3 tools/check_project.py
+bash tools/run_godot_checks.sh
+```
 
-## Explicit limitations
-The source is not a finished game. No physical Xbox pad, Windows computer, Android phone or signed app build has yet been tested in this authoring environment. GitHub CI may validate Godot import/smoke, but that is not hardware QA. Runtime export presets and platform signing credentials must be configured for each new game. Optional modules are not forced onto every genre.
+## Controls
 
-## Architecture
-The shared policies in AGENTS.md, docs/ and tools/ are engine-neutral. The game/ folder is a minimal Godot adapter. Production profile in project.json is a workflow choice, not a full genre engine.
+| Action | PC | Xbox Wireless Controller | Android |
+|---|---|---|---|
+| Steering | A/D or ←/→ | Left stick | Joystick left |
+| Throttle | W or ↑ | RT | GAS |
+| Brake | S or ↓ | LT | BRAKE |
+| Drift/handbrake | Space | A | DRIFT |
+| Camera top-down/chase | C | Y | On-screen camera region |
+| Pause | Escape | Menu | Top-right pause region |
+| Restart | R | optional menu later | pause/menu later |
+| Main menu | M | pending UI focus | pending UI focus |
 
-## Version and assets
-Starter version and new game's version are tracked separately in project.json. Immutable packages are named Game-Slug_vMAJOR.MINOR.PATCH_Platform. Locked art is in assets/approved_assets.json; PR CI compares its entries to origin/main. Never reuse a released artifact name.
+InputMap runs through a single vehicle model regardless of device. Touch actions are pointer-ID-aware, allowing simultaneous steering, gas and drift. Android controls and controller connection must still be verified on a real device.
 
-## Source license
-No general redistribution license assigned; public repository visibility is not a reuse license. Choose a code license and a separate art license before distributing.
+## Currently implemented
+- Original two-contact-patch planar physics controller at 120 Hz with two 240 Hz substeps
+- Public-reference starting grip values, hysteresis, handbrake, rear torque/traction trade-off and sliding-only countersteer assist
+- One procedural fictional Japanese drift circuit, marker stripes, low-poly pines, barriers and car
+- Drift scoring, speed and slip HUD, three-lap progression, persistent tyre marks and off-track slowing
+- Overhead orthographic and behind-car chase cameras (same vehicle physics)
+- Xbox/keyboard/touch bindings, input monitor, Godot smoke and deterministic physics regression tests
+- Karll Game Starter quality, approved-asset guardrails, SemVer and release tooling
+
+## Not yet built
+Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Games packs, progression/saves, nitro boost, replay ghosts, real Japanese circuits, production-grade audio/VFX, online leaderboards and signed Android exports.
+
+Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
+
+## Evidence and release
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.0_Platform and are never overwritten.
 

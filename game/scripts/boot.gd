@@ -1,51 +1,66 @@
 extends Control
 
 func _ready() -> void:
-    var bg := ColorRect.new()
-    bg.color = Color(0.06, 0.08, 0.12)
-    add_child(bg)
-    bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var center := CenterContainer.new()
-    add_child(center)
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var box := VBoxContainer.new()
-    box.custom_minimum_size = Vector2(440, 0)
-    box.add_theme_constant_override("separation", 18)
-    center.add_child(box)
-    var heading := Label.new()
-    heading.text = "NEW_GAME_NAME"
-    heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    heading.add_theme_font_size_override("font_size", 42)
-    box.add_child(heading)
-    var subtitle := Label.new()
-    subtitle.text = "Karll Game Starter | Test shell, not a shipped game"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(subtitle)
-    var play := _button(box, "PLAY INPUT / MOVEMENT PROTOTYPE", "res://scenes/prototype.tscn")
-    _button(box, "XBOX / KEYBOARD INPUT MONITOR", "res://scenes/dev/input_monitor.tscn")
-    var version := Label.new()
-    version.text = "Build: " + _build_label()
-    version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    box.add_child(version)
-    if not OS.has_feature("mobile"):
-        var quit_button := Button.new()
-        quit_button.text = "QUIT"
-        quit_button.custom_minimum_size.y = 52
-        quit_button.pressed.connect(func(): get_tree().quit())
-        box.add_child(quit_button)
-    play.grab_focus()
+    var background := ColorRect.new()
+    background.color = Color(0.055,0.071,0.092)
+    add_child(background)
+    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    var centre := CenterContainer.new()
+    add_child(centre)
+    centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-func _button(parent: VBoxContainer, title: String, scene: String) -> Button:
+    var menu := VBoxContainer.new()
+    menu.custom_minimum_size = Vector2(410,0)
+    menu.add_theme_constant_override("separation",20)
+    centre.add_child(menu)
+
+    var name := Label.new()
+    name.text = "NITRO WHEELZ"
+    name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name.add_theme_font_size_override("font_size",44)
+    name.add_theme_color_override("font_color",Color(1.0,0.62,0.28))
+    menu.add_child(name)
+
+    var subtitle := Label.new()
+    subtitle.text = "JAPAN DRIFT NIGHTS"
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_font_size_override("font_size",22)
+    menu.add_child(subtitle)
+
+    var description := Label.new()
+    description.text = "Shin-Kawa Drift Park • 3-lap driving laboratory\nTop-down default • Chase camera optional\nGarage and car collection: planned for later releases"
+    description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    menu.add_child(description)
+
+    var start := _button(menu,"START DRIFT SESSION","res://scenes/race.tscn")
+    _button(menu,"XBOX / INPUT DIAGNOSTICS","res://scenes/dev/input_monitor.tscn")
+
+    var hint := Label.new()
+    hint.text = "WASD / left stick · Space / A drift · C / Y camera\nEsc / Menu pause · R restart · M main menu"
+    hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    menu.add_child(hint)
+
+    var stamp := Label.new()
+    stamp.text = "PROTOTYPE v0.1.0 — original physics implementation"
+    stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stamp.add_theme_color_override("font_color",Color(0.67,0.73,0.80))
+    menu.add_child(stamp)
+
+    if not OS.has_feature("mobile"):
+        var quit := Button.new()
+        quit.text = "QUIT"
+        quit.custom_minimum_size.y = 52
+        quit.pressed.connect(func():get_tree().quit())
+        menu.add_child(quit)
+    start.grab_focus()
+
+func _button(parent: VBoxContainer,title: String, scene: String) -> Button:
     var button := Button.new()
     button.text = title
-    button.custom_minimum_size.y = 60
-    button.pressed.connect(func(): get_tree().change_scene_to_file(scene))
+    button.custom_minimum_size.y = 64
+    button.pressed.connect(func():get_tree().change_scene_to_file(scene))
     parent.add_child(button)
     return button
-
-func _build_label() -> String:
-    var data = JSON.parse_string(FileAccess.get_file_as_string("res://build_info.json"))
-    if data is Dictionary:
-        return str(data.get("version", "?")) + " / " + str(data.get("git_sha", "unbuilt")).substr(0, 8)
-    return "unknown"
 

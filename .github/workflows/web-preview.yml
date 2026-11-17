@@ -1,0 +1,46 @@
+name: Playable Web preview
+on:
+  push:
+    branches: [main, "agent/nitro-v0.1-driving-lab"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify project metadata
+        run: python3 tools/check_project.py
+      - name: Install Godot 4.7.2 and matching export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          curl -fL --retry 3 -o /tmp/godot.tpz https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          unzip -q /tmp/godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable" /tmp/nitro-templates
+          unzip -q /tmp/godot.tpz -d /tmp/nitro-templates
+          cp -a /tmp/nitro-templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+          echo "GODOT_BIN=$PWD/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Export the browser build (not hardware-tested)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p builds/web
+          "$GODOT_BIN" --headless --editor --path game --import
+          "$GODOT_BIN" --headless --path game --export-release "Web" "$PWD/builds/web/index.html"
+          test -s builds/web/index.html
+          test -s builds/web/index.wasm
+          echo "Web export generated; manual Android browser test remains NOT RUN."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nitro-Wheelz_v0.1.0_Web
+          path: builds/web/*
+          if-no-files-found: error
+          compression-level: 6

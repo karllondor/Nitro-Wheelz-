@@ -17,17 +17,17 @@ esac
 python3 tools/check_project.py
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
-for spec in import smoke_test input_test; do
+for spec in import smoke_test input_test driving_test; do
     if [ "$spec" = import ]; then
         "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"
     else
         "$GODOT_BIN" --headless --path game --script "res://tests/$spec.gd" 2>&1 | tee "$LOG_DIR/$spec.log"
     fi
-    if grep -Eq 'SCRIPT ERROR|ERROR:' "$LOG_DIR/$spec.log"; then
+    if grep -Eq 'SCRIPT ERROR|ERROR:|FAIL:' "$LOG_DIR/$spec.log"; then
         echo "FAIL: Godot reported runtime/parse errors in $spec" >&2
         exit 4
     fi
 done
-echo "PASS: Godot import, smoke and input script complete"
-echo "NOT RUN: Xbox physical pad, Android, export, gameplay feel"
+echo "PASS: Godot import, real scenes, input and driving regressions"
+echo "NOT RUN: Xbox real controller, Android, Windows export and physical device performance"
 
