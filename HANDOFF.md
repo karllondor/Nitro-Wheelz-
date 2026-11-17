@@ -18,4 +18,13 @@ This is an original Godot physics model informed by public DRIFTIT principles, N
 
 ## Build
 v0.1.4 Android ARM64 debug and Web; generated APKs use ephemeral CI signing keys, so previous install may need uninstall (with data loss) before installing.
-CI status not yet run when authored. Evidence links added after checks.
+Automated build/CI PASS; physical mobile and Xbox tests NOT RUN.
+
+## Evidence — 2026-11-17
+- Foundation: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053648
+- Godot import, controller map, physics and track/wall/UI regression: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053566
+- Android ARM64 debug APK export: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053614
+- Web export: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053521
+- APK SHA-256: 1e43c352f48167df119da6f690d7071e1c63453efce8c65e875910cb1f6ba01b
+
+APK and ZIP archives verified for integrity and Android ARM64 runtime presence. CI checks do not substitute for visual or tactile handset tests.
