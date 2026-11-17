@@ -18,12 +18,12 @@ jobs:
         with:
           java-version: '17'
           distribution: temurin
-      - uses: android-actions/setup-android@v3
       - name: Install Android SDK requirements
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35"
+          echo "SDK: ${ANDROID_HOME:-not-set}"
+          sdkmanager --sdk_root="${ANDROID_HOME}" "platform-tools" "build-tools;35.0.1" "platforms;android-35"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" >> "$GITHUB_ENV"
       - name: Install pinned Godot 4.7.2 and export templates
         shell: bash
