@@ -1,18 +1,19 @@
-# Nitro Wheelz v0.1.2 grip/reverse handoff
+# Nitro Wheelz — v0.1.3 Handling + Zoom
 
-Model: GPT-6
-Branch: agent/nitro-v0.1.2-grip-reverse
-Date: 2026-11-17
-Status: Godot, Foundation, Android APK and Web export PASS; hardware playtest NOT RUN
+Date: 2026-11-17. Model: GPT-6.
+Development branch: agent/nitro-v0.1.3-camera-handling.
 
-Source videos: owner-provided Nitro Wheelz (1000075990.mp4) and DRIFTIT (1000075991.mp4). Owner reported excess drift/sliding and absence of BRAKE-to-REVERSE.
+## User feedback / video evidence
+Uploaded current Nitro Wheelz gameplay (1000075993.mp4, approximately 84 seconds) and DRIFTIT reference gameplay (1000075991.mp4, approximately 49 seconds). Nitro shows multiple 80–100 km/h off-road approaches and narrow camera framing; user says handling remains odd and camera is too close. DRIFTIT reference shows a wider view and more controlled transitions. User explicitly requests removal of unnecessary 'REVERSE' caption.
 
-Updated: original deterministic two-axle driving model rear traction under power (velocity dependent), yaw response and neutral steering recovery, back-to-forward transition, BRAKE reverse drive. Maintained camera, Lada, track, mobile touches, Xbox mapping.
-Source-validated mechanic references:
-https://driftit.app/guides/drifting-explained
-https://driftit.app/guides/drifting-with-a-controller
-https://driftit.app/blog/building-a-drift-game-in-threejs
+## Implementation
+- No text 'REVERSE' on BRAKE; reversing continues to work.
+- Overhead orthographic camera portrait size 78 (was 52) and landscape 62 (was 45). Fixed orientation world north-up, no rotation following yaw; chase moved further back/higher with broader field of view.
+- Yaw rate now depends on 12 m/s² nominal combined arcade lateral budget divided by speed (plus small bonus during active slides); yaw torque reduced and damping increased. Calibration is intended to permit roughly 0.6 rad/s at 72 km/h, allowing ~33 m sweepers while removing the original unlimited high-speed spin rate. This is a candidate, not proof of equivalent DRIFTIT handling.
+- Regression tests: 72 km/h steering sweeper, yaw rate cap, overhead fixed orientation during car yaw; prior braking, reverse, drift grip/recovery and Lada/touch tests retained.
 
-CI passes on code commit e975440ce2e3d24ab37bb89587a94ad489645ad7:\n- Foundation: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44182330072\n- Godot import/smoke/physics: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44182330061\n- Web preview: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44182330026\n- Android APK: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44182330052\n- APK SHA-256: 0e74478babd1915629710a11574fa64c8353e5cf7d9bc84905bcb8d025cb7a04 Real Android playtest must confirm feel and that reverse starts after braking to a stop. Can't assert exact feel match to proprietary DRIFTIT physics from articles alone.
+## Validation
+CI statuses not yet updated. Physical Android feel NOT RUN. These changes use original GDScript, not DRIFTIT source.
+Public reference: https://driftit.app/blog/building-a-drift-game-in-threejs and https://driftit.app/guides/drifting-with-a-controller
 
-Signing: CI generates a fresh debug signing key each run; old test build may need uninstall before new test APK. Stable Android signing is a separate pending improvement.
+Next: verify Godot/Android/Web checks, publish APK, have owner test identical high-speed sweeper and handbrake entry again. Check not to overcorrect into understeer.

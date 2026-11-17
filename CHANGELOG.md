@@ -1,5 +1,15 @@
 # Nitro Wheelz change history
 
+## [0.1.3] — Camera framing and speed-aware steering
+- Removed the user-unwanted REVERSE subtitle from the BRAKE button (braking and reversing remain functional).
+- Zoomed out portrait overhead camera (52 -> 78 world units) and landscape camera (45 -> 62), widened and backed off chase camera.
+- Changed top-down camera to maintain a constant world orientation while the vehicle yaws, preventing the road from visually rotating with the car.
+- Bounded car yaw rate by lateral acceleration available at current speed, instead of allowing ±2.8 rad/s even around 80–100 km/h. Reduced yaw torque and increased damping to address mobile footage showing off-track overshoots and unstable corner exits.
+- Added deterministic high-speed sweeper and fixed-overhead-camera orientation regressions.
+- All changes preserve the approved low-poly Lada, track, controller mappings, and BRAKE reverse behavior.
+- **Godot/Android/Web CI:** PENDING at authoring; physical Android driving feel NOT RUN.
+
+
 ## [0.1.2] — Grip recovery and BRAKE / REVERSE
 - Reviewed two owner-provided real-device recordings: Nitro Wheelz chase-camera overslides compared with DRIFTIT mobile top-down.
 - Rebuilt rear power grip to decline with throttle and scale with speed (36 km/h full gas: 60% loss; 72 km/h: 37% loss), rather than multiplying the same 60% loss across all speeds and the rear sliding state.

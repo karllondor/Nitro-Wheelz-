@@ -21,7 +21,10 @@ const REVERSE_LIMIT: float = 8.5
 const HANDBRAKE_DECEL: float = 2.0
 const DRAG_COEFF: float = 0.009
 const ROLLING_DRAG: float = 0.45
-const YAW_DAMPING: float = 1.15
+const YAW_DAMPING: float = 1.45
+const YAW_TORQUE_GAIN: float = 0.39
+const YAW_LATERAL_BUDGET: float = 12.0
+const SLIDE_YAW_BONUS: float = 1.4
 const LOW_SPEED_GRIP_START: float = 3.0
 
 var position: Vector2 = Vector2.ZERO
@@ -80,6 +83,15 @@ func _power_grip_factor(gas: float, speed_mps_now: float) -> float:
     # Nonlinear gas response lets partial Xbox throttle hold a slide.
     var full_power_loss: float = clampf(0.83 - speed_mps_now*0.023, 0.10, 0.60)
     return 1.0 - full_power_loss*pow(gas, 1.6)
+
+func _yaw_rate_limit(speed_now: float, slide: float) -> float:
+    # Maximum sustainable turn rate follows a_y / v, not a constant
+    # rad/s across all speeds. The previous ±2.8 rad/s at 80 km/h
+    # allowed an implausible sub-10 m turn and sudden sideways travel.
+    return clampf(
+        (YAW_LATERAL_BUDGET + SLIDE_YAW_BONUS*slide)/maxf(speed_now, 3.0),
+        0.27, 2.1
+    )
 
 func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -> void:
     if dt <= 0.0:
@@ -144,7 +156,11 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     front_lateral *= moving_grip
     rear_lateral *= moving_grip
 
-    var yaw_accel: float = (front_lateral-rear_lateral)*0.55
+    # The axle force difference generates yaw, but at road speed the
+    # sustainable rotation is bounded by available lateral acceleration.
+    # Preserve strong low-speed drift entries without letting a 90 km/h
+    # car whirl as if it were stationary.
+    var yaw_accel: float = (front_lateral-rear_lateral)*YAW_TORQUE_GAIN
     # A slide with the joystick near centre should be recoverable. Lift-off
     # increases alignment assistance; full throttle suppresses part of it.
     var hands_off: float = clampf(1.0-absf(steer)*2.7,0.0,1.0)
@@ -152,7 +168,8 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     yaw_accel += travel_direction*recovery*2.7*(1.0-0.55*gas)
     yaw_rate += yaw_accel*dt
     yaw_rate *= exp(-(YAW_DAMPING+0.6*hands_off*(1.0-slide_fraction))*dt)
-    yaw_rate = clampf(yaw_rate,-2.8,2.8)
+    var yaw_ceiling: float = _yaw_rate_limit(speed,slide_fraction)
+    yaw_rate = clampf(yaw_rate,-yaw_ceiling,yaw_ceiling)
 
     # BRAKE doubles as REVERSE. Forward speed must be nearly zero before
     # negative motor torque engages; holding BRAKE then backs up to a limit.

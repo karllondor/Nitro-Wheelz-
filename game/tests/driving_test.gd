@@ -114,6 +114,34 @@ func _run() -> void:
         _fail("Slide stays loose or keeps spinning after lifting throttle")
         return
 
+    # v0.1.3: at 72+ km/h the car must not rotate like a low-speed donut.
+    if a._yaw_rate_limit(20.0,0.0) > 0.68 or a._yaw_rate_limit(20.0,0.0) < 0.52:
+        _fail("High speed yaw limit not proportional to available lateral grip")
+        return
+    if a._yaw_rate_limit(10.0,0.0) <= a._yaw_rate_limit(20.0,0.0):
+        _fail("Low-speed turn authority must exceed high-speed turn authority")
+        return
+    var sweeper: NitroDriveModel = DRIVE.new()
+    sweeper.reset(Vector2.ZERO,0.0)
+    sweeper.velocity = Vector2(0,-20.0)
+    var maximum_yaw_rate: float = 0.0
+    var maximum_slip_angle: float = 0.0
+    for i in range(480):
+        sweeper.step(STEP,0.68,0.70,0.0,0.0)
+        maximum_yaw_rate = maxf(maximum_yaw_rate,absf(sweeper.yaw_rate))
+        maximum_slip_angle = maxf(maximum_slip_angle,absf(sweeper.drift_angle))
+        if not is_finite(sweeper.yaw_rate) or not is_finite(sweeper.drift_angle):
+            _fail("High-speed cornering diverged")
+            return
+        if absf(sweeper.yaw_rate) > sweeper._yaw_rate_limit(sweeper.speed_mps(),0.99)+0.001:
+            _fail("Speed-dependent turning limit exceeded during sweeper")
+            return
+    print("HIGH SPEED SWEEPER: speed=",sweeper.speed_kmh(),
+        " yaw_peak=",maximum_yaw_rate," angle_peak=",maximum_slip_angle)
+    if maximum_yaw_rate < 0.42:
+        _fail("Car stopped responding to steering")
+        return
+
     var track: NitroDriftTrack = TRACK.new()
     root.add_child(track)
     await process_frame
