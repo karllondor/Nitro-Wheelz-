@@ -64,7 +64,7 @@ func _make_cameras() -> void:
     add_child(overhead)
     chase = Camera3D.new()
     chase.name = "Behind car"
-    chase.fov = 68.0
+    chase.fov = 72.0
     chase.current = false
     add_child(chase)
     _update_camera(1.0)
@@ -242,13 +242,13 @@ func _update_camera(delta: float) -> void:
     var forward_dir: Vector2 = model.forward()
     var f: Vector3 = Vector3(forward_dir.x,0.0,forward_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    overhead.size = 52.0 if portrait else 45.0
-    var overhead_target: Vector3 = car_position+Vector3(0,51,11)
+    # Wider scene coverage on phones: more road visible before each corner.\n    overhead.size = 78.0 if portrait else 62.0
+    # Fixed north-up orientation; never rotate the top-down camera as the car yaws.\n    var overhead_target: Vector3 = car_position + Vector3(0,74,15)
     overhead.position = overhead.position.lerp(overhead_target,clampf(delta*7.0,0.0,1.0))
-    overhead.look_at(car_position+f*7.0,Vector3.UP)
-    var chase_target: Vector3 = car_position-f*9.5+Vector3(0,4.7,0)
+    overhead.look_at(car_position + Vector3(0,0,-5.0),Vector3(0,0,-1))
+    var chase_target: Vector3 = car_position-f*15.0+Vector3(0,6.5,0)
     chase.position = chase.position.lerp(chase_target,clampf(delta*4.2,0.0,1.0))
-    chase.look_at(car_position+f*11.0+Vector3.UP*1.5,Vector3.UP)
+    chase.look_at(car_position+f*15.0+Vector3.UP*1.7,Vector3.UP)
 
 func _toggle_camera() -> void:
     camera_mode = 1-camera_mode
