@@ -68,6 +68,21 @@ func _run() -> void:
     if controls.steer < 0.1 or controls.throttle < 0.99 or controls.handbrake < 0.99:
         _fail("Three-finger steering/gas/drift input did not combine")
         return
+
+    # Portrait controls are wider/taller and share no overlapping targets.
+    var portrait_controls: Dictionary = controls._layout(Vector2(720,1600))
+    var gas_pedal: Rect2 = Rect2(portrait_controls["gas"])
+    var brake_pedal: Rect2 = Rect2(portrait_controls["brake"])
+    var drift_rect: Rect2 = Rect2(portrait_controls["drift"])
+    if gas_pedal.size.y < 310.0 or brake_pedal.size.x < 150.0:
+        _fail("Portrait GAS/BRAKE pedals are too small")
+        return
+    if drift_rect.size.y < 175.0:
+        _fail("Portrait DRIFT button should be larger")
+        return
+    if gas_pedal.intersects(brake_pedal) or drift_rect.intersects(gas_pedal):
+        _fail("Mobile control hit rectangles overlap")
+        return
     controls.release_all()
     if controls.throttle > 0.01 or controls.steer > 0.01 or controls.handbrake > 0.01:
         _fail("Touch controls remained pressed after release")
