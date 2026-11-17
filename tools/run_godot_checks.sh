@@ -17,7 +17,7 @@ esac
 python3 tools/check_project.py
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
-for spec in import smoke_test input_test driving_test; do
+for spec in import smoke_test input_test driving_test mobile_visual_test; do
     if [ "$spec" = import ]; then
         "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"
     else
