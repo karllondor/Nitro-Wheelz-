@@ -8,6 +8,7 @@ var lap: int = 1
 var lap_limit: int = 3
 var score: int = 0
 var speed: float = 0.0
+var reversing: bool = false
 var drift_degrees: float = 0.0
 var combo: float = 1.0
 var mode: String = "TOP-DOWN"
@@ -75,7 +76,7 @@ func _draw() -> void:
         s.x*(0.32 if portrait else 0.18),
         s.y*(0.089 if portrait else 0.16))
     _panel(speedbox)
-    _print(speedbox,"%d KM/H" % int(speed),0.43,31,LIGHT)
+    _print(speedbox,("%s%d KM/H" % ["R ",int(speed)]) if reversing else "%d KM/H" % int(speed),0.43,31,LIGHT)
     _print(speedbox,"%d°  %s" % [int(absf(drift_degrees)),road_status],
         0.79,15,ORANGE)
 
