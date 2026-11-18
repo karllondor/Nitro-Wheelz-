@@ -18,6 +18,8 @@ var finished: bool = false
 var road_status: String = "ON TRACK"
 var track_name: String = "SHIN-KAWA"
 var track_points: PackedVector2Array = PackedVector2Array()
+var car_world_position: Vector2 = Vector2.ZERO
+var track_progress: float = 0.0
 var target_time: float = 0.0
 
 const WHITE := Color(0.98,0.98,1.0)
@@ -75,7 +77,17 @@ func _minimap(rect: Rect2) -> void:
         outline.append(rect.get_center()+(track_points[i]-mid)*sf)
     outline.append(outline[0])
     draw_polyline(outline,WHITE,2.5*_scale(),true)
-    draw_circle(outline[0],2.8*_scale(),PINK)
+    # White transverse stripe is the start/finish. A red dot tracks the CAR.
+    var start_tangent: Vector2 = (track_points[1]-track_points[track_points.size()-1]).normalized()
+    var crossing: Vector2 = Vector2(-start_tangent.y,start_tangent.x)
+    var start_dot: Vector2 = rect.get_center()+(track_points[0]-mid)*sf
+    var half_stripe: float = clampf(12.5*sf,5.0*_scale(),12.0*_scale())
+    draw_line(start_dot-crossing*half_stripe,start_dot+crossing*half_stripe,
+        WHITE,3.3*_scale(),true)
+    var player_dot: Vector2 = rect.get_center()+(car_world_position-mid)*sf
+    draw_circle(player_dot,4.2*_scale(),Color(0.03,0.03,0.035))
+    draw_circle(player_dot,3.2*_scale(),Color(1.0,0.095,0.15))
+    draw_arc(player_dot,4.0*_scale(),0.0,TAU,24,WHITE,0.8*_scale(),true)
 
 func _draw() -> void:
     var s: Vector2 = get_viewport_rect().size
