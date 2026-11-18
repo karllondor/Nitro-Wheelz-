@@ -13,7 +13,7 @@ func _run() -> void:
         _fail("Race timer started before the first GAS")
         return
     Input.action_press("throttle")
-    await physics_frame
+    race._physics_process(1.0/120.0)
     Input.action_release("throttle")
     if not bool(race.get("race_started")) or float(race.get("time_elapsed")) <= 0.0:
         _fail("Race timer did not start on first GAS")
