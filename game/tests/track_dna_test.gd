@@ -55,6 +55,33 @@ func _run() -> void:
     if not t.track_valid or t.centerline.size()!=points.size():
         _fail("Scene did not build validated Track DNA geometry")
         return
+    # Creator proof-of-concept: modify one geometric control and a width,
+    # rebuild the SAME scene without hand-modelling any mesh.
+    var edited: Dictionary = raw.duplicate(true)
+    edited["control_points"][6][0] = float(edited["control_points"][6][0])+3.0
+    edited["widths_m"][4] = 27.0
+    var alternate: Dictionary = DNA.compile(edited)
+    if not bool(alternate["ok"]):
+        _fail("Harmless creator edit was rejected: "+str(alternate["errors"]))
+        return
+    if not t.rebuild_from_data(edited):
+        _fail("In-memory Track Creator rebuild failed")
+        return
+    if absf(t.halfwidths[4*DNA.SUBDIVISIONS]-13.5) > 0.01:
+        _fail("Edited width did not regenerate road geometry")
+        return
+    var remembered_length: float = t.length_metres
+    var invalid_edit: Dictionary = edited.duplicate(true)
+    invalid_edit["widths_m"][4] = 1.0
+    if t.rebuild_from_data(invalid_edit):
+        _fail("Invalid creator edit incorrectly replaced playable track")
+        return
+    if not t.track_valid or absf(t.length_metres-remembered_length)>0.001:
+        _fail("Rejected edit destroyed the previous validated track")
+        return
+    if not t.rebuild_from_data(raw):
+        _fail("Cannot restore original authored track after creator edit")
+        return
     var body: StaticBody3D = t.get_node_or_null(
         "Exactly matched wall triangle collision mesh") as StaticBody3D
     var visual: MeshInstance3D = t.get_node_or_null("Walls from Track DNA edges") as MeshInstance3D

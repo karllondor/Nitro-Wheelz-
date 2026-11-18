@@ -52,7 +52,7 @@ func _ready() -> void:
     menu.add_child(hint)
 
     var stamp := Label.new()
-    stamp.text = "MOBILE PROTOTYPE v0.1.1"
+    stamp.text = "NITRO WHEELZ v" + str(ProjectSettings.get_setting("application/config/version","unknown")) + "  |  TECHNICAL PLAYTEST"
     stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     stamp.add_theme_font_size_override("font_size",int(16*scale_factor))
     stamp.add_theme_color_override("font_color",Color(0.66,0.73,0.80))

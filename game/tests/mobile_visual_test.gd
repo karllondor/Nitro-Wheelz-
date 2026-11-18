@@ -41,8 +41,10 @@ func _run() -> void:
     # independent of yaw. Rotating the vehicle must not spin the track view.
     var overhead: Camera3D = race.get("overhead")
     race.call("_update_camera",1.0)
-    if overhead.size < 60.0:
-        _fail("Top-down camera is too close for a narrow/mobile screen")
+    # Dynamic zoom legitimately moves closer when stopped. The camera
+    # regression separately tests its full speed range and smoothing.
+    if overhead.size < 49.0:
+        _fail("Top-down camera is clipped beyond the intended minimum size")
         return
     var north_up: Vector3 = overhead.global_transform.basis.z
     model.heading = wrapf(model.heading + PI*0.75,-PI,PI)
