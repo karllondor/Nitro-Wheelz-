@@ -30,9 +30,9 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
         return {
             "joystick_center": Vector2(s.x*0.215,s.y*0.853),
             "joystick_radius": s.x*0.175,
-            "drift": Rect2(s.x*0.790,s.y*0.405,s.x*0.188,s.y*0.332),
-            "brake": Rect2(s.x*0.5275,s.y*0.8413,s.x*0.1500,s.y*0.1387),
-            "gas": Rect2(s.x*0.7863,s.y*0.8413,s.x*0.1533,s.y*0.1387),
+            "drift": Rect2(s.x*0.790,s.y*0.470,s.x*0.188,s.y*0.300),
+            "brake": Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132),
+            "gas": Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190),
             "pause": Rect2(s.x*0.690,s.y*0.206,s.x*0.126,s.y*0.057),
             "camera": Rect2(s.x*0.842,s.y*0.206,s.x*0.136,s.y*0.057),
             "restart": Rect2(s.x*0.265,s.y*0.43,s.x*0.470,s.y*0.095),
@@ -41,9 +41,9 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
     return {
         "joystick_center": Vector2(s.x*0.142,s.y*0.810),
         "joystick_radius": s.y*0.177,
-        "drift": Rect2(s.x*0.850,s.y*0.350,s.x*0.128,s.y*0.340),
-        "brake": Rect2(s.x*0.6983,s.y*0.8193,s.x*0.0953,s.y*0.1587),
-        "gas": Rect2(s.x*0.8580,s.y*0.8193,s.x*0.0960,s.y*0.1587),
+        "drift": Rect2(s.x*0.850,s.y*0.390,s.x*0.128,s.y*0.340),
+        "brake": Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161),
+        "gas": Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224),
         "pause": Rect2(s.x*0.921,s.y*0.180,s.x*0.057,s.y*0.125),
         "camera": Rect2(s.x*0.846,s.y*0.180,s.x*0.062,s.y*0.125),
         "restart": Rect2(s.x*0.33,s.y*0.49,s.x*0.34,s.y*0.12),
@@ -215,28 +215,41 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
         w*0.025,Color(0.86,0.88,0.93))
 
 func _pedal(rect: Rect2, label: String, pressed: bool) -> void:
+    # Separate brake and throttle silhouettes based on the approved
+    # perforated aluminium pedal reference. Visual shape and touch Rect2 match.
     var x: float = rect.position.x
     var y: float = rect.position.y
     var w: float = rect.size.x
     var h: float = rect.size.y
     var scale: float = _ui_scale()
-    var poly := PackedVector2Array([
-        Vector2(x+w*0.22,y+h*0.015),Vector2(x+w*0.83,y+h*0.015),
-        Vector2(x+w*0.97,y+h*0.87),Vector2(x+w*0.87,y+h*0.98),
-        Vector2(x+w*0.07,y+h*0.98),Vector2(x+w*0.015,y+h*0.88)
-    ])
-    draw_colored_polygon(poly,Color(0.99,0.58,0.74,0.94) if pressed else Color(0.74,0.76,0.79,0.95))
-    draw_polyline(PackedVector2Array([
-        poly[0],poly[1],poly[2],poly[3],poly[4],poly[5],poly[0]
-    ]),Color(0.98,0.98,1.0,0.97),2.5*scale,true)
-    for row in range(3):
-        for col in range(2):
-            draw_circle(Vector2(x+w*(0.35+0.31*float(col)),
-                y+h*(0.20+0.24*float(row))),w*0.079,Color(0.045,0.045,0.055,0.96))
-    var font: Font = get_theme_default_font()
-    var font_size: int = int(15.0*scale)
-    draw_string(font,Vector2(x,y+h*0.91),label,
-        HORIZONTAL_ALIGNMENT_CENTER,w,font_size,Color(0.055,0.055,0.070))
-    if pressed:
-        draw_line(Vector2(x+w*0.12,y+h*0.99),Vector2(x+w*0.89,y+h*0.99),
-            Color(1.0,0.08,0.51,0.9),3.0*scale,true)
+    var gas_pedal: bool = label == "GAS"
+    var poly := PackedVector2Array()
+    if gas_pedal:
+        poly = PackedVector2Array([
+            Vector2(x+w*0.14,y+h*0.012),Vector2(x+w*0.84,y+h*0.012),
+            Vector2(x+w*0.96,y+h*0.087),Vector2(x+w*0.95,y+h*0.92),
+            Vector2(x+w*0.84,y+h*0.987),Vector2(x+w*0.12,y+h*0.987),
+            Vector2(x+w*0.045,y+h*0.91),Vector2(x+w*0.045,y+h*0.082)
+        ])
+    else:
+        poly = PackedVector2Array([
+            Vector2(x+w*0.18,y+h*0.008),Vector2(x+w*0.88,y+h*0.008),
+            Vector2(x+w*0.972,y+h*0.090),Vector2(x+w*0.91,y+h*0.92),
+            Vector2(x+w*0.80,y+h*0.989),Vector2(x+w*0.06,y+h*0.989),
+            Vector2(x+w*0.012,y+h*0.90),Vector2(x+w*0.10,y+h*0.087)
+        ])
+    draw_colored_polygon(poly,Color(0.92,0.62,0.75) if pressed else Color(0.68,0.70,0.73))
+    var outline: PackedVector2Array = poly.duplicate()
+    outline.append(poly[0])
+    draw_polyline(outline,Color(0.99,0.99,1.0,0.95),2.4*scale,true)
+    # Matte holes: staggered rows. The gas pedal is taller than the brake.
+    var rows: int = 6 if gas_pedal else 4
+    for row in range(rows):
+        var hole_y: float = y+h*(0.15+(0.70*float(row)/float(rows-1)))
+        var positions: Array[float] = [0.31,0.69] if row%2==0 else [0.5]
+        for hole_x in positions:
+            var centre: Vector2 = Vector2(x+w*hole_x,hole_y)
+            draw_circle(centre,w*0.101,Color(0.93,0.94,0.95,0.80))
+            draw_circle(centre,w*0.083,Color(0.028,0.031,0.040,1.0))
+    draw_line(Vector2(x+w*0.12,y+h*0.97),Vector2(x+w*0.86,y+h*0.97),
+        Color(1.0,0.035,0.49,0.94) if pressed else Color(0.43,0.45,0.50,0.7),2.4*scale,true)
