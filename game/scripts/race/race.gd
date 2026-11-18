@@ -326,7 +326,7 @@ func _update_camera(delta: float) -> void:
     var f := Vector3(view_dir.x,0.0,view_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
     # Keep the road flowing: the original 78m portrait frame was too wide.
-    var base_size: float = 60.0 if portrait else 52.0
+    var base_size: float = 60.0 if portrait else 58.0
     var zoom_target: float = base_size/_zoom_factor_for_speed(model.speed_kmh())
     var zoom_alpha: float = 1.0-exp(-3.3*maxf(delta,0.0))
     overhead.size = lerpf(overhead.size,zoom_target,zoom_alpha)
