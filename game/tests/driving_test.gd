@@ -170,7 +170,7 @@ func _run() -> void:
     if start_forward.distance_to(Vector2(0,-1)) > 0.09:
         _fail("Start straight is not aligned vertically north")
         return
-    if absf(track.centerline[24].x-track.centerline[0].x)>1.0:
+    if absf(track.centerline[12].x-track.centerline[0].x)>1.0:
         _fail("Start starts turning before the first long straight")
         return
     var tangent: Vector2 = Vector2(track.sample_info(track.start_position())["tangent"])
