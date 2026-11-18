@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "id": "benchmark_sweepers",
+  "name": "SWEEPERS",
+  "generator_version": 1,
+  "seed": 2202,
+  "closed": true,
+  "width_m": 23,
+  "start_index": 0,
+  "theme": "benchmark",
+  "control_points": [
+    [
+      -39.852,
+      0
+    ],
+    [
+      -46.702,
+      -12.982
+    ],
+    [
+      -47.477,
+      -27.544
+    ],
+    [
+      -39.962,
+      -39.925
+    ],
+    [
+      -26.471,
+      -45.325
+    ],
+    [
+      -11.945,
+      -43.471
+    ],
+    [
+      1.457,
+      -37.353
+    ],
+    [
+      15.346,
+      -32.604
+    ],
+    [
+      29.636,
+      -29.093
+    ],
+    [
+      41.189,
+      -20.226
+    ],
+    [
+      45.827,
+      -6.451
+    ],
+    [
+      43.166,
+      7.956
+    ],
+    [
+      36.732,
+      21.215
+    ],
+    [
+      29.038,
+      33.79
+    ],
+    [
+      18.95,
+      44.468
+    ],
+    [
+      5.554,
+      50.282
+    ],
+    [
+      -8.853,
+      48.315
+    ],
+    [
+      -19.96,
+      38.876
+    ],
+    [
+      -25.895,
+      25.455
+    ],
+    [
+      -30.756,
+      11.6
+    ]
+  ],
+  "description": "Independent comparable five-bend course with a left flick; about 295m and 23m wide. NOT identical waypoint geometry or corner radii to DRIFTIT."
+}

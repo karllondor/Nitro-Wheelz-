@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.1 MOBILE POLISH.** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.7 BENCHMARK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -39,7 +39,7 @@ InputMap runs through a single vehicle model regardless of device. Touch actions
 ## Currently implemented
 - Original two-contact-patch planar physics controller at 120 Hz with two 240 Hz substeps
 - Public-reference starting grip values, hysteresis, handbrake, rear torque/traction trade-off and sliding-only countersteer assist
-- One procedural fictional Japanese drift circuit, marker stripes, low-poly pines, barriers and car
+- One fictional Shin-Kawa circuit plus two independent short comparison circuits, marker stripes, low-poly pines, barriers and car
 - Drift scoring, speed and slip HUD, three-lap progression, persistent tyre marks and off-track slowing
 - Overhead orthographic and behind-car chase cameras (same vehicle physics)
 - Xbox/keyboard/touch bindings, input monitor, Godot smoke and deterministic physics regression tests
@@ -51,5 +51,5 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.1_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.7_Platform and are never overwritten.
 

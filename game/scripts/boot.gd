@@ -35,13 +35,18 @@ func _ready() -> void:
     menu.add_child(subtitle)
 
     var description := Label.new()
-    description.text = "SHIN-KAWA DRIFT PARK\n3 LAPS  •  2 CAMERAS  •  ORIGINAL PHYSICS"
+    description.text = "3 LAPS  •  2 CAMERAS  •  ORIGINAL PHYSICS\nCHOOSE A TRACK TO DRIVE"
     description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     description.add_theme_font_size_override("font_size",int(19*scale_factor))
     menu.add_child(description)
 
-    var start := _button(menu,"START DRIFT SESSION","res://scenes/race.tscn",scale_factor)
+    var start := _button(menu,"SHIN-KAWA • ORIGINAL","res://scenes/race.tscn",
+        scale_factor,"res://tracks/shin_kawa_v2.json")
+    _button(menu,"TEST 01 • OVAL (271m)","res://scenes/race.tscn",
+        scale_factor,"res://tracks/benchmark_oval.json")
+    _button(menu,"TEST 02 • SWEEPERS (295m)","res://scenes/race.tscn",
+        scale_factor,"res://tracks/benchmark_sweepers.json")
     _button(menu,"CONTROLLER DIAGNOSTICS","res://scenes/dev/input_monitor.tscn",scale_factor)
 
     var hint := Label.new()
@@ -66,11 +71,15 @@ func _ready() -> void:
         menu.add_child(quit)
     start.grab_focus()
 
-func _button(parent: VBoxContainer,title: String, scene: String,scale_factor: float) -> Button:
+func _button(parent: VBoxContainer,title: String, scene: String,
+        scale_factor: float,track_path: String = "") -> Button:
     var button := Button.new()
     button.text = title
     button.custom_minimum_size.y = 77*scale_factor
     button.add_theme_font_size_override("font_size",int(25*scale_factor))
-    button.pressed.connect(func():get_tree().change_scene_to_file(scene))
+    button.pressed.connect(func():
+        if not track_path.is_empty():
+            ProjectSettings.set_setting("nitro/selected_track",track_path)
+        get_tree().change_scene_to_file(scene))
     parent.add_child(button)
     return button

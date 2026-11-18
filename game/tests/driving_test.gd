@@ -28,6 +28,24 @@ func _run() -> void:
         _fail("Reverse exceeds safety speed limit")
         return
 
+    # Signed reversing: steer right -> the rear moves right, nose rotates left.
+    var reverse_right: NitroDriveModel = DRIVE.new()
+    reverse_right.reset(Vector2.ZERO,0.0)
+    reverse_right.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_right.step(STEP,1.0,0.0,1.0,0.0)
+    if reverse_right.heading >= -0.10 or reverse_right.position.x < 0.15:
+        _fail("Reverse steering right has inverted yaw or translation")
+        return
+    var reverse_left: NitroDriveModel = DRIVE.new()
+    reverse_left.reset(Vector2.ZERO,0.0)
+    reverse_left.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_left.step(STEP,-1.0,0.0,1.0,0.0)
+    if reverse_left.heading <= 0.10 or reverse_left.position.x > -0.15:
+        _fail("Reverse steering left has inverted yaw or translation")
+        return
+
     # GAS should recover through neutral and take the car forward.
     for i in range(960):
         reverse.step(STEP,0.0,1.0,0.0,0.0)

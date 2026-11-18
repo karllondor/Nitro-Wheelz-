@@ -1,3 +1,14 @@
+## [0.1.7] — Benchmarks Oval/Sweepers, speed-perception camera tune, HUD playtest
+- Added two optional comparison tracks: near-271m/24m two-sweeper Oval and near-295m/23m independent Sweepers-style loop.
+- Track layouts use original control points; dimensionally comparable to DRIFTIT public guide, NOT identical proprietary course data.
+- Keep original Shin-Kawa as the default selectable circuit; garage now offers 3 circuits.
+- Fix Track DNA's false-negative local proximity validation on short tracks using physical distance along track rather than a constant knot neighbourhood.
+- Bring overhead framing closer on portrait phones; chase moves closer and steeper, plus a small blend of true travel direction for visible drifting.
+- Replace prototype HUD/touch rendering with approved black/pink visual direction: minimap, time, score tiles, camera/pause, numerical angle, portrait metal pedals and vertical handbrake. Prototype score/time data is real; star progression remains unimplemented.
+- Regression: new Oval/Sweepers geometry/collision scene test, existing Godot controls/physics/camera tests.
+- Android visual performance, subjective speed, real three laps and DriftIt matching recordings: NOT RUN. CI must be checked by commit SHA before marking build PASS.
+
+
 # Nitro Wheelz change history
 
 ## [0.1.6] — P1 dynamic camera and desktop exports
