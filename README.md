@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.8 ANDROID TEST CANDIDATE (separate branch, unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.9 HANDSET TEST CANDIDATE (independent branch, not merged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,5 +51,11 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.8_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.9_Platform and are never overwritten.
 
+
+## v0.1.9 mobile playtest
+- **EDIT TRACK • BETA** is now a separate touch-driven editor. Tap a white node, drag it to change the road, use ADD/DELETE, VALIDATE, SAVE and DRIVE. The road must pass the fail-closed Track DNA validator before racing. The **GENERATE TRACK • BETA** button remains a separate procedural variation feature.
+- Finish screen is now a separate full-screen presentation with three-lap time, score, three-star result (provisional for non-Oval tracks), locally ranked best runs and recent play history. Data is local to this device only under `user://nitro_local_runs.json`, not an online leaderboard.
+- More responsive power-oversteer, reduced assist/damping and stronger handbrake initiation support steering+GAS drifts and low-speed donuts. This is a deliberately more demanding arcade tune; device approval is still required.
+- Build version 0.1.9 is visible in the menu, in Android versionName and in all APK/Web/Desktop artifact names.
