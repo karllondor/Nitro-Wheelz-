@@ -28,6 +28,24 @@ func _run() -> void:
         _fail("Reverse exceeds safety speed limit")
         return
 
+    # Signed reversing: steer right -> the rear moves right, nose rotates left.
+    var reverse_right: NitroDriveModel = DRIVE.new()
+    reverse_right.reset(Vector2.ZERO,0.0)
+    reverse_right.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_right.step(STEP,1.0,0.0,1.0,0.0)
+    if reverse_right.heading >= -0.10 or reverse_right.position.x < 0.15:
+        _fail("Reverse steering right has inverted yaw or translation")
+        return
+    var reverse_left: NitroDriveModel = DRIVE.new()
+    reverse_left.reset(Vector2.ZERO,0.0)
+    reverse_left.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_left.step(STEP,-1.0,0.0,1.0,0.0)
+    if reverse_left.heading <= 0.10 or reverse_left.position.x > -0.15:
+        _fail("Reverse steering left has inverted yaw or translation")
+        return
+
     # GAS should recover through neutral and take the car forward.
     for i in range(960):
         reverse.step(STEP,0.0,1.0,0.0,0.0)
@@ -77,6 +95,23 @@ func _run() -> void:
         c.step(STEP,0.65,0.8,0.0,1.0)
     if c.rear_traction >= 0.75:
         _fail("Handbrake did not reduce rear grip")
+        return
+
+    # The handbrake must lock rear grip on the first tick, even when the
+    # steering finger lands briefly AFTER the drift finger.
+    var instant: NitroDriveModel = DRIVE.new()
+    instant.reset(Vector2.ZERO,0.0)
+    instant.velocity = Vector2(0.0,-14.0)
+    instant.step(STEP,0.0,1.0,0.0,1.0)
+    if instant.rear_traction > 0.11:
+        _fail("DRIFT rear grip did not lock in the first physics tick")
+        return
+    var before_yaw: float = instant.yaw_rate
+    for j in range(12):
+        instant.step(STEP,0.0,1.0,0.0,1.0)
+    instant.step(STEP,0.7,1.0,0.0,1.0)
+    if instant.yaw_rate <= before_yaw+0.1:
+        _fail("Buffered flick did not respond when steering followed DRIFT")
         return
 
     # At 72 km/h full throttle should cost far less rear grip than at 36 km/h.

@@ -1,7 +1,7 @@
 name: Playable Web preview
 on:
   push:
-    branches: [main, "agent/nitro-v0.1-driving-lab", "agent/nitro-v0.1.1-mobile-lada", "agent/nitro-v0.1.2-grip-reverse", "agent/nitro-v0.1.3-camera-handling", "agent/nitro-v0.1.4-controls-walls", "agent/nitro-v0.1.5-trackdna-p0", "agent/nitro-v0.1.6-dynamic-camera"]
+    branches: [main, "agent/nitro-v0.1-driving-lab", "agent/nitro-v0.1.1-mobile-lada", "agent/nitro-v0.1.2-grip-reverse", "agent/nitro-v0.1.3-camera-handling", "agent/nitro-v0.1.4-controls-walls", "agent/nitro-v0.1.5-trackdna-p0", "agent/nitro-v0.1.8-handbrake-trackcreator"]
   pull_request:
 permissions:
   contents: read
@@ -40,7 +40,7 @@ jobs:
           echo "Web export generated; manual Android browser test remains NOT RUN."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.6_Web
+          name: Nitro-Wheelz_v0.1.8_Web
           path: builds/web/*
           if-no-files-found: error
           compression-level: 6

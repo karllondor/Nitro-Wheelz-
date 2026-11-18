@@ -6,6 +6,8 @@ class_name NitroDriftTrack
 ## the identical triangles are also exposed to the Godot physics engine.
 
 const TRACK_DATA: String = "res://tracks/shin_kawa_v2.json"
+var track_data_path: String = TRACK_DATA
+var display_name: String = "Shin-Kawa Drift Park"
 const DNA = preload("res://scripts/world/track_dna.gd")
 const HALF_ROAD_WIDTH: float = 12.0  # legacy test compatibility, local widths vary
 const CAR_WALL_CLEARANCE: float = 1.18
@@ -27,7 +29,7 @@ func _ready() -> void:
         build()
 
 func build() -> void:
-    var compiled: Dictionary = DNA.read_track(TRACK_DATA)
+    var compiled: Dictionary = DNA.read_track(track_data_path)
     _apply_compiled(compiled)
 
 func rebuild_from_data(data: Dictionary) -> bool:
@@ -56,6 +58,7 @@ func _apply_compiled(compiled: Dictionary) -> void:
     arc_lengths = compiled["arc_lengths"]
     length_metres = float(compiled["length_metres"])
     track_id = str(compiled["track_id"])
+    display_name = str(compiled["track_name"])
     _build_environment()
     _add_corridor("Compacted shoulder",_shift_edge(left_edge,-1.8),
         _shift_edge(right_edge,1.8),0.018,Color(0.43,0.37,0.31))

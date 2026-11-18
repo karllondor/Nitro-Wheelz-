@@ -7,7 +7,7 @@ const SUBDIVISIONS: int = 12
 const MIN_RADIUS_M: float = 16.0
 const MIN_SEGMENT_M: float = 0.06
 const MIN_CLEARANCE_M: float = 3.0
-const NEIGHBOUR_SKIP: int = 12
+const LOCAL_ARC_NEIGHBOURHOOD_M: float = 55.0
 
 static func read_track(path: String) -> Dictionary:
     if not FileAccess.file_exists(path):
@@ -91,6 +91,7 @@ static func compile(data: Dictionary) -> Dictionary:
         "centerline":samples,"left_edge":left,"right_edge":right,
         "halfwidths":halfwidths,"arc_lengths":lengths,
         "length_metres":total,"track_id":str(data.get("id","unnamed")),
+        "track_name":str(data.get("name",data.get("id","unnamed"))),
         "seed":int(data.get("seed",0)),"control_points":points}
 
 static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
@@ -127,14 +128,21 @@ static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
                         a,b,ring[j],ring[(j+1)%n]) != null:
                     errors.append("Self-intersecting road / wall ring at segments %d and %d" % [i,j])
                     return errors
-    # Prevent unrelated branches of the road occupying the same space.
-    # Skip a local 12-sample neighbourhood: a normal curve is naturally
-    # close to itself. All nonlocal paths require both widths + clearance.
+    # Neighbourhood is measured in METRES along the loop, not in sample
+    # indices. A 271m benchmark and a 1097m circuit have very different
+    # sample spacing; a fixed 12-index skip falsely rejects small sweepers.
+    # This does not disable intersection tests of centre/left/right rings.
+    var progress := PackedFloat32Array()
+    var perimeter: float = 0.0
+    for k in range(n):
+        progress.append(perimeter)
+        perimeter += center[k].distance_to(center[(k+1)%n])
     for i in range(n):
         var a: Vector2 = center[i]
         var b: Vector2 = center[(i+1)%n]
-        for j in range(i+NEIGHBOUR_SKIP+1,n):
-            if n-(j-i) <= NEIGHBOUR_SKIP:
+        for j in range(i+2,n):
+            var along: float = progress[j]-progress[i]
+            if minf(along,perimeter-along) <= LOCAL_ARC_NEIGHBOURHOOD_M:
                 continue
             var c: Vector2 = center[j]
             var d: Vector2 = center[(j+1)%n]

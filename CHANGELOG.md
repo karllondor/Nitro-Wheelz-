@@ -1,3 +1,24 @@
+## [0.1.8] — Responsive handbrake, minimap, new course and Track Creator beta
+- Unique v0.1.8 in game menu, Android versionName/versionCode and all Android/Web/Desktop artifact names.
+- Same-physics-tick rear handbrake lock and brief steering overlap window for immediate entry; mobile GAS remains binary.
+- Drone/chase framing raised to keep the car above controls; staggered-hole metal brake and tall gas, lowered handbrake.
+- Live red vehicle dot and white start/finish marker on minimap.
+- New original Shin-Kawa Full Circuit referencing supplied schematic's sweeper and S-curve rhythm, not identical source geometry.
+- Android-accessible seeded validated Track Creator beta menu action, guarded by Track DNA compiler and saved under user://.
+- Add automated geometry, generator determinism and touch/physics regressions.
+- Android device feel, three human-driven laps, exact route and proprietary assets remain NOT RUN / not implemented.
+
+## [0.1.7] — Benchmarks Oval/Sweepers, speed-perception camera tune, HUD playtest
+- Added two optional comparison tracks: near-271m/24m two-sweeper Oval and near-295m/23m independent Sweepers-style loop.
+- Track layouts use original control points; dimensionally comparable to DRIFTIT public guide, NOT identical proprietary course data.
+- Keep original Shin-Kawa as the default selectable circuit; garage now offers 3 circuits.
+- Fix Track DNA's false-negative local proximity validation on short tracks using physical distance along track rather than a constant knot neighbourhood.
+- Bring overhead framing closer on portrait phones; chase moves closer and steeper, plus a small blend of true travel direction for visible drifting.
+- Replace prototype HUD/touch rendering with approved black/pink visual direction: minimap, time, score tiles, camera/pause, numerical angle, portrait metal pedals and vertical handbrake. Prototype score/time data is real; star progression remains unimplemented.
+- Regression: new Oval/Sweepers geometry/collision scene test, existing Godot controls/physics/camera tests.
+- Android visual performance, subjective speed, real three laps and DriftIt matching recordings: NOT RUN. CI must be checked by commit SHA before marking build PASS.
+
+
 # Nitro Wheelz change history
 
 ## [0.1.6] — P1 dynamic camera and desktop exports
