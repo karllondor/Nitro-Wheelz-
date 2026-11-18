@@ -14,4 +14,4 @@ P1 changes:
 - Added Linux and Windows native desktop export and separate GitHub workflow.
 
 Remaining brief work: P2 responsive physics mobile test, P3 drift line/zone/angle/combo scoring, P4 checkpoints/score progression, P5 new approved UI, P6 effects and P7 human-driven three laps. None implemented/tested by this phase. Android / PC gameplay, frame rates, wall-side camera visuals and phone Xbox testing NOT RUN.
-Workflow evidence links: pending.
+Verified CI and build checks: see docs/QA_REPORT_v0.1.6.md (exact run IDs, hashes and NOT RUN gates).
