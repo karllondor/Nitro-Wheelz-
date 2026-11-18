@@ -112,25 +112,25 @@ func _validate() -> void:
         _status("INVALID • "+(str(errors[0]) if not errors.is_empty() else "Unknown geometry error"),false)
     queue_redraw()
 
-func _save() -> void:
+func _save() -> bool:
     _validate()
     if not ready_to_play:
-        return
+        return false
     var file: FileAccess = FileAccess.open(CUSTOM,FileAccess.WRITE)
     if file == null:
         _status("FAILED • Storage unavailable",false)
-        return
+        return false
     file.store_string(JSON.stringify(data,"  "))
     file.close()
     var check: Dictionary = DNA.read_track(CUSTOM)
     if not bool(check.get("ok",false)):
         _status("FAILED • Saved circuit failed geometry check",false)
-        return
+        return false
     _status("SAVED • MY CUSTOM CIRCUIT • %.0f m" % last_length,true)
+    return true
 
 func _drive() -> void:
-    _save()
-    if not ready_to_play or not FileAccess.file_exists(CUSTOM):
+    if not _save():
         return
     ProjectSettings.set_setting("nitro/selected_track",CUSTOM)
     get_tree().change_scene_to_file("res://scenes/race.tscn")
