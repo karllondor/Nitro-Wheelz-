@@ -1,3 +1,11 @@
+## [0.1.9] — Actual Track Editor, result board and dynamic drift retune
+- New **EDIT TRACK • BETA** separate from procedural Generate Track. Drag/Add/Delete spline control points, validate closed road and shared collision, save custom loop to user:// and play; fail-closed on invalid data.
+- Result scene replaces the FINISHED popup and stacked Restart/Garage UI. Local-only history and best times stored separately per track. Display time, score and provisional stars. No online leaderboard.
+- Steering+full GAS can now release the rear and produce power-oversteer without handbrake. Higher turning authority and less assisted stability permit deliberate donuts; handbrake flick impulse increased. Reverse stays separately modelled.
+- Distinct Android APK versionCode=9, versionName=0.1.9 and matching versioned desktop/web artifacts.
+- New headless tests: editable geometry & persistence, local records/stars, power-entry/drift and donut. Hardware feel and manually driven complete races still need review.
+- Model: GPT-6. Source clips: 1000076235, 1000076237, 1000076238, 1000076239, 1000076240; no claim of matched input timing or exact reference car dynamics.
+
 ## [0.1.8] — Responsive handbrake, minimap, new course and Track Creator beta
 - Unique v0.1.8 in game menu, Android versionName/versionCode and all Android/Web/Desktop artifact names.
 - Same-physics-tick rear handbrake lock and brief steering overlap window for immediate entry; mobile GAS remains binary.
