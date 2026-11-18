@@ -347,7 +347,7 @@ func _update_camera(delta: float) -> void:
 
     # Drone follow: tilted ~25 degrees off vertical, damped rotation,
     # and extra forward track preview; keeps the car lower in the frame.
-    var drone_alpha: float = 1.0-exp(-2.0*maxf(delta,0.0))
+    var drone_alpha: float = 1.0-exp(-4.5*maxf(delta,0.0))
     drone_direction = drone_direction.lerp(f,drone_alpha).normalized()
     var overhead_target: Vector3 = focus-drone_direction*31.0+Vector3.UP*76.0
     var pan_alpha: float = 1.0-exp(-5.0*maxf(delta,0.0))
