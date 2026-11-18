@@ -36,6 +36,7 @@ var slide_hold: float = 0.0
 var drift_angle: float = 0.0
 var steering_angle: float = 0.0
 var handbrake_previously_held: bool = false
+var handbrake_flick_window: float = 0.0
 
 func reset(p: Vector2, radians: float) -> void:
     position = p
@@ -47,6 +48,7 @@ func reset(p: Vector2, radians: float) -> void:
     drift_angle = 0.0
     steering_angle = 0.0
     handbrake_previously_held = false
+    handbrake_flick_window = 0.0
 
 func speed_mps() -> float:
     return velocity.length()
@@ -104,6 +106,13 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     handbrake = clampf(handbrake,0.0,1.0)
     var drift_pressed: bool = handbrake > 0.35 and not handbrake_previously_held
     handbrake_previously_held = handbrake > 0.35
+    if drift_pressed:
+        # Allow the steer finger to arrive slightly after the DRIFT finger.
+        handbrake_flick_window = 0.12
+    elif handbrake <= 0.35:
+        handbrake_flick_window = 0.0
+    else:
+        handbrake_flick_window = maxf(0.0,handbrake_flick_window-dt)
 
     var f: Vector2 = forward()
     var r: Vector2 = right()
@@ -155,9 +164,12 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var target_traction: float = REAR_SLIDE_GRIP if sliding else 1.0
     if handbrake > 0.1 and speed > 1.5:
         target_traction = HANDBRAKE_GRIP
-    # Handbrake engages in the first 1–2 simulation ticks, not after a long lerp.
-    var response_seconds: float = 0.008 if handbrake > 0.35 else (0.025 if target_traction < rear_traction else REATTACH_SECONDS)
-    rear_traction = move_toward(rear_traction,target_traction,dt/response_seconds)
+    # Hard rear lock on the same physics tick as touch, no grip lerp delay.
+    if handbrake > 0.35 and speed > 1.5:
+        rear_traction = HANDBRAKE_GRIP
+    else:
+        var response_seconds: float = 0.025 if target_traction < rear_traction else REATTACH_SECONDS
+        rear_traction = move_toward(rear_traction,target_traction,dt/response_seconds)
 
     var travel_direction: float = atan2(local_side,slip_forward)
     var slide_fraction: float = clampf((1.0-rear_traction)/(1.0-REAR_SLIDE_GRIP),0.0,1.0)
@@ -196,10 +208,11 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var recovery: float = slide_fraction*hands_off*clampf(speed/7.0,0.0,1.0)
     yaw_accel += travel_direction*recovery*2.7*(1.0-0.22*gas)
     yaw_rate += yaw_accel*dt
-    if drift_pressed and signed_speed > 4.0 and absf(steer) > 0.08:
-        # One-shot flick only on the rising handbrake edge. No repeated
-        # spin while the player keeps DRIFT held.
-        yaw_rate += steer*0.20*clampf(speed/14.0,0.0,1.0)
+    if handbrake_flick_window > 0.0 and signed_speed > 4.0 and absf(steer) > 0.08:
+        # The first valid steer+DRIFT overlap gives a single, immediate
+        # entry impulse. Never repeat it while DRIFT remains pressed.
+        yaw_rate += steer*0.42*clampf(speed/14.0,0.0,1.0)
+        handbrake_flick_window = 0.0
     yaw_rate *= exp(-(YAW_DAMPING+0.6*hands_off*(1.0-slide_fraction))*dt)
     var yaw_ceiling: float = _yaw_rate_limit(speed,slide_fraction)
     yaw_rate = clampf(yaw_rate,-yaw_ceiling,yaw_ceiling)
