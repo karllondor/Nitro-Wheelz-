@@ -1,30 +1,23 @@
-# Nitro Wheelz v0.1.4 — Mobile gameplay feedback iteration
+# Nitro Wheelz — Track DNA v0.1.5 P0 test build
 
-Model: GPT-6. Date: 2026-11-17.
-Branch: agent/nitro-v0.1.4-controls-walls.
-User footage: /mnt/data/1000076007.mp4 (Nitro Wheelz 55.9 s), /mnt/data/1000076008.mp4 (DRIFTIT 30.7 s). These are source footage, not the new build.
-Previous first race recorded off-road travel, unstable steering, thin/thumby pedal controls, and different camera-aligned start. DRIFTIT comparison shows larger road space and easier deliberate drifting.
+Model: GPT-6
+Date: 2026-11-18
+Development branch: agent/nitro-v0.1.5-trackdna-p0
+Repo: https://github.com/karllondor/Nitro-Wheelz-
 
-## Changes
-- Redesigned loop so spawn heading follows screen-up on portrait top-down camera, with a first right turn after a long straight.
-- Track half-width increased 8.2 -> 12.0 world units; wall collision corrected to coincide with a continuous visible raised blue/white perimeter (car clearance 1.18 m).
-- Wall bounce removes outward momentum, applies a restrained inward return, friction, and optional 100 ms haptic (VIBRATE permission) plus short camera shake. Contact does not allow entering the sand.
-- Joystick uses an analog response exponent 0.74 for short moves; steering rate rises to 18 rad/s and release recovery to 23 rad/s. Handbrake press releases rear grip in around 8 ms and triggers one short non-repeating yaw flick while steering.
-- Gas and brake have enlarged trapezoidal pedal face, deep controls; DRIFT larger.
-- Godot regression tests: straight northbound spawn, wall both-sides rebound, close-range portrait control geometry, immediate handbrake response, existing reverse/steering/physics/camera tests.
+## Scope: P0 geometry, not full P0-P7 brief
+Canonical track layout: game/tracks/shin_kawa_v2.json.
+Compiler/validator: game/scripts/world/track_dna.gd.
+Runtime rebuild, walls, exact matching StaticBody collider and deterministic car contact: game/scripts/world/drift_track.gd.
+Negative controls and collision face identity tests: game/tests/track_dna_test.gd.
 
-## Constraints
-This is an original Godot physics model informed by public DRIFTIT principles, NOT a copy of its source. Real-device steering feel, collision haptics and real-world phone FPS need manual playtest. Track layout fictional. Revisit if first turn is too far or narrow despite the road width increase.
+Rejected by generator: wrong schema, open-loop flag, too few or duplicate controls, road width under 12m/over 34m, too small radii, zero-length segments, self-intersecting centreline/wall offsets, nonlocal road corridor overlap.
 
-## Build
-v0.1.4 Android ARM64 debug and Web; generated APKs use ephemeral CI signing keys, so previous install may need uninstall (with data loss) before installing.
-Automated build/CI PASS; physical mobile and Xbox tests NOT RUN.
+## Deliverables/gates
+- Godot import + smoke, input, driving, visual and TrackDNA tests: TO CHECK
+- Web export / Android ARM64 debug APK: TO CHECK
+- Desktop export: NOT RUN; preset needed
+- Physical-device 3 laps, scenery, collisions, UI: NOT RUN
+- Full dynamic camera P1 and LINE/ZONES/ANGLE/COMBO P3 are NOT IMPLEMENTED in this slice
 
-## Evidence — 2026-11-17
-- Foundation: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053648
-- Godot import, controller map, physics and track/wall/UI regression: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053566
-- Android ARM64 debug APK export: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053614
-- Web export: https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44202053521
-- APK SHA-256: 1e43c352f48167df119da6f690d7071e1c63453efce8c65e875910cb1f6ba01b
-
-APK and ZIP archives verified for integrity and Android ARM64 runtime presence. CI checks do not substitute for visual or tactile handset tests.
+No game-wide handling tuning or approved Lada redesign. Track algorithm outputs are deterministic. Unsuccessful in-memory rebuilds do not damage the current playable track.
