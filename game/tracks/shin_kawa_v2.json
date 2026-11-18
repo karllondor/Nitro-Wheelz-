@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "id": "shin_kawa_v2",
+  "name": "Shin-Kawa Drift Park — clean circuit",
+  "generator_version": 1,
+  "seed": 1105,
+  "closed": true,
+  "width_m": 24,
+  "start_index": 0,
+  "theme": "japan_drift",
+  "control_points": [
+    [
+      -118,
+      15
+    ],
+    [
+      -118,
+      -45
+    ],
+    [
+      -95,
+      -100
+    ],
+    [
+      -45,
+      -135
+    ],
+    [
+      18,
+      -135
+    ],
+    [
+      78,
+      -107
+    ],
+    [
+      110,
+      -56
+    ],
+    [
+      105,
+      -5
+    ],
+    [
+      65,
+      40
+    ],
+    [
+      25,
+      57
+    ],
+    [
+      10,
+      93
+    ],
+    [
+      50,
+      130
+    ],
+    [
+      89,
+      165
+    ],
+    [
+      69,
+      204
+    ],
+    [
+      4,
+      220
+    ],
+    [
+      -62,
+      206
+    ],
+    [
+      -110,
+      177
+    ],
+    [
+      -142,
+      125
+    ],
+    [
+      -118,
+      80
+    ]
+  ],
+  "widths_m": [
+    24,
+    24,
+    24,
+    24,
+    26,
+    26,
+    24,
+    24,
+    24,
+    24,
+    24,
+    25,
+    25,
+    26,
+    26,
+    24,
+    24,
+    24,
+    24
+  ],
+  "description": "Hand-designed control curve; deterministic sampled road, single matching wall/collision coordinate system. First straight runs north, then first turn right. Authoritative test layout. Track editor can later replace these points."
+}
