@@ -1,264 +1,291 @@
 extends Node3D
 class_name NitroDriftTrack
-## Original fictional Japanese circuit, built from spline samples. No real circuit map.
+## Nitro Track DNA v1: visual surfaces, solid barrier meshes and analytic
+## vehicle contacts all derive from the SAME validated sampled corridor.
+## The planar arcade car intentionally uses deterministic analytic contacts;
+## the identical triangles are also exposed to the Godot physics engine.
 
-const HALF_ROAD_WIDTH: float = 12.0
+const TRACK_DATA: String = "res://tracks/shin_kawa_v2.json"
+const DNA = preload("res://scripts/world/track_dna.gd")
+const HALF_ROAD_WIDTH: float = 12.0  # legacy test compatibility, local widths vary
 const CAR_WALL_CLEARANCE: float = 1.18
-const SAMPLE_SUBDIVISIONS: int = 12
-# Start line follows a straight world-north (-Z) section; the first
-# meaningful turn is RIGHT. This is intentionally aligned with portrait
-# top-down navigation, not an arbitrary rotated camera.
-const CONTROL_POINTS: Array[Vector2] = [
-    Vector2(-70, 40), Vector2(-70, 0), Vector2(-70, -40),
-    Vector2(-45, -85), Vector2(10, -88), Vector2(58, -70),
-    Vector2(73, -30), Vector2(48, 10), Vector2(25, 30),
-    Vector2(55, 52), Vector2(73, 82), Vector2(55, 116),
-    Vector2(15, 125), Vector2(-15, 96), Vector2(-40, 122),
-    Vector2(-75, 118), Vector2(-94, 91), Vector2(-75, 72),
-    Vector2(-70, 65)
-]
+const WALL_HEIGHT: float = 1.30
+const WALL_THICKNESS: float = 0.40
 
 var centerline: Array[Vector2] = []
+var left_edge: Array[Vector2] = []
+var right_edge: Array[Vector2] = []
+var halfwidths: PackedFloat32Array = PackedFloat32Array()
 var arc_lengths: PackedFloat32Array = PackedFloat32Array()
 var length_metres: float = 0.0
+var validation_errors: PackedStringArray = PackedStringArray()
+var track_valid: bool = false
+var track_id: String = ""
 
 func _ready() -> void:
     if centerline.is_empty():
         build()
 
 func build() -> void:
-    centerline.clear()
-    var count: int = CONTROL_POINTS.size()
-    for i in range(count):
-        var p0: Vector2 = CONTROL_POINTS[(i - 1 + count) % count]
-        var p1: Vector2 = CONTROL_POINTS[i]
-        var p2: Vector2 = CONTROL_POINTS[(i + 1) % count]
-        var p3: Vector2 = CONTROL_POINTS[(i + 2) % count]
-        for segment in range(SAMPLE_SUBDIVISIONS):
-            var t: float = float(segment) / float(SAMPLE_SUBDIVISIONS)
-            var point: Vector2 = 0.5 * (
-                2.0 * p1 + (-p0 + p2) * t +
-                (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t +
-                (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t
-            )
-            centerline.append(point)
-    arc_lengths = PackedFloat32Array()
-    length_metres = 0.0
-    for i in range(centerline.size()):
-        arc_lengths.append(length_metres)
-        length_metres += centerline[i].distance_to(centerline[(i + 1) % centerline.size()])
+    var compiled: Dictionary = DNA.read_track(TRACK_DATA)
+    _apply_compiled(compiled)
+
+func rebuild_from_data(data: Dictionary) -> bool:
+    # Future editor entrypoint: reject invalid data without replacing the
+    # currently playable track. No accidental broken geometry is generated.
+    var compiled: Dictionary = DNA.compile(data)
+    if not bool(compiled.get("ok",false)):
+        validation_errors = compiled["errors"]
+        return false
+    _apply_compiled(compiled)
+    return true
+
+func _apply_compiled(compiled: Dictionary) -> void:
+    track_valid = bool(compiled.get("ok",false))
+    validation_errors = compiled.get("errors",PackedStringArray())
+    if not track_valid:
+        push_error("Nitro Track DNA rejected circuit: "+str(validation_errors))
+        return
+    for child in get_children():
+        remove_child(child)
+        child.queue_free()
+    centerline = compiled["centerline"]
+    left_edge = compiled["left_edge"]
+    right_edge = compiled["right_edge"]
+    halfwidths = compiled["halfwidths"]
+    arc_lengths = compiled["arc_lengths"]
+    length_metres = float(compiled["length_metres"])
+    track_id = str(compiled["track_id"])
     _build_environment()
-    _add_ribbon("Tarmac", 0.0, HALF_ROAD_WIDTH, 0.04, Color(0.17,0.18,0.21))
-    _add_ribbon("Kerbs", 0.0, HALF_ROAD_WIDTH + 1.6, 0.012, Color(0.43,0.37,0.31))
-    # Re-add tarmac above kerbs so only the coloured outside shoulder remains.
-    _add_ribbon("Driving Surface", 0.0, HALF_ROAD_WIDTH, 0.05, Color(0.19,0.19,0.215))
-    _add_ribbon("White edge left", -HALF_ROAD_WIDTH + 0.55, 0.10, 0.065, Color(0.84,0.85,0.83))
-    _add_ribbon("White edge right", HALF_ROAD_WIDTH - 0.55, 0.10, 0.065, Color(0.84,0.85,0.83))
+    _add_corridor("Compacted shoulder",_shift_edge(left_edge,-1.8),
+        _shift_edge(right_edge,1.8),0.018,Color(0.43,0.37,0.31))
+    _add_corridor("Single continuous driving surface",left_edge,right_edge,
+        0.05,Color(0.19,0.19,0.215))
+    _add_corridor("White edge left",_shift_edge(left_edge,0.49),
+        _shift_edge(left_edge,0.61),0.066,Color(0.87,0.87,0.85))
+    _add_corridor("White edge right",_shift_edge(right_edge,-0.61),
+        _shift_edge(right_edge,-0.49),0.066,Color(0.87,0.87,0.85))
     _build_start_line()
     _build_barriers()
     _build_track_props()
+
+func _shift_edge(edge: Array[Vector2], metres: float) -> Array[Vector2]:
+    var shifted: Array[Vector2] = []
+    for i in range(edge.size()):
+        var inward: Vector2 = (right_edge[i]-left_edge[i]).normalized()
+        shifted.append(edge[i]+inward*metres)
+    return shifted
 
 func start_position() -> Vector2:
     return centerline[0]
 
 func start_heading() -> float:
-    var tangent: Vector2 = (centerline[5] - centerline[0]).normalized()
-    return atan2(tangent.x, -tangent.y)
+    var tangent: Vector2 = (centerline[1]-centerline[centerline.size()-1]).normalized()
+    return atan2(tangent.x,-tangent.y)
 
 func sample_info(pos: Vector2) -> Dictionary:
     var best_sq: float = INF
-    var closest: Vector2 = Vector2.ZERO
-    var closest_index: int = 0
+    var index: int = 0
+    var nearest: Vector2 = Vector2.ZERO
     var segment_t: float = 0.0
+    var n: int = centerline.size()
+    for i in range(n):
+        var a: Vector2 = centerline[i]
+        var b: Vector2 = centerline[(i+1)%n]
+        var delta: Vector2 = b-a
+        var t: float = clampf((pos-a).dot(delta)/maxf(delta.length_squared(),0.000001),0.0,1.0)
+        var p: Vector2 = a+delta*t
+        var dsq: float = pos.distance_squared_to(p)
+        if dsq < best_sq:
+            best_sq=dsq
+            index=i
+            nearest=p
+            segment_t=t
+    var next_i: int = (index+1)%n
+    var segment: Vector2 = centerline[next_i]-centerline[index]
+    var width: float = lerpf(halfwidths[index],halfwidths[next_i],segment_t)
+    var progress: float = (arc_lengths[index]+segment.length()*segment_t)/maxf(length_metres,1.0)
+    return {"distance":sqrt(best_sq),"point":nearest,"index":index,
+        "t":segment_t,"width":width,"progress":progress,
+        "tangent":segment.normalized()}
+
+func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
+    # Derive analytic contact from the *same sampled edge segments*
+    # used for the blue/white wall mesh. Not a distance-to-centre fudge.
+    var info: Dictionary = sample_info(pos)
+    var i: int = int(info["index"])
+    var next_i: int = (i+1)%centerline.size()
+    var t: float = float(info["t"])
+    var normal: Vector2 = (right_edge[i].lerp(right_edge[next_i],t) -
+        left_edge[i].lerp(left_edge[next_i],t)).normalized()
+    var side: float = -1.0 if (pos-Vector2(info["point"])).dot(normal)<0.0 else 1.0
+    var boundary: Vector2 = left_edge[i].lerp(left_edge[next_i],t) if side<0 else right_edge[i].lerp(right_edge[next_i],t)
+    var outward: Vector2 = normal*side
+    var safe_centre: Vector2 = boundary-outward*(CAR_WALL_CLEARANCE+0.10)
+    var penetration: float = (pos-safe_centre).dot(outward)
+    if penetration <= 0.0:
+        return {"hit":false,"position":pos,"velocity":travel_velocity,
+            "impact_speed":0.0,"normal":Vector2.ZERO}
+    var outward_speed: float = maxf(travel_velocity.dot(outward),0.0)
+    var reflected: Vector2 = (travel_velocity-outward*(1.18*outward_speed))*0.80
+    var corrected: Vector2 = pos-outward*(penetration+0.005)
+    return {"hit":true,"position":corrected,"velocity":reflected,
+        "impact_speed":outward_speed,"normal":outward}
+
+func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
+        height: float,tint: Color) -> void:
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
     for i in range(centerline.size()):
-        var start: Vector2 = centerline[i]
-        var end: Vector2 = centerline[(i + 1) % centerline.size()]
-        var direction: Vector2 = end - start
-        var denom: float = maxf(direction.length_squared(), 0.00001)
-        var t: float = clampf((pos - start).dot(direction) / denom, 0.0, 1.0)
-        var p: Vector2 = start + direction * t
-        var squared_distance: float = pos.distance_squared_to(p)
-        if squared_distance < best_sq:
-            best_sq = squared_distance
-            closest = p
-            closest_index = i
-            segment_t = t
-    var next_index: int = (closest_index + 1) % centerline.size()
-    var portion: float = (arc_lengths[closest_index] +
-        centerline[closest_index].distance_to(centerline[next_index]) * segment_t
-    ) / maxf(length_metres, 1.0)
-    return {"distance": sqrt(best_sq), "point": closest, "index": closest_index,
-        "progress": portion, "tangent": (
-            centerline[next_index] - centerline[closest_index]).normalized()}
-
-func _tangent(i: int) -> Vector2:
-    var count: int = centerline.size()
-    return (centerline[(i + 1) % count] - centerline[(i - 1 + count) % count]).normalized()
-
-func _add_ribbon(name: String, offset: float, half_width: float, height: float, tint: Color) -> void:
-    var mesh := SurfaceTool.new()
-    mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
-    for i in range(centerline.size()):
-        var next_index: int = (i + 1) % centerline.size()
-        var n0: Vector2 = Vector2(-_tangent(i).y, _tangent(i).x)
-        var n1: Vector2 = Vector2(-_tangent(next_index).y, _tangent(next_index).x)
-        var a: Vector2 = centerline[i] + n0 * (offset - half_width)
-        var b: Vector2 = centerline[i] + n0 * (offset + half_width)
-        var c: Vector2 = centerline[next_index] + n1 * (offset - half_width)
-        var d: Vector2 = centerline[next_index] + n1 * (offset + half_width)
-        for p in [a,c,b,b,c,d]:
-            mesh.set_normal(Vector3.UP)
-            mesh.set_color(tint)
-            mesh.add_vertex(Vector3(p.x,height,p.y))
-    var result: ArrayMesh = mesh.commit()
-    var material := StandardMaterial3D.new()
-    material.vertex_color_use_as_albedo = true
-    material.roughness = 0.98
-    material.cull_mode = BaseMaterial3D.CULL_DISABLED
-    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    result.surface_set_material(0, material)
-    var instance := MeshInstance3D.new()
-    instance.name = name
-    instance.mesh = result
-    add_child(instance)
-
-func _build_environment() -> void:
-    var plane := MeshInstance3D.new()
-    plane.name = "Japanese drift park earth"
-    var ground := PlaneMesh.new()
-    ground.size = Vector2(360, 360)
-    plane.mesh = ground
-    plane.position.y = -0.08
+        var next_i: int = (i+1)%centerline.size()
+        var p: Vector3 = Vector3(a[i].x,height,a[i].y)
+        var q: Vector3 = Vector3(b[i].x,height,b[i].y)
+        var r: Vector3 = Vector3(a[next_i].x,height,a[next_i].y)
+        var u: Vector3 = Vector3(b[next_i].x,height,b[next_i].y)
+        _add_tri(st,p,r,q,tint)
+        _add_tri(st,q,r,u,tint)
+    var arr: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
-    mat.albedo_color = Color(0.31,0.27,0.22)
-    mat.roughness = 1.0
-    plane.material_override = mat
-    add_child(plane)
+    mat.vertex_color_use_as_albedo = true
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    arr.surface_set_material(0,mat)
+    var mesh := MeshInstance3D.new()
+    mesh.name = label
+    mesh.mesh = arr
+    add_child(mesh)
 
-    var sun := DirectionalLight3D.new()
-    sun.name = "Late dusk sky"
-    sun.rotation_degrees = Vector3(-58, -33, -12)
-    sun.light_color = Color(1.0,0.75,0.59)
-    sun.light_energy = 0.95
-    sun.shadow_enabled = false
-    add_child(sun)
+func _add_tri(st: SurfaceTool,a: Vector3,b: Vector3,c: Vector3,
+        tint: Color,vertices: PackedVector3Array = PackedVector3Array()) -> void:
+    for p in [a,b,c]:
+        st.set_color(tint)
+        st.set_normal(Vector3.UP)
+        st.add_vertex(p)
+        # Optional collision vertices are returned by explicit wall helper.
 
-    var env := WorldEnvironment.new()
-    var resource := Environment.new()
-    resource.background_mode = Environment.BG_COLOR
-    resource.background_color = Color(0.11,0.14,0.22)
-    resource.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    resource.ambient_light_color = Color(0.62,0.7,0.78)
-    resource.ambient_light_energy = 0.7
-    env.environment = resource
-    add_child(env)
+func _wall_tri(st: SurfaceTool,vertices: PackedVector3Array,
+        a: Vector3,b: Vector3,c: Vector3,tint: Color) -> void:
+    for p in [a,b,c]:
+        st.set_color(tint)
+        st.set_normal(Vector3.UP)
+        st.add_vertex(p)
+        vertices.append(p)
+
+func _build_barriers() -> void:
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var triangles := PackedVector3Array()
+    var count: int = centerline.size()
+    for i in range(count):
+        var next_i: int = (i+1)%count
+        var colour: Color = Color(0.90,0.92,0.91) if int(i/3)%2==0 else Color(0.14,0.42,0.69)
+        var n0: Vector2 = (right_edge[i]-left_edge[i]).normalized()
+        var n1: Vector2 = (right_edge[next_i]-left_edge[next_i]).normalized()
+        for side in [-1.0,1.0]:
+            var p: Vector2 = left_edge[i] if side<0 else right_edge[i]
+            var q: Vector2 = left_edge[next_i] if side<0 else right_edge[next_i]
+            p += n0*side*0.10
+            q += n1*side*0.10
+            var bottom_a := Vector3(p.x,0.055,p.y)
+            var bottom_b := Vector3(q.x,0.055,q.y)
+            var top_a := Vector3(p.x,WALL_HEIGHT,p.y)
+            var top_b := Vector3(q.x,WALL_HEIGHT,q.y)
+            var outer_p: Vector2 = p+n0*side*WALL_THICKNESS
+            var outer_q: Vector2 = q+n1*side*WALL_THICKNESS
+            var outside_a := Vector3(outer_p.x,WALL_HEIGHT,outer_p.y)
+            var outside_b := Vector3(outer_q.x,WALL_HEIGHT,outer_q.y)
+            _wall_tri(st,triangles,bottom_a,bottom_b,top_a,colour)
+            _wall_tri(st,triangles,top_a,bottom_b,top_b,colour)
+            _wall_tri(st,triangles,top_a,top_b,outside_a,colour)
+            _wall_tri(st,triangles,outside_a,top_b,outside_b,colour)
+    var mesh: ArrayMesh = st.commit()
+    var mat := StandardMaterial3D.new()
+    mat.vertex_color_use_as_albedo = true
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mesh.surface_set_material(0,mat)
+    var visual := MeshInstance3D.new()
+    visual.name = "Walls from Track DNA edges"
+    visual.mesh = mesh
+    add_child(visual)
+    var body := StaticBody3D.new()
+    body.name = "Exactly matched wall triangle collision mesh"
+    var collider := CollisionShape3D.new()
+    var shape := ConcavePolygonShape3D.new()
+    shape.data = triangles
+    collider.shape = shape
+    body.add_child(collider)
+    add_child(body)
 
 func _build_start_line() -> void:
-    var p: Vector2 = centerline[0]
-    var tangent: Vector2 = _tangent(0)
-    var lateral: Vector2 = Vector2(-tangent.y,tangent.x)
-    var size: float = 1.2
-    for tile in range(14):
+    var p: Vector2 = start_position()
+    var t: Vector2 = (centerline[1]-centerline[centerline.size()-1]).normalized()
+    var across: Vector2 = (right_edge[0]-left_edge[0]).normalized()
+    var road_width: float = halfwidths[0]*2.0
+    var tiles: int = 20
+    for tile in range(tiles):
         for stripe in range(2):
             var board := MeshInstance3D.new()
-            var tile_mesh := BoxMesh.new()
-            tile_mesh.size = Vector3(size,0.025,size)
-            board.mesh = tile_mesh
-            var offset: float = -7.5 + (float(tile) + 0.5) * (15.0/14.0)
-            var delta: float = (float(stripe)-0.5)*size
-            var world_point: Vector2 = p + lateral*offset + tangent*delta
-            board.position = Vector3(world_point.x, 0.092, world_point.y)
-            board.rotation.y = atan2(tangent.x,-tangent.y)
+            var box := BoxMesh.new()
+            box.size = Vector3(road_width/float(tiles),0.025,0.58)
+            board.mesh = box
+            var lateral: float = -halfwidths[0]+(float(tile)+0.5)*road_width/float(tiles)
+            var longitudinal: float = (float(stripe)-0.5)*0.58
+            var pt: Vector2 = p+across*lateral+t*longitudinal
+            board.position = Vector3(pt.x,0.094,pt.y)
+            board.rotation.y = -start_heading()
             var material := StandardMaterial3D.new()
             material.albedo_color = Color.WHITE if (tile+stripe)%2==0 else Color(0.055,0.055,0.06)
             material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
             board.material_override = material
             add_child(board)
 
-func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
-    # The visible wall is positioned at HALF_ROAD_WIDTH; clip the
-    # car centre slightly inside it to account for vehicle body width.
-    # Returned impulse is used by camera and device feedback.
-    var info: Dictionary = sample_info(pos)
-    var lateral: float = float(info["distance"])
-    var limit: float = HALF_ROAD_WIDTH - CAR_WALL_CLEARANCE
-    if lateral <= limit:
-        return {"hit":false,"position":pos,"velocity":travel_velocity,
-            "impact_speed":0.0,"normal":Vector2.ZERO}
-    var toward_wall: Vector2 = pos - Vector2(info["point"])
-    if toward_wall.length_squared() < 0.00001:
-        var tangent: Vector2 = Vector2(info["tangent"])
-        toward_wall = Vector2(-tangent.y,tangent.x)
-    toward_wall = toward_wall.normalized()
-    var outward_speed: float = maxf(travel_velocity.dot(toward_wall),0.0)
-    var reposition: Vector2 = Vector2(info["point"]) + toward_wall*limit
-    # Kill outward velocity, return a gentle 18% bounce, lose some
-    # tangential speed. No teleport-to-road or off-road sand penalty.
-    var v: Vector2 = (travel_velocity - toward_wall*(1.18*outward_speed))*0.80
-    return {"hit":true,"position":reposition,"velocity":v,
-        "impact_speed":outward_speed,"normal":toward_wall}
-
-func _build_barriers() -> void:
-    # Continuous raised painted walls, not isolated boxes. Two triangles
-    # for the inside-facing upright and two for its visible top cap.
-    # One mesh draw call per material instead of 100+ MeshInstance nodes.
-    var surface := SurfaceTool.new()
-    surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-    var total: int = centerline.size()
-    for i in range(total):
-        var next_i: int = (i+1)%total
-        var tangent0: Vector2 = _tangent(i)
-        var tangent1: Vector2 = _tangent(next_i)
-        var lateral0: Vector2 = Vector2(-tangent0.y,tangent0.x)
-        var lateral1: Vector2 = Vector2(-tangent1.y,tangent1.x)
-        var colour: Color = Color(0.90,0.92,0.91) if int(i/3)%2==0 else Color(0.14,0.42,0.69)
-        for side in [-1.0,1.0]:
-            var p: Vector2 = centerline[i] + lateral0*side*(HALF_ROAD_WIDTH+0.10)
-            var q: Vector2 = centerline[next_i] + lateral1*side*(HALF_ROAD_WIDTH+0.10)
-            var bottom_a := Vector3(p.x,0.065,p.y)
-            var bottom_b := Vector3(q.x,0.065,q.y)
-            var top_a := Vector3(p.x,1.30,p.y)
-            var top_b := Vector3(q.x,1.30,q.y)
-            _wall_tri(surface,bottom_a,bottom_b,top_a,colour)
-            _wall_tri(surface,top_a,bottom_b,top_b,colour)
-            var p_out: Vector2 = p+lateral0*side*0.36
-            var q_out: Vector2 = q+lateral1*side*0.36
-            var top_out_a := Vector3(p_out.x,1.30,p_out.y)
-            var top_out_b := Vector3(q_out.x,1.30,q_out.y)
-            _wall_tri(surface,top_a,top_b,top_out_a,colour)
-            _wall_tri(surface,top_out_a,top_b,top_out_b,colour)
-    var mesh: ArrayMesh = surface.commit()
-    var mat := StandardMaterial3D.new()
-    mat.vertex_color_use_as_albedo = true
-    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    mesh.surface_set_material(0,mat)
-    var walls := MeshInstance3D.new()
-    walls.name = "Continuous wall collision boundary — blue white"
-    walls.mesh = mesh
-    add_child(walls)
-
-func _wall_tri(surface: SurfaceTool,a: Vector3,b: Vector3,
-        c: Vector3,col: Color) -> void:
-    for point in [a,b,c]:
-        surface.set_normal(Vector3.UP)
-        surface.set_color(col)
-        surface.add_vertex(point)
+func _build_environment() -> void:
+    var plane := MeshInstance3D.new()
+    plane.name = "Ground outside track"
+    var ground := PlaneMesh.new()
+    ground.size = Vector2(650,650)
+    plane.mesh = ground
+    plane.position.y = -0.08
+    var m := StandardMaterial3D.new()
+    m.albedo_color = Color(0.31,0.27,0.22)
+    plane.material_override = m
+    add_child(plane)
+    var sun := DirectionalLight3D.new()
+    sun.rotation_degrees = Vector3(-58,-33,-12)
+    sun.light_color = Color(1.0,0.75,0.59)
+    sun.light_energy = 0.95
+    sun.shadow_enabled = false
+    add_child(sun)
+    var env := WorldEnvironment.new()
+    var res := Environment.new()
+    res.background_mode = Environment.BG_COLOR
+    res.background_color = Color(0.11,0.14,0.22)
+    res.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    res.ambient_light_color = Color(0.62,0.7,0.78)
+    res.ambient_light_energy = 0.7
+    env.environment = res
+    add_child(env)
 
 func _build_track_props() -> void:
-    # Sparse low-poly scenery; no branded venues or real-world circuit layouts.
-    for i in range(0, centerline.size(), 13):
-        var tangent: Vector2 = _tangent(i)
-        var lateral: Vector2 = Vector2(-tangent.y,tangent.x)
-        var offset: float = 25.0 if (i/13)%2 == 0 else -23.0
-        var p: Vector2 = centerline[i] + lateral*offset
+    # Every prop is rejected if it would approach any other branch of road.
+    # The global query matters on U-turns and hairpins.
+    for i in range(0,centerline.size(),13):
+        var t: Vector2 = (centerline[(i+1)%centerline.size()]-
+            centerline[(i-1+centerline.size())%centerline.size()]).normalized()
+        var n: Vector2 = Vector2(-t.y,t.x)
+        var offset: float = halfwidths[i]+19.0
+        var pos: Vector2 = centerline[i]+n*offset*(1.0 if (i/13)%2==0 else -1.0)
+        var check: Dictionary = sample_info(pos)
+        if float(check["distance"]) < float(check["width"])+6.0:
+            continue
         var trunk := MeshInstance3D.new()
         var stem := CylinderMesh.new()
         stem.top_radius = 0.35
         stem.bottom_radius = 0.45
         stem.height = 3.8
         trunk.mesh = stem
-        trunk.position = Vector3(p.x,1.9,p.y)
+        trunk.position = Vector3(pos.x,1.9,pos.y)
         var bark := StandardMaterial3D.new()
         bark.albedo_color = Color(0.20,0.16,0.15)
         trunk.material_override = bark
@@ -267,12 +294,11 @@ func _build_track_props() -> void:
             var tree := MeshInstance3D.new()
             var cone := CylinderMesh.new()
             cone.top_radius = 0.05
-            cone.bottom_radius = 2.7 - tier*0.45
+            cone.bottom_radius = 2.7-float(tier)*0.45
             cone.height = 3.7
             tree.mesh = cone
-            tree.position = Vector3(p.x,3.5+tier*1.8,p.y)
+            tree.position = Vector3(pos.x,3.5+float(tier)*1.8,pos.y)
             var needles := StandardMaterial3D.new()
-            needles.albedo_color = Color(0.13,0.27,0.23) if tier%2 == 0 else Color(0.12,0.21,0.19)
+            needles.albedo_color = Color(0.13,0.27,0.23) if tier%2==0 else Color(0.12,0.21,0.19)
             tree.material_override = needles
             add_child(tree)
-

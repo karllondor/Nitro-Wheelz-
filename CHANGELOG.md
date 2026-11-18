@@ -1,5 +1,16 @@
 # Nitro Wheelz change history
 
+## [0.1.5] — Nitro Track DNA P0 geometry prototype
+- Replaced handwired control point source with versioned JSON track data (19 authored knots + editable per-section widths).
+- Added deterministic Track DNA compiler, shared centreline and left/right edge arrays, robust fail-closed spline/corridor validation, negative tests for duplicate nodes, invalid widths, figure-eight intersection.
+- Switched all road strips, white lines, barrier meshes, analytic car contact bounds and Godot StaticBody3D collision mesh to the same validated edge arrays. Fixed previous offset/collision discrepancies.
+- Replaced dangerous serpentine Shin-Kawa v0.1.4 layout with a validated original closed loop (screen-up first straight, first right-hand bend, varied road widths, curved technical sections). Prototype geometry, not final competitive circuit.
+- Start line crosses the exact current road width, perpendicular to start tangent. Scenery avoids all other road branches.
+- Geometry-only full-loop test and two-side wall rebound/collider mesh identity; no physical handset or three-lap human driving claim.
+- **P1 dynamic camera and P2–P7 scoring/HUD/progression:** pending; retain existing systems until P0 gate is green.
+- CI/build status pending at authoring; update handoff with evidence.
+
+
 ## [0.1.4] — Mobile track walls, rapid drift and portrait first straight
 - Rebuilt the fictional Shin-Kawa layout with a vertically northbound starting straight, followed by a right turn (natural rightward joystick action).
 - Widened racing road from 16.4 m total to 24 m total.
