@@ -5,6 +5,7 @@ extends Node3D
 const TRACK = preload("res://scripts/world/drift_track.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
+const RESULTS = preload("res://scripts/ui/race_results.gd")
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 
@@ -16,6 +17,8 @@ var overhead: Camera3D
 var chase: Camera3D
 var touch: NitroRaceTouch
 var hud: NitroRaceHUD
+var results_layer: CanvasLayer
+var results_open: bool = false
 var camera_mode: int = 0
 var time_elapsed: float = 0.0
 var race_started: bool = false
@@ -174,6 +177,31 @@ func _physics_process(delta: float) -> void:
     _drift_scoring(delta)
     _record_marks(delta)
     _update_visuals()
+    if finished and not results_open:
+        _show_results()
+
+func _show_results() -> void:
+    # Separate full-screen result presentation. Never stack the old pause
+    # popup, HUD and touch controls underneath the finish buttons.
+    results_open = true
+    if hud != null:
+        hud.visible = false
+    if touch != null:
+        touch.release_all()
+        touch.visible = false
+        touch.set_process_input(false)
+    results_layer = CanvasLayer.new()
+    results_layer.layer = 24
+    results_layer.name = "Finish results and local leaderboard"
+    add_child(results_layer)
+    var view: NitroRaceResults = RESULTS.new()
+    results_layer.add_child(view)
+    var target: float = float(hud.target_time) if hud != null else 0.0
+    if target <= 0.0:
+        # Uncalibrated courses use provisional local practice tiers.
+        target = track.length_metres*3.0/14.0
+    view.show_race(track.track_id,track.display_name,time_elapsed,lap_score,target,
+        Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
 
 func _wall_feedback(impact_speed: float) -> void:
     if collision_cooldown > 0.0:
@@ -389,6 +417,15 @@ func _toggle_pause() -> void:
     _update_visuals()
 
 func _restart() -> void:
+    if results_layer != null:
+        results_layer.queue_free()
+        results_layer = null
+    results_open = false
+    if hud != null:
+        hud.visible = true
+    if touch != null:
+        touch.set_process_input(true)
+        touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     model.reset(track.start_position(),track.start_heading())
     time_elapsed = 0.0
     race_started = false
