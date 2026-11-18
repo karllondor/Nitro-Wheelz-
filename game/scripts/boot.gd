@@ -50,6 +50,9 @@ func _ready() -> void:
     _button(menu,"SHIN-KAWA • FULL CIRCUIT","res://scenes/race.tscn",
         scale_factor,"res://tracks/shin_kawa_full_circuit.json")
 
+    _button(menu,"EDIT TRACK • BETA","res://scenes/track_editor.tscn",scale_factor)
+
+    # Generator BETA: generates a valid variant but does NOT permit editing.
     # Creator BETA: generate a new safe closed Track DNA variant locally;
     # never start a race with an unvalidated corridor.
     var generated_status := Label.new()
