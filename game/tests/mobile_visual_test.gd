@@ -9,6 +9,15 @@ func _run() -> void:
     root.add_child(race)
     await process_frame
     await process_frame
+    if float(race.get("time_elapsed")) > 0.001 or bool(race.get("race_started")):
+        _fail("Race timer started before the first GAS")
+        return
+    Input.action_press("throttle")
+    await physics_frame
+    Input.action_release("throttle")
+    if not bool(race.get("race_started")) or float(race.get("time_elapsed")) <= 0.0:
+        _fail("Race timer did not start on first GAS")
+        return
     var model: NitroDriveModel = race.get("model")
     var track: NitroDriftTrack = race.get("track")
     var car: NitroLadaLowPoly = race.get("car_root") as NitroLadaLowPoly
@@ -37,8 +46,7 @@ func _run() -> void:
     if int(race.get("camera_mode")) != 0:
         _fail("Cannot return to default top-down camera")
         return
-    # Top-down camera is now substantially wider and its orientation is
-    # independent of yaw. Rotating the vehicle must not spin the track view.
+    # Drone view is wider, tilted and follows heading with damping.
     var overhead: Camera3D = race.get("overhead")
     race.call("_update_camera",1.0)
     # Dynamic zoom legitimately moves closer when stopped. The camera
@@ -49,8 +57,8 @@ func _run() -> void:
     var north_up: Vector3 = overhead.global_transform.basis.z
     model.heading = wrapf(model.heading + PI*0.75,-PI,PI)
     race.call("_update_camera",1.0)
-    if north_up.dot(overhead.global_transform.basis.z) < 0.9999:
-        _fail("Overhead camera rotation changes when car changes heading")
+    if north_up.dot(overhead.global_transform.basis.z) > 0.995:
+        _fail("Drone-follow camera did not follow the new car heading")
         return
 
     var controls: NitroRaceTouch = race.get("touch")
@@ -76,8 +84,8 @@ func _run() -> void:
     var gas_pedal: Rect2 = Rect2(portrait_controls["gas"])
     var brake_pedal: Rect2 = Rect2(portrait_controls["brake"])
     var drift_rect: Rect2 = Rect2(portrait_controls["drift"])
-    if gas_pedal.size.y < 310.0 or brake_pedal.size.x < 150.0:
-        _fail("Portrait GAS/BRAKE pedals are too small")
+    if absf(gas_pedal.size.y-1600.0*0.208*2.0/3.0)>2.0 or absf(brake_pedal.size.x-720.0*0.225*2.0/3.0)>2.0:
+        _fail("Portrait pedals are not one-third smaller than the old layout")
         return
     if drift_rect.size.y < 175.0:
         _fail("Portrait DRIFT button should be larger")
