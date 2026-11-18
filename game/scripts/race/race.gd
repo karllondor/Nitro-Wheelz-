@@ -106,7 +106,7 @@ func _make_ui() -> void:
     hud.name = "Lap / Speed / Score"
     overlay.add_child(hud)
     hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    hud.track_name = track.display_name
+    hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else track.display_name
     hud.track_points = PackedVector2Array(track.centerline)
     hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
         90.0 if track.track_id=="benchmark_sweepers" else 0.0)
