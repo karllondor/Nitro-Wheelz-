@@ -56,7 +56,11 @@ func _ready() -> void:
     generated_status.text = ""
     generated_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     generated_status.add_theme_font_size_override("font_size",int(16*scale_factor))
-    var generator_button := _button(menu,"GENERATE TRACK • BETA","res://scenes/race.tscn",scale_factor)
+    var generator_button := Button.new()
+    generator_button.text = "GENERATE TRACK • BETA"
+    generator_button.custom_minimum_size.y = 77*scale_factor
+    generator_button.add_theme_font_size_override("font_size",int(25*scale_factor))
+    menu.add_child(generator_button)
     generator_button.pressed.connect(func():
         var creator: Variant = load("res://scripts/world/track_generator.gd").new()
         var seed: int = Time.get_ticks_usec()
