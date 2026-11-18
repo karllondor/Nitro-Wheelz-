@@ -53,12 +53,6 @@ func _world_point(p: Vector2) -> Vector2:
 func _make_ui() -> void:
     var s: Vector2 = get_viewport_rect().size
     var scale: float = clampf(s.x/720.0,0.75,2.0)
-    var background := ColorRect.new()
-    background.color = Color(0.022,0.028,0.038)
-    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(background)
-    move_child(background,0)
     var title := Label.new()
     title.text = "NITRO WHEELZ / TRACK EDITOR BETA"
     title.position = Vector2(s.x*0.05,s.y*0.025)
@@ -238,6 +232,7 @@ func _input(event: InputEvent) -> void:
             _drag_touch(event.position,-2)
 
 func _draw() -> void:
+    draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.022,0.028,0.038),true)
     draw_rect(canvas,Color(0.065,0.087,0.105,0.92),true)
     draw_rect(canvas,Color(0.45,0.48,0.58,0.75),false,2.0)
     if _point_count() < 3:
