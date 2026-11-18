@@ -345,11 +345,11 @@ func _update_camera(delta: float) -> void:
     camera_velocity_lead = camera_velocity_lead.lerp(desired_lead,lead_alpha)
     var focus: Vector3 = car_position+camera_velocity_lead
 
-    # Drone follow: tilted ~26 degrees off vertical, damped rotation,
+    # Drone follow: tilted ~25 degrees off vertical, damped rotation,
     # and extra forward track preview; keeps the car lower in the frame.
     var drone_alpha: float = 1.0-exp(-2.0*maxf(delta,0.0))
     drone_direction = drone_direction.lerp(f,drone_alpha).normalized()
-    var overhead_target: Vector3 = focus-drone_direction*17.0+Vector3.UP*82.0
+    var overhead_target: Vector3 = focus-drone_direction*31.0+Vector3.UP*76.0
     var pan_alpha: float = 1.0-exp(-5.0*maxf(delta,0.0))
     overhead.position = overhead.position.lerp(overhead_target,pan_alpha)
     # Reduce the old forward look target: the car was pushed beneath pedals.
