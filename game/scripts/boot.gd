@@ -35,13 +35,46 @@ func _ready() -> void:
     menu.add_child(subtitle)
 
     var description := Label.new()
-    description.text = "SHIN-KAWA DRIFT PARK\n3 LAPS  •  2 CAMERAS  •  ORIGINAL PHYSICS"
+    description.text = "3 LAPS  •  2 CAMERAS  •  ORIGINAL PHYSICS\nCHOOSE A TRACK TO DRIVE"
     description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     description.add_theme_font_size_override("font_size",int(19*scale_factor))
     menu.add_child(description)
 
-    var start := _button(menu,"START DRIFT SESSION","res://scenes/race.tscn",scale_factor)
+    var start := _button(menu,"SHIN-KAWA • ORIGINAL","res://scenes/race.tscn",
+        scale_factor,"res://tracks/shin_kawa_v2.json")
+    _button(menu,"TEST 01 • OVAL (271m)","res://scenes/race.tscn",
+        scale_factor,"res://tracks/benchmark_oval.json")
+    _button(menu,"TEST 02 • SWEEPERS (295m)","res://scenes/race.tscn",
+        scale_factor,"res://tracks/benchmark_sweepers.json")
+    _button(menu,"SHIN-KAWA • FULL CIRCUIT","res://scenes/race.tscn",
+        scale_factor,"res://tracks/shin_kawa_full_circuit.json")
+
+    _button(menu,"EDIT TRACK • BETA","res://scenes/track_editor.tscn",scale_factor)
+
+    # Generator BETA: generates a valid variant but does NOT permit editing.
+    # Creator BETA: generate a new safe closed Track DNA variant locally;
+    # never start a race with an unvalidated corridor.
+    var generated_status := Label.new()
+    generated_status.text = ""
+    generated_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    generated_status.add_theme_font_size_override("font_size",int(16*scale_factor))
+    var generator_button := Button.new()
+    generator_button.text = "GENERATE TRACK • BETA"
+    generator_button.custom_minimum_size.y = 77*scale_factor
+    generator_button.add_theme_font_size_override("font_size",int(25*scale_factor))
+    menu.add_child(generator_button)
+    generator_button.pressed.connect(func():
+        var creator: Variant = load("res://scripts/world/track_generator.gd").new()
+        var seed: int = Time.get_ticks_usec()
+        var result: Dictionary = creator.generate(seed)
+        if bool(result.get("ok",false)):
+            ProjectSettings.set_setting("nitro/selected_track",str(result["path"]))
+            get_tree().change_scene_to_file("res://scenes/race.tscn")
+        else:
+            generated_status.text = "GENERATION FAILED: "+str(result.get("error","unknown"))
+    )
+    menu.add_child(generated_status)
     _button(menu,"CONTROLLER DIAGNOSTICS","res://scenes/dev/input_monitor.tscn",scale_factor)
 
     var hint := Label.new()
@@ -66,11 +99,15 @@ func _ready() -> void:
         menu.add_child(quit)
     start.grab_focus()
 
-func _button(parent: VBoxContainer,title: String, scene: String,scale_factor: float) -> Button:
+func _button(parent: VBoxContainer,title: String, scene: String,
+        scale_factor: float,track_path: String = "") -> Button:
     var button := Button.new()
     button.text = title
     button.custom_minimum_size.y = 77*scale_factor
     button.add_theme_font_size_override("font_size",int(25*scale_factor))
-    button.pressed.connect(func():get_tree().change_scene_to_file(scene))
+    button.pressed.connect(func():
+        if not track_path.is_empty():
+            ProjectSettings.set_setting("nitro/selected_track",track_path)
+        get_tree().change_scene_to_file(scene))
     parent.add_child(button)
     return button

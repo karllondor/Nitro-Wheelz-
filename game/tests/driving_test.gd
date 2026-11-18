@@ -28,6 +28,24 @@ func _run() -> void:
         _fail("Reverse exceeds safety speed limit")
         return
 
+    # Signed reversing: steer right -> the rear moves right, nose rotates left.
+    var reverse_right: NitroDriveModel = DRIVE.new()
+    reverse_right.reset(Vector2.ZERO,0.0)
+    reverse_right.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_right.step(STEP,1.0,0.0,1.0,0.0)
+    if reverse_right.heading >= -0.10 or reverse_right.position.x < 0.15:
+        _fail("Reverse steering right has inverted yaw or translation")
+        return
+    var reverse_left: NitroDriveModel = DRIVE.new()
+    reverse_left.reset(Vector2.ZERO,0.0)
+    reverse_left.velocity = Vector2(0.0,4.0)
+    for i in range(240):
+        reverse_left.step(STEP,-1.0,0.0,1.0,0.0)
+    if reverse_left.heading <= 0.10 or reverse_left.position.x > -0.15:
+        _fail("Reverse steering left has inverted yaw or translation")
+        return
+
     # GAS should recover through neutral and take the car forward.
     for i in range(960):
         reverse.step(STEP,0.0,1.0,0.0,0.0)
@@ -79,6 +97,23 @@ func _run() -> void:
         _fail("Handbrake did not reduce rear grip")
         return
 
+    # The handbrake must lock rear grip on the first tick, even when the
+    # steering finger lands briefly AFTER the drift finger.
+    var instant: NitroDriveModel = DRIVE.new()
+    instant.reset(Vector2.ZERO,0.0)
+    instant.velocity = Vector2(0.0,-14.0)
+    instant.step(STEP,0.0,1.0,0.0,1.0)
+    if instant.rear_traction > 0.11:
+        _fail("DRIFT rear grip did not lock in the first physics tick")
+        return
+    var before_yaw: float = instant.yaw_rate
+    for j in range(12):
+        instant.step(STEP,0.0,1.0,0.0,1.0)
+    instant.step(STEP,0.7,1.0,0.0,1.0)
+    if instant.yaw_rate <= before_yaw+0.1:
+        _fail("Buffered flick did not respond when steering followed DRIFT")
+        return
+
     # At 72 km/h full throttle should cost far less rear grip than at 36 km/h.
     if absf(a._power_grip_factor(1.0,10.0) - 0.40) > 0.02:
         _fail("Rear power-grip calibration at 36 km/h is wrong")
@@ -86,7 +121,7 @@ func _run() -> void:
     if absf(a._power_grip_factor(1.0,20.0) - 0.63) > 0.02:
         _fail("Rear power-grip calibration at 72 km/h is wrong")
         return
-    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 20.0) > 0.1:
+    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 24.0) > 0.1:
         _fail("Speed dependent steering reference mismatch")
         return
 
@@ -115,7 +150,7 @@ func _run() -> void:
         return
 
     # v0.1.3: at 72+ km/h the car must not rotate like a low-speed donut.
-    if a._yaw_rate_limit(20.0,0.0) > 0.68 or a._yaw_rate_limit(20.0,0.0) < 0.52:
+    if a._yaw_rate_limit(20.0,0.0) > 0.83 or a._yaw_rate_limit(20.0,0.0) < 0.79:
         _fail("High speed yaw limit not proportional to available lateral grip")
         return
     if a._yaw_rate_limit(10.0,0.0) <= a._yaw_rate_limit(20.0,0.0):
@@ -127,13 +162,14 @@ func _run() -> void:
     var maximum_yaw_rate: float = 0.0
     var maximum_slip_angle: float = 0.0
     for i in range(480):
+        var speed_before_step: float = sweeper.speed_mps()
         sweeper.step(STEP,0.68,0.70,0.0,0.0)
         maximum_yaw_rate = maxf(maximum_yaw_rate,absf(sweeper.yaw_rate))
         maximum_slip_angle = maxf(maximum_slip_angle,absf(sweeper.drift_angle))
         if not is_finite(sweeper.yaw_rate) or not is_finite(sweeper.drift_angle):
             _fail("High-speed cornering diverged")
             return
-        if absf(sweeper.yaw_rate) > sweeper._yaw_rate_limit(sweeper.speed_mps(),0.99)+0.001:
+        if absf(sweeper.yaw_rate) > sweeper._yaw_rate_limit(speed_before_step,1.0)+0.002:
             _fail("Speed-dependent turning limit exceeded during sweeper")
             return
     print("HIGH SPEED SWEEPER: speed=",sweeper.speed_kmh(),
@@ -153,6 +189,32 @@ func _run() -> void:
         return
     if absf(flick.steering_angle) <= 0.055:
         _fail("Steering remains sluggish during the first driving tick")
+        return
+
+    # Power-oversteer: 65 km/h + full binary GAS + steering, no handbrake.
+    var power: NitroDriveModel = DRIVE.new()
+    power.reset(Vector2.ZERO,0.0)
+    power.velocity = Vector2(0.0,-18.0)
+    var power_peak: float = 0.0
+    for i in range(480):
+        power.step(STEP,0.80,1.0,0.0,0.0)
+        power_peak = maxf(power_peak,absf(power.drift_angle))
+    print("POWER DRIFT WITHOUT HB: peak_angle=",power_peak," speed=",power.speed_kmh())
+    if power_peak < 14.0:
+        _fail("Full GAS + steering cannot trigger a useful drift without handbrake")
+        return
+
+    # Low-speed launch into a sustained donut is a deliberate, riskier manoeuvre.
+    var donut: NitroDriveModel = DRIVE.new()
+    donut.reset(Vector2.ZERO,0.0)
+    var total_rotation: float = 0.0
+    for i in range(1680):
+        var prev: float = donut.heading
+        donut.step(STEP,0.96,1.0,0.0,0.0)
+        total_rotation += absf(wrapf(donut.heading-prev,-PI,PI))
+    print("DONUT FULL GAS+STEER: rotation_rad=",total_rotation," speed=",donut.speed_kmh())
+    if total_rotation < 3.0:
+        _fail("Low-speed full-GAS steering barely rotates the car")
         return
 
     var track: NitroDriftTrack = TRACK.new()

@@ -6,26 +6,26 @@ class_name NitroDriveModel
 ## steering/countersteer and lift-off let the driver recover.
 ## BRAKE decelerates forward motion and becomes REVERSE near standstill.
 
-const FRONT_GRIP: float = 5.6
-const REAR_GRIP: float = 6.4
-const REAR_SLIDE_GRIP: float = 0.62
+const FRONT_GRIP: float = 6.8
+const REAR_GRIP: float = 5.25
+const REAR_SLIDE_GRIP: float = 0.55
 const HANDBRAKE_GRIP: float = 0.10
 const REATTACH_SECONDS: float = 0.45
-const COUNTERSTEER_ASSIST: float = 0.82
+const COUNTERSTEER_ASSIST: float = 0.48
 const WHEELBASE: float = 2.55
 const HALF_WHEELBASE: float = WHEELBASE * 0.5
-const DRIVE_ACCEL: float = 10.5
+const DRIVE_ACCEL: float = 13.0
 const BRAKE_ACCEL: float = 17.0
 const REVERSE_ACCEL: float = 4.8
 const REVERSE_LIMIT: float = 8.5
 const HANDBRAKE_DECEL: float = 2.0
 const DRAG_COEFF: float = 0.009
 const ROLLING_DRAG: float = 0.45
-const YAW_DAMPING: float = 1.45
-const YAW_TORQUE_GAIN: float = 0.48
-const YAW_LATERAL_BUDGET: float = 12.0
-const SLIDE_YAW_BONUS: float = 1.4
-const LOW_SPEED_GRIP_START: float = 3.0
+const YAW_DAMPING: float = 0.94
+const YAW_TORQUE_GAIN: float = 0.72
+const YAW_LATERAL_BUDGET: float = 16.2
+const SLIDE_YAW_BONUS: float = 4.0
+const LOW_SPEED_GRIP_START: float = 2.0
 
 var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
@@ -36,6 +36,7 @@ var slide_hold: float = 0.0
 var drift_angle: float = 0.0
 var steering_angle: float = 0.0
 var handbrake_previously_held: bool = false
+var handbrake_flick_window: float = 0.0
 
 func reset(p: Vector2, radians: float) -> void:
     position = p
@@ -47,6 +48,7 @@ func reset(p: Vector2, radians: float) -> void:
     drift_angle = 0.0
     steering_angle = 0.0
     handbrake_previously_held = false
+    handbrake_flick_window = 0.0
 
 func speed_mps() -> float:
     return velocity.length()
@@ -73,11 +75,11 @@ func _tyre_response(slip: float, peak_angle: float) -> float:
     return slip / sqrt(slip*slip + peak_angle*peak_angle)
 
 func _max_steer_for_speed(mps: float) -> float:
-    # Published reference: 35.5 deg at rest, 20 deg at 72 km/h,
-    # and about 7 deg at 162 km/h.
+    # Nitro Wheelz arcade tune: 35.5 deg at rest, 24 deg at 72 km/h,
+    # and 10 deg at 162 km/h. More authority than the previous build.
     if mps < 20.0:
-        return deg_to_rad(lerpf(35.5, 20.0, clampf(mps/20.0, 0.0, 1.0)))
-    return deg_to_rad(lerpf(20.0, 7.0, clampf((mps-20.0)/25.0, 0.0, 1.0)))
+        return deg_to_rad(lerpf(35.5, 24.0, clampf(mps/20.0, 0.0, 1.0)))
+    return deg_to_rad(lerpf(24.0, 10.0, clampf((mps-20.0)/25.0, 0.0, 1.0)))
 
 func _power_grip_factor(gas: float, speed_mps_now: float) -> float:
     # DRIFTIT documents up to 60% grip reduction at 36 km/h and
@@ -92,7 +94,7 @@ func _yaw_rate_limit(speed_now: float, slide: float) -> float:
     # allowed an implausible sub-10 m turn and sudden sideways travel.
     return clampf(
         (YAW_LATERAL_BUDGET + SLIDE_YAW_BONUS*slide)/maxf(speed_now, 3.0),
-        0.27, 2.1
+        0.33, 2.8
     )
 
 func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -> void:
@@ -104,6 +106,13 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     handbrake = clampf(handbrake,0.0,1.0)
     var drift_pressed: bool = handbrake > 0.35 and not handbrake_previously_held
     handbrake_previously_held = handbrake > 0.35
+    if drift_pressed:
+        # Allow the steer finger to arrive slightly after the DRIFT finger.
+        handbrake_flick_window = 0.12
+    elif handbrake <= 0.35:
+        handbrake_flick_window = 0.0
+    else:
+        handbrake_flick_window = maxf(0.0,handbrake_flick_window-dt)
 
     var f: Vector2 = forward()
     var r: Vector2 = right()
@@ -111,20 +120,43 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var local_side: float = velocity.dot(r)
     var speed: float = velocity.length()
     var max_steer: float = _max_steer_for_speed(speed)
-    var effective_steer: float = -steer if signed_speed < -0.5 else steer
-    var demanded_steer: float = effective_steer * max_steer
+    # Reverse needs SIGNED bicycle kinematics, not forward-slip tyre forces.
+    # Right steering while backing rotates the nose left and the rear right.
+    if signed_speed < -0.30 and speed < 10.2:
+        slide_hold = 0.0
+        rear_traction = move_toward(rear_traction,1.0,dt/REATTACH_SECONDS)
+        steering_angle = move_toward(steering_angle,steer*max_steer,18.0*dt)
+        var reverse_speed: float = signed_speed
+        if brake > 0.01 and gas < 0.01:
+            reverse_speed = maxf(reverse_speed-REVERSE_ACCEL*brake*dt,-REVERSE_LIMIT)
+        elif gas > 0.01:
+            reverse_speed = minf(reverse_speed+BRAKE_ACCEL*gas*dt,0.0)
+        else:
+            reverse_speed = minf(0.0,reverse_speed+ROLLING_DRAG*dt)
+        if handbrake > 0.10:
+            reverse_speed = minf(0.0,reverse_speed+HANDBRAKE_DECEL*handbrake*dt)
+        var reverse_yaw: float = clampf(reverse_speed*tan(steering_angle)/WHEELBASE,-1.5,1.5)
+        yaw_rate = move_toward(yaw_rate,reverse_yaw,6.0*dt)
+        heading = wrapf(heading+yaw_rate*dt,-PI,PI)
+        velocity = forward()*reverse_speed
+        position += velocity*dt
+        drift_angle = 0.0
+        return
+    var demanded_steer: float = steer*max_steer
     var front_side: float = local_side + yaw_rate*HALF_WHEELBASE
     var rear_side: float = local_side - yaw_rate*HALF_WHEELBASE
     var slip_forward: float = maxf(absf(signed_speed),2.0)
     var rear_slip: float = atan2(rear_side,slip_forward)
 
-    # Rear sliding is not forced merely because gas is held. Breaking traction
-    # requires lateral slip or the handbrake. On lifting throttle, the state
-    # reattaches within the documented 0.45 seconds.
-    var breakaway: bool = (handbrake > 0.10 and speed > 1.5) or (
-        gas > 0.40 and signed_speed > 4.0 and
-        absf(rear_slip) > deg_to_rad(12.0)
-    )
+    # Throttle alone on a straight retains grip; deliberate steering + full
+    # binary GAS may release the rear before large sideways slip develops.
+    # Power-oversteer no longer waits for a 12-degree rear slip close to
+    # the barrier. Full binary GAS + deliberate steering can break away
+    # before the apex. Low-speed launches also permit controlled donuts.
+    var powered_entry: bool = gas > 0.70 and absf(steer) > 0.48 and signed_speed > 7.0
+    var powered_donut: bool = gas > 0.84 and absf(steer) > 0.68 and signed_speed > 2.4 and signed_speed < 10.0
+    var slip_entry: bool = gas > 0.40 and signed_speed > 4.0 and absf(rear_slip) > deg_to_rad(6.0)
+    var breakaway: bool = (handbrake > 0.10 and speed > 1.5) or powered_entry or powered_donut or slip_entry
     if breakaway:
         slide_hold = REATTACH_SECONDS
     else:
@@ -134,9 +166,12 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var target_traction: float = REAR_SLIDE_GRIP if sliding else 1.0
     if handbrake > 0.1 and speed > 1.5:
         target_traction = HANDBRAKE_GRIP
-    # Handbrake engages in the first 1–2 simulation ticks, not after a long lerp.
-    var response_seconds: float = 0.008 if handbrake > 0.35 else (0.025 if target_traction < rear_traction else REATTACH_SECONDS)
-    rear_traction = move_toward(rear_traction,target_traction,dt/response_seconds)
+    # Hard rear lock on the same physics tick as touch, no grip lerp delay.
+    if handbrake > 0.35 and speed > 1.5:
+        rear_traction = HANDBRAKE_GRIP
+    else:
+        var response_seconds: float = 0.025 if target_traction < rear_traction else REATTACH_SECONDS
+        rear_traction = move_toward(rear_traction,target_traction,dt/response_seconds)
 
     var travel_direction: float = atan2(local_side,slip_forward)
     var slide_fraction: float = clampf((1.0-rear_traction)/(1.0-REAR_SLIDE_GRIP),0.0,1.0)
@@ -152,6 +187,9 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var front_slip: float = atan2(front_side,slip_forward)-steering_angle
     var front_lateral: float = -FRONT_GRIP*_tyre_response(front_slip,deg_to_rad(8.0))
     var power_factor: float = _power_grip_factor(gas,speed)
+    # During an established slide, soften stacked rear-grip reductions,
+    # while still allowing heavy throttle to increase oversteer.
+    power_factor = lerpf(power_factor,1.0,slide_fraction*0.08)
     var brake_factor: float = 1.0-0.30*brake if signed_speed > 1.0 else 1.0
     var rear_cap: float = REAR_GRIP*rear_traction*power_factor*brake_factor
     var rear_lateral: float = -rear_cap*_tyre_response(rear_slip,deg_to_rad(10.0))
@@ -166,16 +204,23 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     # Preserve strong low-speed drift entries without letting a 90 km/h
     # car whirl as if it were stationary.
     var yaw_accel: float = (front_lateral-rear_lateral)*YAW_TORQUE_GAIN
+    # Arcade RWD torque kick at deliberate steering + full GAS.
+    # This is an ORIGINAL game-feel force, not a copied DRIFTIT equation.
+    if powered_entry and handbrake < 0.1:
+        yaw_accel += steer*1.0*clampf((gas-0.70)/0.30,0.0,1.0)
+    if powered_donut and handbrake < 0.1:
+        yaw_accel += steer*2.1*clampf((10.0-speed)/7.0,0.0,1.0)
     # A slide with the joystick near centre should be recoverable. Lift-off
     # increases alignment assistance; full throttle suppresses part of it.
     var hands_off: float = clampf(1.0-absf(steer)*2.7,0.0,1.0)
     var recovery: float = slide_fraction*hands_off*clampf(speed/7.0,0.0,1.0)
-    yaw_accel += travel_direction*recovery*2.7*(1.0-0.55*gas)
+    yaw_accel += travel_direction*recovery*2.7*(1.0-0.22*gas)
     yaw_rate += yaw_accel*dt
-    if drift_pressed and signed_speed > 4.0 and absf(steer) > 0.08:
-        # One-shot flick only on the rising handbrake edge. No repeated
-        # spin while the player keeps DRIFT held.
-        yaw_rate += steer*0.20*clampf(speed/14.0,0.0,1.0)
+    if handbrake_flick_window > 0.0 and signed_speed > 4.0 and absf(steer) > 0.08:
+        # The first valid steer+DRIFT overlap gives a single, immediate
+        # entry impulse. Never repeat it while DRIFT remains pressed.
+        yaw_rate += steer*0.76*clampf(speed/14.0,0.0,1.0)
+        handbrake_flick_window = 0.0
     yaw_rate *= exp(-(YAW_DAMPING+0.6*hands_off*(1.0-slide_fraction))*dt)
     var yaw_ceiling: float = _yaw_rate_limit(speed,slide_fraction)
     yaw_rate = clampf(yaw_rate,-yaw_ceiling,yaw_ceiling)
