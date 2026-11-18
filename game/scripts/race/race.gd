@@ -31,6 +31,8 @@ var collision_cooldown: float = 0.0
 var camera_shake_strength: float = 0.0
 var camera_shake_phase: float = 0.0
 var camera_velocity_lead: Vector3 = Vector3.ZERO
+var chase_occlusion_point: Vector3 = Vector3.ZERO
+var chase_is_blocked: bool = false
 const CAMERA_LOOKAHEAD_SECONDS: float = 0.45
 const CAMERA_LEAD_MAX_METRES: float = 19.0
 var wall_collision_count: int = 0
@@ -149,6 +151,7 @@ func _physics_process(delta: float) -> void:
     var info: Dictionary = track.sample_info(model.position)
     offroad = false
 
+    _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     _drift_scoring(delta)
     _record_marks(delta)
@@ -262,6 +265,19 @@ func _process(delta: float) -> void:
     camera_shake_phase += delta*36.0
     _update_camera(delta)
 
+func _update_chase_occlusion() -> void:
+    # Physics direct-space queries belong in _physics_process only.
+    var car: Vector3 = Vector3(model.position.x,0.0,model.position.y)
+    var direction2: Vector2 = model.forward()
+    var f: Vector3 = Vector3(direction2.x,0.0,direction2.y)
+    var speed_t: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
+    var desired: Vector3 = car-f*lerpf(15.0,19.0,speed_t) + Vector3.UP*lerpf(7.2,8.3,speed_t)
+    var q := PhysicsRayQueryParameters3D.create(car+Vector3.UP*1.4,desired)
+    var wall: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+    chase_is_blocked = not wall.is_empty()
+    if chase_is_blocked:
+        chase_occlusion_point = Vector3(wall["position"])+Vector3(wall["normal"])*0.65
+
 func _zoom_factor_for_speed(kmh: float) -> float:
     # Prototype Camera2D reference converted to orthographic Camera3D size:
     # Camera3D.size = base_size / target_zoom.
@@ -313,11 +329,8 @@ func _update_camera(delta: float) -> void:
     var look_target: Vector3 = car_position+f*9.0+Vector3.UP*1.0
     # Move a camera in front of a blocking wall instead of behind it.
     # Non-colliding decorative trees never occlude the camera via physics.
-    if is_inside_tree():
-        var q := PhysicsRayQueryParameters3D.create(car_position+Vector3.UP*1.4,chase_target)
-        var wall: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
-        if not wall.is_empty():
-            chase_target = Vector3(wall["position"])+Vector3(wall["normal"])*0.65
+    if chase_is_blocked:
+        chase_target = chase_occlusion_point
     var chase_alpha: float = 1.0-exp(-4.0*maxf(delta,0.0))
     chase.position = chase.position.lerp(chase_target,chase_alpha)
     chase.look_at(look_target,Vector3.UP)
@@ -358,6 +371,7 @@ func _restart() -> void:
     collision_cooldown = 0.0
     camera_shake_strength = 0.0
     camera_velocity_lead = Vector3.ZERO
+    chase_is_blocked = false
     wall_collision_count = 0
     _update_visuals()
 
