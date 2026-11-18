@@ -31,8 +31,8 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
             "joystick_center": Vector2(s.x*0.215,s.y*0.853),
             "joystick_radius": s.x*0.175,
             "drift": Rect2(s.x*0.790,s.y*0.405,s.x*0.188,s.y*0.332),
-            "brake": Rect2(s.x*0.490,s.y*0.772,s.x*0.225,s.y*0.208),
-            "gas": Rect2(s.x*0.748,s.y*0.772,s.x*0.230,s.y*0.208),
+            "brake": Rect2(s.x*0.5275,s.y*0.8413,s.x*0.1500,s.y*0.1387),
+            "gas": Rect2(s.x*0.7863,s.y*0.8413,s.x*0.1533,s.y*0.1387),
             "pause": Rect2(s.x*0.690,s.y*0.206,s.x*0.126,s.y*0.057),
             "camera": Rect2(s.x*0.842,s.y*0.206,s.x*0.136,s.y*0.057),
             "restart": Rect2(s.x*0.265,s.y*0.43,s.x*0.470,s.y*0.095),
@@ -42,8 +42,8 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
         "joystick_center": Vector2(s.x*0.142,s.y*0.810),
         "joystick_radius": s.y*0.177,
         "drift": Rect2(s.x*0.850,s.y*0.350,s.x*0.128,s.y*0.340),
-        "brake": Rect2(s.x*0.675,s.y*0.740,s.x*0.143,s.y*0.238),
-        "gas": Rect2(s.x*0.834,s.y*0.740,s.x*0.144,s.y*0.238),
+        "brake": Rect2(s.x*0.6983,s.y*0.8193,s.x*0.0953,s.y*0.1587),
+        "gas": Rect2(s.x*0.8580,s.y*0.8193,s.x*0.0960,s.y*0.1587),
         "pause": Rect2(s.x*0.921,s.y*0.180,s.x*0.057,s.y*0.125),
         "camera": Rect2(s.x*0.846,s.y*0.180,s.x*0.062,s.y*0.125),
         "restart": Rect2(s.x*0.33,s.y*0.49,s.x*0.34,s.y*0.12),
@@ -196,7 +196,8 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
         var ry: float = grip.position.y+grip.size.y*(0.19+float(rib)*0.069)
         draw_line(Vector2(grip.position.x+w*0.055,ry),
             Vector2(grip.end.x-w*0.055,ry),Color(0.65,0.67,0.69,0.46),1.2*scale,true)
-    var base := Rect2(x+w*0.10,y+h*0.75,w*0.80,h*0.235)
+    # Enlarge only the lower handbrake BUTTON by 10%; keep lever grip.
+    var base := Rect2(x+w*0.06,y+h*0.7265,w*0.88,h*0.2585)
     var metal := StyleBoxFlat.new()
     metal.bg_color = Color(0.09,0.075,0.095,0.92)
     metal.border_color = pink if pressed else Color(0.92,0.91,0.95,0.80)
