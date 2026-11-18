@@ -22,6 +22,7 @@ var lap: int = 1
 var last_progress: float = 0.0
 var lap_started_at: float = 0.0
 var lap_score: int = 0
+var active_drift_points: int = 0
 var combo: float = 1.0
 var combo_timer: float = 0.0
 var paused: bool = false
@@ -47,8 +48,13 @@ var skid_clock: float = 0.0
 
 func _ready() -> void:
     track = TRACK.new()
-    track.name = "Shin-Kawa Drift Park"
+    track.track_data_path = str(ProjectSettings.get_setting(
+        "nitro/selected_track",TRACK.TRACK_DATA))
+    track.name = "Nitro Track DNA"
     add_child(track)
+    if not track.track_valid:
+        push_error("Selected benchmark track invalid: "+track.track_data_path)
+        return
     model = DRIVE.new()
     model.reset(track.start_position(),track.start_heading())
     _make_car()
@@ -100,6 +106,10 @@ func _make_ui() -> void:
     hud.name = "Lap / Speed / Score"
     overlay.add_child(hud)
     hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    hud.track_name = track.display_name
+    hud.track_points = PackedVector2Array(track.centerline)
+    hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
+        90.0 if track.track_id=="benchmark_sweepers" else 0.0)
 
     var touch_layer := CanvasLayer.new()
     touch_layer.layer = 6
@@ -188,15 +198,20 @@ func _drift_scoring(dt: float) -> void:
     if model.is_drifting() and not offroad:
         var angle_ratio: float = minf(absf(model.drift_angle),75.0)/45.0
         var points: float = model.speed_mps()*pow(angle_ratio,1.2)*combo*dt*3.0
-        lap_score += int(maxf(points,0.0)*10.0)
+        var gain: int = int(maxf(points,0.0)*10.0)
+        lap_score += gain
+        active_drift_points += gain
         combo_timer += dt
         if combo_timer > 1.8:
             combo = minf(5.0,combo+0.1)
             combo_timer = 0.0
     elif offroad:
+        active_drift_points = 0
         combo = 1.0
         combo_timer = 0.0
     else:
+        if not model.is_drifting():
+            active_drift_points = 0
         combo_timer = maxf(combo_timer-dt,0.0)
 
 func _record_marks(dt: float) -> void:
@@ -252,6 +267,7 @@ func _update_visuals() -> void:
         hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
         hud.score = lap_score
+        hud.drift_score = active_drift_points
         hud.combo = combo
         hud.mode = "TOP-DOWN" if camera_mode == 0 else "CHASE"
         hud.paused = paused
@@ -271,7 +287,7 @@ func _update_chase_occlusion() -> void:
     var direction2: Vector2 = model.forward()
     var f: Vector3 = Vector3(direction2.x,0.0,direction2.y)
     var speed_t: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
-    var desired: Vector3 = car-f*lerpf(15.0,19.0,speed_t) + Vector3.UP*lerpf(7.2,8.3,speed_t)
+    var desired: Vector3 = car-f*lerpf(8.3,11.5,speed_t) + Vector3.UP*lerpf(6.0,7.2,speed_t)
     var q := PhysicsRayQueryParameters3D.create(car+Vector3.UP*1.4,desired)
     var wall: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
     chase_is_blocked = not wall.is_empty()
@@ -302,9 +318,15 @@ func _update_camera(delta: float) -> void:
         return
     var car_position := Vector3(model.position.x,0.0,model.position.y)
     var forward_dir: Vector2 = model.forward()
-    var f := Vector3(forward_dir.x,0.0,forward_dir.y)
+    # During a drift, the camera follows a blend of travel and bonnet
+    # directions so the car visibly rotates relative to the scenery.
+    var view_dir: Vector2 = forward_dir
+    if model.speed_mps() > 5.0:
+        view_dir = forward_dir.lerp(model.velocity.normalized(),0.27).normalized()
+    var f := Vector3(view_dir.x,0.0,view_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    var base_size: float = 78.0 if portrait else 62.0
+    # Keep the road flowing: the original 78m portrait frame was too wide.
+    var base_size: float = 60.0 if portrait else 52.0
     var zoom_target: float = base_size/_zoom_factor_for_speed(model.speed_kmh())
     var zoom_alpha: float = 1.0-exp(-3.3*maxf(delta,0.0))
     overhead.size = lerpf(overhead.size,zoom_target,zoom_alpha)
@@ -323,10 +345,10 @@ func _update_camera(delta: float) -> void:
     overhead.look_at(overhead.position+Vector3(0,-74,-20),Vector3(0,0,-1))
 
     var speed_lerp: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
-    var chase_back: float = lerpf(15.0,19.0,speed_lerp)
-    var chase_height: float = lerpf(7.2,8.3,speed_lerp)
+    var chase_back: float = lerpf(8.3,11.5,speed_lerp)
+    var chase_height: float = lerpf(6.0,7.2,speed_lerp)
     var chase_target: Vector3 = car_position-f*chase_back+camera_velocity_lead*0.30+Vector3.UP*chase_height
-    var look_target: Vector3 = car_position+f*9.0+Vector3.UP*1.0
+    var look_target: Vector3 = car_position+f*5.6+Vector3.UP*0.8
     # Move a camera in front of a blocking wall instead of behind it.
     # Non-colliding decorative trees never occlude the camera via physics.
     if chase_is_blocked:
@@ -334,7 +356,7 @@ func _update_camera(delta: float) -> void:
     var chase_alpha: float = 1.0-exp(-4.0*maxf(delta,0.0))
     chase.position = chase.position.lerp(chase_target,chase_alpha)
     chase.look_at(look_target,Vector3.UP)
-    chase.fov = lerpf(chase.fov,lerpf(70.0,76.0,speed_lerp),zoom_alpha)
+    chase.fov = lerpf(chase.fov,lerpf(66.0,74.0,speed_lerp),zoom_alpha)
 
     # Brief wall shake, decays smoothly and never changes camera orientation.
     overhead.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.42
@@ -360,6 +382,7 @@ func _restart() -> void:
     last_progress = 0.0
     lap_started_at = 0.0
     lap_score = 0
+    active_drift_points = 0
     combo = 1.0
     combo_timer = 0.0
     paused = false

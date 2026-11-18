@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "id": "benchmark_oval",
+  "name": "OVAL",
+  "generator_version": 1,
+  "seed": 2201,
+  "closed": true,
+  "width_m": 24,
+  "start_index": 0,
+  "theme": "benchmark",
+  "control_points": [
+    [
+      0,
+      -24
+    ],
+    [
+      0,
+      -37.55
+    ],
+    [
+      0,
+      -51.1
+    ],
+    [
+      0.431,
+      -64.622
+    ],
+    [
+      6.508,
+      -76.532
+    ],
+    [
+      18.013,
+      -83.342
+    ],
+    [
+      31.377,
+      -82.938
+    ],
+    [
+      42.452,
+      -75.447
+    ],
+    [
+      47.799,
+      -63.193
+    ],
+    [
+      48,
+      -49.652
+    ],
+    [
+      48,
+      -36.102
+    ],
+    [
+      48,
+      -22.552
+    ],
+    [
+      48,
+      -9.002
+    ],
+    [
+      47.569,
+      4.521
+    ],
+    [
+      41.492,
+      16.43
+    ],
+    [
+      29.987,
+      23.241
+    ],
+    [
+      16.623,
+      22.836
+    ],
+    [
+      5.548,
+      15.346
+    ],
+    [
+      0.201,
+      3.091
+    ],
+    [
+      0,
+      -10.45
+    ]
+  ],
+  "description": "Independent Oval mechanics benchmark. Matches publicly described 271m/24m/two 180-degree right sweepers at radius 24m; smoothed via Nitro Track DNA, not the DRIFTIT source geometry."
+}
