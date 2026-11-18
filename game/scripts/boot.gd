@@ -47,6 +47,27 @@ func _ready() -> void:
         scale_factor,"res://tracks/benchmark_oval.json")
     _button(menu,"TEST 02 • SWEEPERS (295m)","res://scenes/race.tscn",
         scale_factor,"res://tracks/benchmark_sweepers.json")
+    _button(menu,"SHIN-KAWA • FULL CIRCUIT","res://scenes/race.tscn",
+        scale_factor,"res://tracks/shin_kawa_full_circuit.json")
+
+    # Creator BETA: generate a new safe closed Track DNA variant locally;
+    # never start a race with an unvalidated corridor.
+    var generated_status := Label.new()
+    generated_status.text = ""
+    generated_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    generated_status.add_theme_font_size_override("font_size",int(16*scale_factor))
+    var generator_button := _button(menu,"GENERATE TRACK • BETA","res://scenes/race.tscn",scale_factor)
+    generator_button.pressed.connect(func():
+        var creator: Variant = load("res://scripts/world/track_generator.gd").new()
+        var seed: int = Time.get_ticks_usec()
+        var result: Dictionary = creator.generate(seed)
+        if bool(result.get("ok",false)):
+            ProjectSettings.set_setting("nitro/selected_track",str(result["path"]))
+            get_tree().change_scene_to_file("res://scenes/race.tscn")
+        else:
+            generated_status.text = "GENERATION FAILED: "+str(result.get("error","unknown"))
+    )
+    menu.add_child(generated_status)
     _button(menu,"CONTROLLER DIAGNOSTICS","res://scenes/dev/input_monitor.tscn",scale_factor)
 
     var hint := Label.new()
