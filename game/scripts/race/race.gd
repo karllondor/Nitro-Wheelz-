@@ -108,7 +108,8 @@ func _make_ui() -> void:
     hud.name = "Lap / Speed / Score"
     overlay.add_child(hud)
     hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else track.display_name
+    hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else (
+        "FULL CIRCUIT" if track.track_id=="shin_kawa_full_circuit" else track.display_name)
     hud.track_points = PackedVector2Array(track.centerline)
     hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
         90.0 if track.track_id=="benchmark_sweepers" else 0.0)
@@ -269,6 +270,8 @@ func _update_visuals() -> void:
         (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.signed_forward_speed_mps(), get_physics_process_delta_time())
     if hud != null:
         hud.race_time = time_elapsed
+        hud.car_world_position = model.position
+        hud.track_progress = float(track.sample_info(model.position)["progress"])
         hud.lap = lap
         hud.speed = model.speed_kmh()
         hud.reversing = model.is_reversing()
@@ -349,13 +352,14 @@ func _update_camera(delta: float) -> void:
     var overhead_target: Vector3 = focus-drone_direction*17.0+Vector3.UP*82.0
     var pan_alpha: float = 1.0-exp(-5.0*maxf(delta,0.0))
     overhead.position = overhead.position.lerp(overhead_target,pan_alpha)
-    overhead.look_at(focus+drone_direction*22.0,Vector3.UP)
+    # Reduce the old forward look target: the car was pushed beneath pedals.
+    overhead.look_at(focus+drone_direction*5.0,Vector3.UP)
 
     var speed_lerp: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
     var chase_back: float = lerpf(16.0,22.0,speed_lerp)
     var chase_height: float = lerpf(9.0,12.0,speed_lerp)
     var chase_target: Vector3 = car_position-f*chase_back+camera_velocity_lead*0.22+Vector3.UP*chase_height
-    var look_target: Vector3 = car_position+f*(4.0 if model.is_reversing() else 16.0)+camera_velocity_lead*0.48+Vector3.UP*0.8
+    var look_target: Vector3 = car_position+f*(2.0 if model.is_reversing() else 7.0)+camera_velocity_lead*0.32+Vector3.UP*0.8
     # A nearby wall must not snap the camera to the bumper.
     if chase_is_blocked:
         var candidate: Vector3 = chase_occlusion_point+Vector3.UP*3.5
