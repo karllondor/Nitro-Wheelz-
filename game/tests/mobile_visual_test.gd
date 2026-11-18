@@ -84,11 +84,14 @@ func _run() -> void:
     var gas_pedal: Rect2 = Rect2(portrait_controls["gas"])
     var brake_pedal: Rect2 = Rect2(portrait_controls["brake"])
     var drift_rect: Rect2 = Rect2(portrait_controls["drift"])
-    if absf(gas_pedal.size.y-1600.0*0.208*2.0/3.0)>2.0 or absf(brake_pedal.size.x-720.0*0.225*2.0/3.0)>2.0:
-        _fail("Portrait pedals are not one-third smaller than the old layout")
+    if gas_pedal.size.y < brake_pedal.size.y*1.35 or gas_pedal.position.y >= brake_pedal.position.y:
+        _fail("Gas pedal must be taller and start higher than brake")
         return
-    if drift_rect.size.y < 175.0:
-        _fail("Portrait DRIFT button should be larger")
+    if absf(brake_pedal.size.x-720.0*0.160)>1.0 or absf(gas_pedal.size.x-720.0*0.158)>1.0:
+        _fail("Portrait pedal sizing diverged from reference")
+        return
+    if drift_rect.position.y < 1600.0*0.46 or drift_rect.size.y < 1600.0*0.29:
+        _fail("Handbrake must stay lowered and be easily pressed")
         return
     if gas_pedal.intersects(brake_pedal) or drift_rect.intersects(gas_pedal):
         _fail("Mobile control hit rectangles overlap")

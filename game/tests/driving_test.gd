@@ -97,6 +97,23 @@ func _run() -> void:
         _fail("Handbrake did not reduce rear grip")
         return
 
+    # The handbrake must lock rear grip on the first tick, even when the
+    # steering finger lands briefly AFTER the drift finger.
+    var instant: NitroDriveModel = DRIVE.new()
+    instant.reset(Vector2.ZERO,0.0)
+    instant.velocity = Vector2(0.0,-14.0)
+    instant.step(STEP,0.0,1.0,0.0,1.0)
+    if instant.rear_traction > 0.11:
+        _fail("DRIFT rear grip did not lock in the first physics tick")
+        return
+    var before_yaw: float = instant.yaw_rate
+    for j in range(12):
+        instant.step(STEP,0.0,1.0,0.0,1.0)
+    instant.step(STEP,0.7,1.0,0.0,1.0)
+    if instant.yaw_rate <= before_yaw+0.1:
+        _fail("Buffered flick did not respond when steering followed DRIFT")
+        return
+
     # At 72 km/h full throttle should cost far less rear grip than at 36 km/h.
     if absf(a._power_grip_factor(1.0,10.0) - 0.40) > 0.02:
         _fail("Rear power-grip calibration at 36 km/h is wrong")

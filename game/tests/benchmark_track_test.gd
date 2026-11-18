@@ -9,7 +9,8 @@ func _initialize() -> void:
 func _run() -> void:
     var cases: Array = [
         ["res://tracks/benchmark_oval.json",271.0,24.0],
-        ["res://tracks/benchmark_sweepers.json",295.0,23.0]
+        ["res://tracks/benchmark_sweepers.json",295.0,23.0],
+        ["res://tracks/shin_kawa_full_circuit.json",2156.0,25.0]
     ]
     for scenario in cases:
         var path: String = str(scenario[0])
@@ -38,7 +39,7 @@ func _run() -> void:
                 return
         track.queue_free()
         await process_frame
-    print("PASS: 271m Oval and 295m Sweepers benchmark corridors compile and have no invisible centre walls")
+    print("PASS: Oval, Sweepers and Full Circuit corridors compile with no invisible centre walls")
     print("NOT RUN: exact DRIFTIT route match, human driving, hardware speed perception")
     quit(0)
 
