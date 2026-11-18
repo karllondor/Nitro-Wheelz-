@@ -1,5 +1,16 @@
 # Nitro Wheelz change history
 
+## [0.1.6] — P1 dynamic camera and desktop exports
+- Implements speed-dependent orthographic camera scaling: Camera2D zoom-equivalent 1.15 at up to 20 km/h, 1.0 at 50 km/h, 0.82 at 90 km/h, 0.72 from 120 km/h.
+- Smooth exponential interpolation of both zoom and camera position, including gradual close-in on braking.
+- Camera moves ahead of actual velocity vector over 0.45 s (maximum 19 m), not the vehicle bonnet direction; supports sidelong drift.
+- World-fixed top-down orientation; chase camera pulls back with speed, looks down more and raycasts potential solid-wall occlusion on the Godot physics tick.
+- New dynamic-camera headless regression with zoom response, forward lead, speed values, and no world rotation.
+- Native Linux x86_64 / Windows x86_64 export presets and GitHub Actions workflow added; no interactive PC playtest.
+- Inherits v0.1.5 validated Nitro Track DNA P0; P2 driving re-tune, P3 LINE+ZONES+ANGLE+COMBO, P4 checkpoint scoring/ranking, P5 approved HUD and P6 art are queued, not falsely marked done.
+- Build/CI status PENDING before workflow run; Android/PC visual and feel testing NOT RUN.
+
+
 ## [0.1.5] — Nitro Track DNA P0 geometry prototype
 - Replaced handwired control point source with versioned JSON track data (19 authored knots + editable per-section widths).
 - Added deterministic Track DNA compiler, shared centreline and left/right edge arrays, robust fail-closed spline/corridor validation, negative tests for duplicate nodes, invalid widths, figure-eight intersection.
