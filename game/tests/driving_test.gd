@@ -121,7 +121,7 @@ func _run() -> void:
     if absf(a._power_grip_factor(1.0,20.0) - 0.63) > 0.02:
         _fail("Rear power-grip calibration at 72 km/h is wrong")
         return
-    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 20.0) > 0.1:
+    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 24.0) > 0.1:
         _fail("Speed dependent steering reference mismatch")
         return
 
@@ -150,7 +150,7 @@ func _run() -> void:
         return
 
     # v0.1.3: at 72+ km/h the car must not rotate like a low-speed donut.
-    if a._yaw_rate_limit(20.0,0.0) > 0.68 or a._yaw_rate_limit(20.0,0.0) < 0.52:
+    if a._yaw_rate_limit(20.0,0.0) > 0.83 or a._yaw_rate_limit(20.0,0.0) < 0.79:
         _fail("High speed yaw limit not proportional to available lateral grip")
         return
     if a._yaw_rate_limit(10.0,0.0) <= a._yaw_rate_limit(20.0,0.0):
@@ -188,6 +188,32 @@ func _run() -> void:
         return
     if absf(flick.steering_angle) <= 0.055:
         _fail("Steering remains sluggish during the first driving tick")
+        return
+
+    # Power-oversteer: 65 km/h + full binary GAS + steering, no handbrake.
+    var power: NitroDriveModel = DRIVE.new()
+    power.reset(Vector2.ZERO,0.0)
+    power.velocity = Vector2(0.0,-18.0)
+    var power_peak: float = 0.0
+    for i in range(480):
+        power.step(STEP,0.80,1.0,0.0,0.0)
+        power_peak = maxf(power_peak,absf(power.drift_angle))
+    print("POWER DRIFT WITHOUT HB: peak_angle=",power_peak," speed=",power.speed_kmh())
+    if power_peak < 14.0:
+        _fail("Full GAS + steering cannot trigger a useful drift without handbrake")
+        return
+
+    # Low-speed launch into a sustained donut is a deliberate, riskier manoeuvre.
+    var donut: NitroDriveModel = DRIVE.new()
+    donut.reset(Vector2.ZERO,0.0)
+    var total_rotation: float = 0.0
+    for i in range(1680):
+        var prev: float = donut.heading
+        donut.step(STEP,0.96,1.0,0.0,0.0)
+        total_rotation += absf(wrapf(donut.heading-prev,-PI,PI))
+    print("DONUT FULL GAS+STEER: rotation_rad=",total_rotation," speed=",donut.speed_kmh())
+    if total_rotation < 3.0:
+        _fail("Low-speed full-GAS steering barely rotates the car")
         return
 
     var track: NitroDriftTrack = TRACK.new()
