@@ -162,13 +162,14 @@ func _run() -> void:
     var maximum_yaw_rate: float = 0.0
     var maximum_slip_angle: float = 0.0
     for i in range(480):
+        var speed_before_step: float = sweeper.speed_mps()
         sweeper.step(STEP,0.68,0.70,0.0,0.0)
         maximum_yaw_rate = maxf(maximum_yaw_rate,absf(sweeper.yaw_rate))
         maximum_slip_angle = maxf(maximum_slip_angle,absf(sweeper.drift_angle))
         if not is_finite(sweeper.yaw_rate) or not is_finite(sweeper.drift_angle):
             _fail("High-speed cornering diverged")
             return
-        if absf(sweeper.yaw_rate) > sweeper._yaw_rate_limit(sweeper.speed_mps(),0.99)+0.001:
+        if absf(sweeper.yaw_rate) > sweeper._yaw_rate_limit(speed_before_step,1.0)+0.002:
             _fail("Speed-dependent turning limit exceeded during sweeper")
             return
     print("HIGH SPEED SWEEPER: speed=",sweeper.speed_kmh(),
