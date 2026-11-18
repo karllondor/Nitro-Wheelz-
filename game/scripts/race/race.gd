@@ -30,6 +30,9 @@ var offroad: bool = false
 var collision_cooldown: float = 0.0
 var camera_shake_strength: float = 0.0
 var camera_shake_phase: float = 0.0
+var camera_velocity_lead: Vector3 = Vector3.ZERO
+const CAMERA_LOOKAHEAD_SECONDS: float = 0.45
+const CAMERA_LEAD_MAX_METRES: float = 19.0
 var wall_collision_count: int = 0
 
 var skid_mesh: ImmediateMesh
@@ -259,24 +262,68 @@ func _process(delta: float) -> void:
     camera_shake_phase += delta*36.0
     _update_camera(delta)
 
+func _zoom_factor_for_speed(kmh: float) -> float:
+    # Prototype Camera2D reference converted to orthographic Camera3D size:
+    # Camera3D.size = base_size / target_zoom.
+    var speed: float = maxf(kmh,0.0)
+    if speed <= 20.0:
+        return 1.15
+    if speed <= 50.0:
+        return lerpf(1.15,1.0,(speed-20.0)/30.0)
+    if speed <= 90.0:
+        return lerpf(1.0,0.82,(speed-50.0)/40.0)
+    if speed <= 120.0:
+        return lerpf(0.82,0.72,(speed-90.0)/30.0)
+    return 0.72
+
+func _camera_lead_target(real_velocity: Vector2) -> Vector3:
+    # Use true direction of travel, not where the bonnet is pointing.
+    var lead := Vector3(real_velocity.x,0.0,real_velocity.y)*CAMERA_LOOKAHEAD_SECONDS
+    return lead.limit_length(CAMERA_LEAD_MAX_METRES)
+
 func _update_camera(delta: float) -> void:
     if model == null or overhead == null or chase == null:
         return
-    var car_position: Vector3 = Vector3(model.position.x,0.0,model.position.y)
+    var car_position := Vector3(model.position.x,0.0,model.position.y)
     var forward_dir: Vector2 = model.forward()
-    var f: Vector3 = Vector3(forward_dir.x,0.0,forward_dir.y)
+    var f := Vector3(forward_dir.x,0.0,forward_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    # Wider scene coverage on phones: more road visible before each corner.
-    overhead.size = 78.0 if portrait else 62.0
-    # Fixed north-up orientation; never rotate the top-down camera as the car yaws.
-    var overhead_target: Vector3 = car_position + Vector3(0,74,15)
-    overhead.position = overhead.position.lerp(overhead_target,clampf(delta*7.0,0.0,1.0))
-    overhead.look_at(car_position + Vector3(0,0,-5.0),Vector3(0,0,-1))
-    var chase_target: Vector3 = car_position-f*15.0+Vector3(0,6.5,0)
-    chase.position = chase.position.lerp(chase_target,clampf(delta*4.2,0.0,1.0))
-    chase.look_at(car_position+f*15.0+Vector3.UP*1.7,Vector3.UP)
-    # Short, reversible camera shake. Applies to either camera without
-    # changing its yaw or overwriting chase smoothing.
+    var base_size: float = 78.0 if portrait else 62.0
+    var zoom_target: float = base_size/_zoom_factor_for_speed(model.speed_kmh())
+    var zoom_alpha: float = 1.0-exp(-3.3*maxf(delta,0.0))
+    overhead.size = lerpf(overhead.size,zoom_target,zoom_alpha)
+
+    var desired_lead: Vector3 = _camera_lead_target(model.velocity)
+    var lead_alpha: float = 1.0-exp(-4.2*maxf(delta,0.0))
+    camera_velocity_lead = camera_velocity_lead.lerp(desired_lead,lead_alpha)
+    var focus: Vector3 = car_position+camera_velocity_lead
+
+    # This camera has a constant orientation in WORLD space, even mid-drift.
+    # By offsetting its position instead of looking at the car, the track
+    # cannot rotate when the car yaws.
+    var overhead_target: Vector3 = focus+Vector3(0,74,15)
+    var pan_alpha: float = 1.0-exp(-6.0*maxf(delta,0.0))
+    overhead.position = overhead.position.lerp(overhead_target,pan_alpha)
+    overhead.look_at(overhead.position+Vector3(0,-74,-20),Vector3(0,0,-1))
+
+    var speed_lerp: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
+    var chase_back: float = lerpf(15.0,19.0,speed_lerp)
+    var chase_height: float = lerpf(7.2,8.3,speed_lerp)
+    var chase_target: Vector3 = car_position-f*chase_back+camera_velocity_lead*0.30+Vector3.UP*chase_height
+    var look_target: Vector3 = car_position+f*9.0+Vector3.UP*1.0
+    # Move a camera in front of a blocking wall instead of behind it.
+    # Non-colliding decorative trees never occlude the camera via physics.
+    if is_inside_tree():
+        var q := PhysicsRayQueryParameters3D.create(car_position+Vector3.UP*1.4,chase_target)
+        var wall: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+        if not wall.is_empty():
+            chase_target = Vector3(wall["position"])+Vector3(wall["normal"])*0.65
+    var chase_alpha: float = 1.0-exp(-4.0*maxf(delta,0.0))
+    chase.position = chase.position.lerp(chase_target,chase_alpha)
+    chase.look_at(look_target,Vector3.UP)
+    chase.fov = lerpf(chase.fov,lerpf(70.0,76.0,speed_lerp),zoom_alpha)
+
+    # Brief wall shake, decays smoothly and never changes camera orientation.
     overhead.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.42
     overhead.v_offset = cos(camera_shake_phase*1.3)*camera_shake_strength*0.42
     chase.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.38
@@ -310,6 +357,7 @@ func _restart() -> void:
     had_skid = false
     collision_cooldown = 0.0
     camera_shake_strength = 0.0
+    camera_velocity_lead = Vector3.ZERO
     wall_collision_count = 0
     _update_visuals()
 
