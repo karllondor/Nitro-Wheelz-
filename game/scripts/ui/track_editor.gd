@@ -249,36 +249,70 @@ func _invalidate() -> void:
 func _validate() -> void:
     var result: Dictionary = DNA.compile(data)
     ready_to_play = bool(result.get("ok",false))
+    invalid_nodes.clear()
     if ready_to_play:
         last_length = float(result["length_metres"])
         _status("VALID • %.0f m / %.1f m width • closed loop" % [last_length,float(data["width_m"])],true)
     else:
         var errors: PackedStringArray = result.get("errors",PackedStringArray())
+        for error in errors:
+            _flag_problem_nodes(str(error))
         _status("INVALID • "+(str(errors[0]) if not errors.is_empty() else "Unknown geometry error"),false)
     queue_redraw()
 
-func _save() -> bool:
-    _validate()
-    if not ready_to_play:
-        return false
-    var file: FileAccess = FileAccess.open(CUSTOM,FileAccess.WRITE)
-    if file == null:
-        _status("FAILED • Storage unavailable",false)
-        return false
-    file.store_string(JSON.stringify(data,"  "))
-    file.close()
-    var check: Dictionary = DNA.read_track(CUSTOM)
-    if not bool(check.get("ok",false)):
-        _status("FAILED • Saved circuit failed geometry check",false)
-        return false
-    _status("SAVED • MY CUSTOM CIRCUIT • %.0f m" % last_length,true)
-    return true
+func _flag_ring_sample(sample_index: int) -> void:
+    if _point_count() == 0:
+        return
+    var knot: int = posmodi(int(sample_index/DNA.SUBDIVISIONS),_point_count())
+    # Segment belongs to two nearby editable nodes.
+    invalid_nodes[knot] = true
+    invalid_nodes[(knot+1)%_point_count()] = true
+
+func _flag_problem_nodes(message: String) -> void:
+    # Convert validator's sampled geometry segments back to editable knots.
+    # Do not invent precision: highlight the two nearest source nodes.
+    var regex := RegEx.new()
+    var a: int = -1
+    var b: int = -1
+    if message.contains("samples "):
+        regex.compile("samples ([0-9]+)/([0-9]+)")
+        var match_samples: RegExMatch = regex.search(message)
+        if match_samples != null:
+            a = int(match_samples.get_string(1))
+            b = int(match_samples.get_string(2))
+    elif message.contains("segments "):
+        regex.compile("segments ([0-9]+) and ([0-9]+)")
+        var match_segments: RegExMatch = regex.search(message)
+        if match_segments != null:
+            a = int(match_segments.get_string(1))
+            b = int(match_segments.get_string(2))
+    elif message.contains("at sample "):
+        regex.compile("at sample ([0-9]+)")
+        var match_sample: RegExMatch = regex.search(message)
+        if match_sample != null:
+            a = int(match_sample.get_string(1))
+    elif message.contains("knot ") or message.contains("control points at "):
+        regex.compile("(?:knot |control points at )([0-9]+)")
+        var match_knot: RegExMatch = regex.search(message)
+        if match_knot != null and _point_count() > 0:
+            var knot: int = int(match_knot.get_string(1))%_point_count()
+            invalid_nodes[knot] = true
+            invalid_nodes[(knot+1)%_point_count()] = true
+    if a >= 0:
+        _flag_ring_sample(a)
+    if b >= 0:
+        _flag_ring_sample(b)
+
 
 func _drive() -> void:
-    if not _save():
+    _validate()
+    if not ready_to_play:
+        _status("FIX RED NODES FIRST • Cannot drive an invalid track",false)
         return
-    ProjectSettings.set_setting("nitro/selected_track",CUSTOM)
-    get_tree().change_scene_to_file("res://scenes/race.tscn")
+    pending_drive = true
+    name_input.text = last_saved_name
+    name_dialog.popup_centered(Vector2i(570,240))
+    name_input.grab_focus()
 
 func _reset_shape() -> void:
     var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
@@ -296,6 +330,10 @@ func _back() -> void:
 func _add_point() -> void:
     var pts: Array = data["control_points"]
     var n: int = pts.size()
+    if n < 2:
+        add_mode = true
+        _status("ADD NODE ACTIVE • Tap the map to place each waypoint",true)
+        return
     var idx: int = selected
     if idx < 0:
         var longest: float = 0.0
@@ -341,6 +379,17 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         if d < closest:
             closest = d
             found = i
+    if found < 0 and add_mode:
+        var world: Vector2 = _world_point(pos)
+        var points: Array = data["control_points"]
+        points.append([snappedf(world.x,0.01),snappedf(world.y,0.01)])
+        data["control_points"] = points
+        selected = points.size()-1
+        pointer = -999
+        _validate()
+        if points.size() < 8:
+            _status("%d/8 NODES • Continue placing nodes to close the loop" % points.size(),false)
+        return
     selected = found
     pointer = pointer_index if found >= 0 else -999
     queue_redraw()
@@ -367,11 +416,18 @@ func _input(event: InputEvent) -> void:
             _release_touch(event.index)
     elif event is InputEventScreenDrag:
         _drag_touch(event.position,event.index)
-    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-        if event.pressed:
-            _start_touch(event.position,-2)
-        else:
-            _release_touch(-2)
+    elif event is InputEventMouseButton:
+        if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
+            _zoom(1.2)
+            return
+        if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+            _zoom(1.0/1.2)
+            return
+        if event.button_index == MOUSE_BUTTON_LEFT:
+            if event.pressed:
+                _start_touch(event.position,-2)
+            else:
+                _release_touch(-2)
     elif event is InputEventMouseMotion:
         if pointer == -2:
             _drag_touch(event.position,-2)
@@ -380,18 +436,25 @@ func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.022,0.028,0.038),true)
     draw_rect(canvas,Color(0.065,0.087,0.105,0.92),true)
     draw_rect(canvas,Color(0.45,0.48,0.58,0.75),false,2.0)
-    if _point_count() < 3:
+    var n: int = _point_count()
+    if n <= 0:
         return
     var line := PackedVector2Array()
-    for i in range(_point_count()):
-        line.append(_screen_point(_node_position(i)))
-    line.append(line[0])
-    var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
-    draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
-    draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
-    for i in range(_point_count()):
-        var point: Vector2 = _screen_point(_node_position(i))
-        draw_circle(point,10.0,Color(1.0,0.17,0.48) if i == selected else Color(0.94,0.94,0.96))
+    for idx in range(n):
+        line.append(_screen_point(_node_position(idx)))
+    if n >= 8:
+        line.append(line[0])
+    if n >= 2:
+        var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
+        draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
+        draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
+    # The white first node also represents start/finish.
+    var origin: Vector2 = line[0]
+    draw_arc(origin,15.0,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
+    for idx in range(n):
+        var point: Vector2 = line[idx]
+        # Selection wins orange; invalid knots otherwise red; neutral white.
+        var tint: Color = Color(1.0,0.56,0.09) if idx == selected else (
+            Color(1.0,0.12,0.17) if invalid_nodes.has(idx) else Color(0.94,0.94,0.96))
+        draw_circle(point,10.0,tint)
         draw_circle(point,4.0,Color(0.035,0.041,0.050))
-    var origin: Vector2 = _screen_point(_node_position(0))
-    draw_circle(origin,15.0,Color(0.19,0.85,0.44,0.8))
