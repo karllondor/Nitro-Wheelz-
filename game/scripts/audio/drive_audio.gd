@@ -47,6 +47,16 @@ func _ready() -> void:
             player.stream = duplicated
             player.play()
 
+func _exit_tree() -> void:
+    # Four looping OGG players must release their decoder streams before the
+    # scene exits, otherwise Godot reports resources still in use at shutdown.
+    for player in voices.values():
+        if is_instance_valid(player):
+            (player as AudioStreamPlayer).stop()
+            (player as AudioStreamPlayer).stream = null
+    voices.clear()
+    has_source_audio = false
+
 func _loop_volume(name: String,linear: float,dt: float) -> void:
     if not voices.has(name):
         return
