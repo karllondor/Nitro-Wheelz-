@@ -285,7 +285,7 @@ func _validate() -> void:
 func _flag_ring_sample(sample_index: int) -> void:
     if _point_count() == 0:
         return
-    var knot: int = posmodi(int(sample_index/DNA.SUBDIVISIONS),_point_count())
+    var knot: int = int(floor(float(sample_index)/float(DNA.SUBDIVISIONS)))%_point_count()
     # Segment belongs to two nearby editable nodes.
     invalid_nodes[knot] = true
     invalid_nodes[(knot+1)%_point_count()] = true
