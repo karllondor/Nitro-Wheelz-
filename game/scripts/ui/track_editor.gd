@@ -14,6 +14,15 @@ var pixels_per_metre: float = 1.0
 var message_label: Label
 var ready_to_play: bool = false
 var last_length: float = 0.0
+var zoom_level: float = 1.0
+var add_mode: bool = false
+var invalid_nodes: Dictionary = {}
+var name_dialog: ConfirmationDialog
+var name_input: LineEdit
+var start_dialog: ConfirmationDialog
+var pending_drive: bool = false
+var last_saved_path: String = ""
+var last_saved_name: String = ""
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_PASS
@@ -39,9 +48,14 @@ func _fit_view() -> void:
         var p := Vector2(float(item[0]),float(item[1]))
         smallest = Vector2(minf(smallest.x,p.x),minf(smallest.y,p.y))
         largest = Vector2(maxf(largest.x,p.x),maxf(largest.y,p.y))
-    world_mid = (smallest+largest)*0.5
-    var span: Vector2 = largest-smallest
-    pixels_per_metre = minf(canvas.size.x*0.84/maxf(span.x,1.0),canvas.size.y*0.84/maxf(span.y,1.0))
+    if (data.get("control_points",[]) as Array).is_empty():
+        world_mid = Vector2.ZERO
+        pixels_per_metre = minf(canvas.size.x,canvas.size.y)/310.0*zoom_level
+    else:
+        world_mid = (smallest+largest)*0.5
+        var span: Vector2 = largest-smallest
+        pixels_per_metre = minf(canvas.size.x*0.84/maxf(span.x,1.0),
+            canvas.size.y*0.84/maxf(span.y,1.0))*zoom_level
     queue_redraw()
 
 func _screen_point(p: Vector2) -> Vector2:
@@ -61,7 +75,7 @@ func _make_ui() -> void:
     title.add_theme_color_override("font_color",Color(0.99,0.95,0.98))
     add_child(title)
     var instructions := Label.new()
-    instructions.text = "DRAG white nodes to shape road • Select a node to add/delete"
+    instructions.text = "DRAG nodes • ADD NODE then tap canvas • ORANGE = selected / RED = invalid"
     instructions.position = Vector2(s.x*0.05,s.y*0.098)
     instructions.size = Vector2(s.x*0.9,s.y*0.042)
     instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -74,13 +88,144 @@ func _make_ui() -> void:
     message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     message_label.add_theme_font_size_override("font_size",int(16.0*scale))
     add_child(message_label)
+    _button("ZOOM +",0.832,0.534,0.112,0.042,func(): _zoom(1.25))
+    _button("ZOOM -",0.832,0.582,0.112,0.042,func(): _zoom(0.8))
     _button("ADD NODE",0.05,0.746,0.425,0.065,Callable(self,"_add_point"))
     _button("DELETE NODE",0.525,0.746,0.425,0.065,Callable(self,"_delete_point"))
     _button("VALIDATE",0.05,0.825,0.425,0.065,Callable(self,"_validate"))
-    _button("SAVE TRACK",0.525,0.825,0.425,0.065,Callable(self,"_save"))
-    _button("RESET SHAPE",0.05,0.905,0.275,0.055,Callable(self,"_reset_shape"))
+    _button("SAVE AS...",0.525,0.825,0.425,0.065,Callable(self,"_request_save"))
+    _button("START NEW",0.05,0.905,0.275,0.055,Callable(self,"_request_new"))
     _button("BACK",0.36,0.905,0.275,0.055,Callable(self,"_back"))
     _button("DRIVE",0.675,0.905,0.275,0.055,Callable(self,"_drive"))
+
+    start_dialog = ConfirmationDialog.new()
+    start_dialog.title = "START NEW TRACK"
+    start_dialog.dialog_text = "Choose a starting shape. Unsaved edits will be discarded."
+    start_dialog.ok_button_text = "CIRCLE"
+    start_dialog.confirmed.connect(func(): _start_new_circle())
+    start_dialog.add_button("BLANK CANVAS",false,"blank")
+    start_dialog.custom_action.connect(func(action: String):
+        if action == "blank":
+            start_dialog.hide()
+            _start_new_blank())
+    add_child(start_dialog)
+
+    name_dialog = ConfirmationDialog.new()
+    name_dialog.title = "SAVE CUSTOM TRACK"
+    name_dialog.dialog_text = "Track name (used for the file and race HUD):"
+    name_dialog.ok_button_text = "SAVE"
+    name_input = LineEdit.new()
+    name_input.placeholder_text = "e.g. Welsh Mountain Drift"
+    name_input.max_length = 42
+    name_dialog.add_child(name_input)
+    name_dialog.confirmed.connect(_confirm_save)
+    add_child(name_dialog)
+
+
+func _zoom(multiplier: float) -> void:
+    zoom_level = clampf(zoom_level*multiplier,0.50,4.0)
+    _fit_view()
+
+func _request_new() -> void:
+    start_dialog.popup_centered(Vector2i(540,220))
+
+func _start_new_circle() -> void:
+    var points: Array = []
+    for i in range(16):
+        var angle: float = PI+TAU*float(i)/16.0
+        points.append([
+            snappedf(cos(angle)*105.0,0.001),
+            snappedf(sin(angle)*105.0,0.001)
+        ])
+    _replace_new_track(points,false)
+    _validate()
+
+func _start_new_blank() -> void:
+    _replace_new_track([],true)
+    _status("BLANK • Tap ADD NODE, then tap map to place at least 8 points",false)
+
+func _replace_new_track(points: Array,adding: bool) -> void:
+    data = {
+        "schema_version":1,
+        "id":"player_custom_track",
+        "name":"UNTITLED TRACK",
+        "generator_version":1,
+        "seed":0,
+        "closed":true,
+        "width_m":24.0,
+        "control_points":points
+    }
+    selected = -1
+    pointer = -999
+    add_mode = adding
+    zoom_level = 1.0
+    ready_to_play = false
+    invalid_nodes.clear()
+    last_saved_path = ""
+    last_saved_name = ""
+    _fit_view()
+    queue_redraw()
+
+func _request_save() -> void:
+    _validate()
+    if not ready_to_play:
+        _status("FIX RED NODES FIRST • Cannot save invalid geometry",false)
+        return
+    pending_drive = false
+    name_input.text = last_saved_name if not last_saved_name.is_empty() else ""
+    name_dialog.popup_centered(Vector2i(570,240))
+    name_input.grab_focus()
+
+func _safe_slug(name: String) -> String:
+    var clean: String = ""
+    for i in range(name.length()):
+        var ch: String = name.substr(i,1).to_lower()
+        if ch in "abcdefghijklmnopqrstuvwxyz0123456789":
+            clean += ch
+        elif ch in " -_":
+            if not clean.ends_with("_"):
+                clean += "_"
+    clean = clean.strip_edges().trim_suffix("_")
+    if clean.is_empty():
+        clean = "track"
+    return clean.substr(0,40)
+
+func _confirm_save() -> void:
+    var title: String = name_input.text.strip_edges()
+    if title.is_empty():
+        _status("ENTER A TRACK NAME BEFORE SAVING",false)
+        pending_drive = false
+        return
+    if not _persist_track(title):
+        pending_drive = false
+        return
+    if pending_drive:
+        pending_drive = false
+        ProjectSettings.set_setting("nitro/selected_track",last_saved_path)
+        get_tree().change_scene_to_file("res://scenes/race.tscn")
+
+func _persist_track(title: String) -> bool:
+    _validate()
+    if not ready_to_play:
+        return false
+    var slug: String = _safe_slug(title)
+    var path: String = "user://nitro_track_"+slug+".json"
+    data["id"] = "custom_"+slug
+    data["name"] = title
+    var file: FileAccess = FileAccess.open(path,FileAccess.WRITE)
+    if file == null:
+        _status("FAILED • Device storage unavailable",false)
+        return false
+    file.store_string(JSON.stringify(data,"  "))
+    file.close()
+    var compiled: Dictionary = DNA.read_track(path)
+    if not bool(compiled.get("ok",false)):
+        _status("FAILED • Saved file did not pass validator",false)
+        return false
+    last_saved_path = path
+    last_saved_name = title
+    _status("SAVED • "+title+" • %.0f m" % last_length,true)
+    return true
 
 func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callable) -> void:
     var s: Vector2 = get_viewport_rect().size
