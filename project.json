@@ -1,7 +1,7 @@
 {
   "game_name": "Nitro Wheelz",
   "game_slug": "nitro-wheelz",
-  "game_version": "0.1.6",
+  "game_version": "0.1.12",
   "starter_version": "0.1.0",
   "profile": "3d-production",
   "targets": [
@@ -12,7 +12,7 @@
   "target_fps": 60,
   "controller_support": "default-on",
   "renderer": "gl_compatibility",
-  "status": "track-dna-p0-dynamic-camera-p1-test",
+  "status": "v0112-car-geometry-white-garage-dynamic-audio-import-candidate",
   "orientation_mobile": "portrait",
   "cameras": [
     "top-down",

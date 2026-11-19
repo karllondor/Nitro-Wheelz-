@@ -26,28 +26,27 @@ func _process(_delta: float) -> void:
 
 func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
     var s: Vector2 = get_viewport_rect().size if size_override == Vector2.ZERO else size_override
-    var portrait: bool = s.y > s.x
-    if portrait:
+    if s.y > s.x:
         return {
-            "joystick_center": Vector2(s.x*0.205,s.y*0.836),
-            "joystick_radius": s.x*0.180,
-            "drift": Rect2(s.x*0.510,s.y*0.627,s.x*0.463,s.y*0.117),
-            "brake": Rect2(s.x*0.513,s.y*0.759,s.x*0.220,s.y*0.205),
-            "gas": Rect2(s.x*0.746,s.y*0.759,s.x*0.227,s.y*0.205),
-            "pause": Rect2(s.x*0.87,s.y*0.148,s.x*0.103,s.y*0.064),
-            "camera": Rect2(s.x*0.84,s.y*0.22,s.x*0.135,s.y*0.070),
-            "restart": Rect2(s.x*0.285,s.y*0.53,s.x*0.43,s.y*0.086),
-            "menu": Rect2(s.x*0.285,s.y*0.63,s.x*0.43,s.y*0.086)
+            "joystick_center": Vector2(s.x*0.215,s.y*0.853),
+            "joystick_radius": s.x*0.175,
+            "drift": Rect2(s.x*0.790,s.y*0.470,s.x*0.188,s.y*0.300),
+            "brake": Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132),
+            "gas": Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190),
+            "pause": Rect2(s.x*0.690,s.y*0.206,s.x*0.126,s.y*0.057),
+            "camera": Rect2(s.x*0.842,s.y*0.206,s.x*0.136,s.y*0.057),
+            "restart": Rect2(s.x*0.265,s.y*0.43,s.x*0.470,s.y*0.095),
+            "menu": Rect2(s.x*0.265,s.y*0.55,s.x*0.470,s.y*0.095)
         }
     return {
-        "joystick_center": Vector2(s.x*0.15,s.y*0.78),
-        "joystick_radius": s.y*0.19,
-        "drift": Rect2(s.x*0.680,s.y*0.568,s.x*0.292,s.y*0.143),
-        "brake": Rect2(s.x*0.682,s.y*0.736,s.x*0.138,s.y*0.225),
-        "gas": Rect2(s.x*0.833,s.y*0.736,s.x*0.142,s.y*0.225),
-        "pause": Rect2(s.x*0.92,s.y*0.16,s.x*0.06,s.y*0.10),
-        "camera": Rect2(s.x*0.84,s.y*0.16,s.x*0.065,s.y*0.10),
-        "restart": Rect2(s.x*0.33,s.y*0.51,s.x*0.34,s.y*0.12),
+        "joystick_center": Vector2(s.x*0.142,s.y*0.810),
+        "joystick_radius": s.y*0.177,
+        "drift": Rect2(s.x*0.850,s.y*0.390,s.x*0.128,s.y*0.340),
+        "brake": Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161),
+        "gas": Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224),
+        "pause": Rect2(s.x*0.921,s.y*0.180,s.x*0.057,s.y*0.125),
+        "camera": Rect2(s.x*0.846,s.y*0.180,s.x*0.062,s.y*0.125),
+        "restart": Rect2(s.x*0.33,s.y*0.49,s.x*0.34,s.y*0.12),
         "menu": Rect2(s.x*0.33,s.y*0.65,s.x*0.34,s.y*0.12)
     }
 
@@ -136,65 +135,119 @@ func _ui_scale() -> float:
 
 func _draw() -> void:
     var geo: Dictionary = _layout()
-    var center: Vector2 = Vector2(geo["joystick_center"])
+    var centre: Vector2 = Vector2(geo["joystick_center"])
     var radius: float = float(geo["joystick_radius"])
-    var active: Color = Color(0.80,0.48,0.20,0.67)
-    draw_circle(center,radius,Color(0.09,0.095,0.13,0.42))
-    draw_arc(center,radius,0.0,TAU,72,Color(0.94,0.93,0.95,0.68),3.0*_ui_scale())
-    draw_circle(center+Vector2(steer*radius*0.57,0),
-        radius*0.38,Color(0.94,0.94,0.96,0.70))
-    _button(Rect2(geo["drift"]),"DRIFT",handbrake>0.0,true)
+    var scale: float = _ui_scale()
+    # Minimal transparent steering pad; the physical hit zone is identical.
+    draw_circle(centre,radius,Color(0.025,0.029,0.037,0.32))
+    draw_arc(centre,radius,0.0,TAU,80,Color(0.87,0.89,0.94,0.78),2.1*scale,true)
+    draw_circle(centre+Vector2(steer*radius*0.57,0),
+        radius*0.34,Color(0.70,0.73,0.76,0.90))
+    draw_arc(centre+Vector2(steer*radius*0.57,0),
+        radius*0.34,0.0,TAU,48,Color(1,1,1,0.66),1.4*scale,true)
+    _handbrake(Rect2(geo["drift"]),handbrake>0.0)
     _pedal(Rect2(geo["brake"]),"BRAKE",brake>0.0)
     _pedal(Rect2(geo["gas"]),"GAS",throttle>0.0)
     _button(Rect2(geo["pause"]),"Ⅱ",false,false,true)
     _button(Rect2(geo["camera"]),"CAM",false,false,true)
-    if overlay_visible:
-        _button(Rect2(geo["restart"]),"RESTART",false)
-        _button(Rect2(geo["menu"]),"GARAGE / MENU",false)
+    # PAUSE and FINISH have exclusive modal menus in their own CanvasLayers.
 
 func _button(rect: Rect2, label: String, pushed: bool,
         highlight: bool=false, small: bool=false) -> void:
     var scale: float = _ui_scale()
     var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.70,0.37,0.13,0.76) if pushed else Color(0.11,0.10,0.13,0.52)
-    style.border_color = Color(0.98,0.90,0.79,0.72)
-    style.set_border_width_all(int(maxf(2.0,2.0*scale)))
-    style.set_corner_radius_all(int(minf(rect.size.y*0.22,18.0*scale)))
+    style.bg_color = Color(0.25,0.07,0.18,0.80) if pushed else Color(0.020,0.025,0.035,0.76)
+    style.border_color = Color(0.57,0.30,0.98,0.87) if pushed else Color(0.83,0.84,0.89,0.63)
+    style.set_border_width_all(int(maxf(1.8,1.8*scale)))
+    style.set_corner_radius_all(int(minf(rect.size.y*0.28,16.0*scale)))
     draw_style_box(style,rect)
     var font: Font = get_theme_default_font()
-    var font_size: int = int((21.0 if small else 31.0)*scale)
-    var text_color: Color = Color(1.0,0.72,0.32) if highlight else Color(0.97,0.97,0.97)
-    var baseline: float = rect.position.y + rect.size.y*0.5 + font.get_ascent(font_size)*0.37
-    draw_string(font,Vector2(rect.position.x,baseline),
-        label,HORIZONTAL_ALIGNMENT_CENTER,rect.size.x,font_size,text_color)
+    var font_size: int = int((17.0 if small else 27.0)*scale)
+    var col: Color = Color(0.71,0.55,1.0) if highlight else Color(1,1,1)
+    var baseline: float = rect.position.y+rect.size.y*0.5+font.get_ascent(font_size)*0.37
+    draw_string(font,Vector2(rect.position.x,baseline),label,
+        HORIZONTAL_ALIGNMENT_CENTER,rect.size.x,font_size,col)
 
-func _pedal(rect: Rect2, label: String, pressed: bool) -> void:
-    # A wide-bottomed metal pedal silhouette. No icon asset and no hidden
-    # click rectangle: _zone_at uses this same Rect2.
-    var w: float = rect.size.x
-    var h: float = rect.size.y
+func _handbrake(rect: Rect2, pressed: bool) -> void:
+    # The entire drawn lever rectangle is the functional touch target.
+    var scale: float = _ui_scale()
     var x: float = rect.position.x
     var y: float = rect.position.y
-    var outline := PackedVector2Array([
-        Vector2(x+w*0.18,y+h*0.01),
-        Vector2(x+w*0.82,y+h*0.01),
-        Vector2(x+w*0.98,y+h*0.99),
-        Vector2(x+w*0.02,y+h*0.99),
-        Vector2(x+w*0.18,y+h*0.01)
-    ])
-    var main_color := Color(0.89,0.47,0.19,0.78) if pressed else Color(0.14,0.15,0.18,0.72)
-    draw_colored_polygon(PackedVector2Array([
-        outline[0],outline[1],outline[2],outline[3]
-    ]),main_color)
-    draw_polyline(outline,Color(0.94,0.92,0.90,0.79),
-        maxf(2.0,2.5*_ui_scale()),true)
-    # Recessed anti-slip ribs at the upper half echo a real pedal surface.
-    for rib in range(3):
-        var yy: float = y+h*(0.18+float(rib)*0.095)
-        draw_line(Vector2(x+w*0.27,yy),Vector2(x+w*0.73,yy),
-            Color(0.85,0.86,0.88,0.44),maxf(2.0,2.0*_ui_scale()),true)
+    var w: float = rect.size.x
+    var h: float = rect.size.y
+    var pink := Color(0.57,0.30,0.98,0.95)
+    var cx: float = x+w*0.50
+    var bottom: float = y+h*0.77
+    var shaft_bottom := Vector2(cx,bottom)
+    var shaft_top := Vector2(cx,y+h*(0.24 if pressed else 0.14))
+    draw_line(shaft_bottom,shaft_top,Color(0.85,0.88,0.91),w*0.110,true)
+    draw_line(shaft_bottom+Vector2(w*0.032,0),shaft_top+Vector2(w*0.032,0),
+        Color(0.33,0.36,0.40),w*0.026,true)
+    var grip := Rect2(x+w*0.31,y+h*0.015,w*0.38,h*(0.34 if pressed else 0.42))
+    var rubber := StyleBoxFlat.new()
+    rubber.bg_color = Color(0.065,0.065,0.080)
+    rubber.border_color = pink
+    rubber.set_border_width_all(int(maxf(1.4,1.5*scale)))
+    rubber.set_corner_radius_all(int(w*0.14))
+    draw_style_box(rubber,grip)
+    for rib in range(9):
+        var ry: float = grip.position.y+grip.size.y*(0.19+float(rib)*0.069)
+        draw_line(Vector2(grip.position.x+w*0.055,ry),
+            Vector2(grip.end.x-w*0.055,ry),Color(0.65,0.67,0.69,0.46),1.2*scale,true)
+    # Enlarge only the lower handbrake BUTTON by 10%; keep lever grip.
+    var base := Rect2(x+w*0.06,y+h*0.7265,w*0.88,h*0.2585)
+    var metal := StyleBoxFlat.new()
+    metal.bg_color = Color(0.09,0.075,0.095,0.92)
+    metal.border_color = pink if pressed else Color(0.92,0.91,0.95,0.80)
+    metal.set_border_width_all(int(2.2*scale))
+    metal.set_corner_radius_all(int(w*0.17))
+    draw_style_box(metal,base)
     var font: Font = get_theme_default_font()
-    var font_size: int = int(32.0*_ui_scale())
-    draw_string(font,Vector2(x,y+h*0.73+font.get_ascent(font_size)*0.26),
-        label,HORIZONTAL_ALIGNMENT_CENTER,w,font_size,
-        Color(1,1,1,1))
+    var symbol_size: int = int(34.0*scale)
+    draw_string(font,Vector2(base.position.x,base.position.y+base.size.y*0.56+
+        font.get_ascent(symbol_size)*0.28),"Ⅲ",HORIZONTAL_ALIGNMENT_CENTER,
+        base.size.x,symbol_size,pink)
+    draw_circle(Vector2(base.position.x+base.size.x*0.16,base.position.y+base.size.y*0.15),
+        w*0.025,Color(0.86,0.88,0.93))
+    draw_circle(Vector2(base.end.x-base.size.x*0.16,base.position.y+base.size.y*0.15),
+        w*0.025,Color(0.86,0.88,0.93))
+
+func _pedal(rect: Rect2, label: String, pressed: bool) -> void:
+    # Separate brake and throttle silhouettes based on the approved
+    # perforated aluminium pedal reference. Visual shape and touch Rect2 match.
+    var x: float = rect.position.x
+    var y: float = rect.position.y
+    var w: float = rect.size.x
+    var h: float = rect.size.y
+    var scale: float = _ui_scale()
+    var gas_pedal: bool = label == "GAS"
+    var poly := PackedVector2Array()
+    if gas_pedal:
+        poly = PackedVector2Array([
+            Vector2(x+w*0.14,y+h*0.012),Vector2(x+w*0.84,y+h*0.012),
+            Vector2(x+w*0.96,y+h*0.087),Vector2(x+w*0.95,y+h*0.92),
+            Vector2(x+w*0.84,y+h*0.987),Vector2(x+w*0.12,y+h*0.987),
+            Vector2(x+w*0.045,y+h*0.91),Vector2(x+w*0.045,y+h*0.082)
+        ])
+    else:
+        poly = PackedVector2Array([
+            Vector2(x+w*0.18,y+h*0.008),Vector2(x+w*0.88,y+h*0.008),
+            Vector2(x+w*0.972,y+h*0.090),Vector2(x+w*0.91,y+h*0.92),
+            Vector2(x+w*0.80,y+h*0.989),Vector2(x+w*0.06,y+h*0.989),
+            Vector2(x+w*0.012,y+h*0.90),Vector2(x+w*0.10,y+h*0.087)
+        ])
+    draw_colored_polygon(poly,Color(0.92,0.62,0.75) if pressed else Color(0.68,0.70,0.73))
+    var outline: PackedVector2Array = poly.duplicate()
+    outline.append(poly[0])
+    draw_polyline(outline,Color(0.99,0.99,1.0,0.95),2.4*scale,true)
+    # Matte holes: staggered rows. The gas pedal is taller than the brake.
+    var rows: int = 6 if gas_pedal else 4
+    for row in range(rows):
+        var hole_y: float = y+h*(0.15+(0.70*float(row)/float(rows-1)))
+        var positions: Array[float] = [0.31,0.69] if row%2==0 else [0.5]
+        for hole_x in positions:
+            var centre: Vector2 = Vector2(x+w*hole_x,hole_y)
+            draw_circle(centre,w*0.101,Color(0.93,0.94,0.95,0.80))
+            draw_circle(centre,w*0.083,Color(0.028,0.031,0.040,1.0))
+    draw_line(Vector2(x+w*0.12,y+h*0.97),Vector2(x+w*0.86,y+h*0.97),
+        Color(0.57,0.30,0.98,0.94) if pressed else Color(0.43,0.45,0.50,0.7),2.4*scale,true)

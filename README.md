@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.1 MOBILE POLISH.** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.12 MODEL/GARAGE/SFX-IMPORT TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -39,7 +39,7 @@ InputMap runs through a single vehicle model regardless of device. Touch actions
 ## Currently implemented
 - Original two-contact-patch planar physics controller at 120 Hz with two 240 Hz substeps
 - Public-reference starting grip values, hysteresis, handbrake, rear torque/traction trade-off and sliding-only countersteer assist
-- One procedural fictional Japanese drift circuit, marker stripes, low-poly pines, barriers and car
+- Original Shin-Kawa, reference-inspired Full Circuit, two benchmark courses and a validated Generate Track beta, marker stripes, low-poly pines, barriers and car
 - Drift scoring, speed and slip HUD, three-lap progression, persistent tyre marks and off-track slowing
 - Overhead orthographic and behind-car chase cameras (same vehicle physics)
 - Xbox/keyboard/touch bindings, input monitor, Godot smoke and deterministic physics regression tests
@@ -51,5 +51,37 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.1_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.12_Platform and are never overwritten.
 
+
+## v0.1.9 mobile playtest
+- **EDIT TRACK • BETA** is now a separate touch-driven editor. Tap a white node, drag it to change the road, use ADD/DELETE, VALIDATE, SAVE and DRIVE. The road must pass the fail-closed Track DNA validator before racing. The **GENERATE TRACK • BETA** button remains a separate procedural variation feature.
+- Finish screen is now a separate full-screen presentation with three-lap time, score, three-star result (provisional for non-Oval tracks), locally ranked best runs and recent play history. Data is local to this device only under `user://nitro_local_runs.json`, not an online leaderboard.
+- More responsive power-oversteer, reduced assist/damping and stronger handbrake initiation support steering+GAS drifts and low-speed donuts. This is a deliberately more demanding arcade tune; device approval is still required.
+- Build version 0.1.9 is visible in the menu, in Android versionName and in all APK/Web/Desktop artifact names.
+
+## v0.1.10 handoff (Model GPT-6)
+- **Driving:** reduces v0.1.9's unwanted spinning by restoring rear grip, increasing steering/yaw damping, and requiring actual rear slip before normal full-GAS power drift. Arcade car retains earlier handbrake one-tick response and intentional low-speed donut option. This is a tuning hypothesis awaiting real-phone approval, not a proven driving-feel fix.
+- **Start New:** choose **CIRCLE** (valid closed editable circuit) or **BLANK CANVAS** (place control points by taps, minimum eight before Track DNA validation). Existing **GENERATE TRACK** remains separate.
+- **Zoom:** +/− on the editing canvas, plus scroll wheel on desktop (0.5× to 4×). The camera/track bounds are refitted with the selected zoom.
+- **Node feedback:** selected node **orange**; validator-identified failing local knot(s) **red**, mapped back from sampled curve/edge segment indexes. Structural/global errors such as fewer than eight nodes are explained in status text and cannot be assigned to one node.
+- **Saving:** a track name is requested via dialog; each name uses its own local JSON file; the editor reloads the last saved valid track next time. Files are local to the handset, not published or shared online.
+- **QA:** Godot headless checks cover nominal straight throttle, mild steering recovery, deliberate power drift, donut, circle/blank, node dragging, validation marking and named save. True multi-touch, Android UI visibility and player feel remain **NOT RUN** until tested on device.
+
+## v0.1.11 device playtest — GPT-6
+- Brand: the owner's white/purple graffiti logo and yellow crown are installed as a compact *vector trace* at the top of the main menu and track editor. This is a traced rendition, not the original raster embedded pixel-for-pixel. UI colors purple #9551F9, gold #FFDA49, white and deep charcoal.
+- Pause bug: old HUD modal and touch Restart/Garage overlays are removed; PAUSE presents a single blocking CanvasLayer with RESUME / RESTART / GARAGE. Finish still uses a distinct result screen.
+- History: recent drives show only day, abbreviated month and clock time; full ISO date remains stored for sorting.
+- Editor: 48-deep UNDO for actual edits (node drag, add, delete, new/reset), Ctrl+Z on PC. Start New and Save are now compact native-in-scene dialogs with large touch labels and a name input positioned above the on-screen Android keyboard.
+- Physics: approximately 10% reduction to yaw torque contribution and power-oversteer kick relative to v0.1.10. Handbrake flick remains unchanged.
+- Surfaces: source-derived reduced WebP samples from the two provided images (dark asphalt / sand) are tiled on the shared procedural corridor, shoulders and ground using world-space UVs. The lighter textures may repeat at close range until a later visual polish pass.
+- Tests: strict Godot import + tests for playable scenes, touch logic, pause exclusivity, loaded logo texture, asphalt/sand materials, editor Undo/dialog, and date formatting. Physical Android controls and perceived speed require owner approval.
+
+## v0.1.12 — Car dimensions, garage and sound-import workflow
+- Lada 2106 dimensions from technical manual: 4.166m body and 2.424m wheelbase, synchronized in visual geometry and model physics. Widebody/drift wheel track intentionally stylized, not stock 1.611m body width.
+- Redesigned silhouette: proportionally longer bonnet and boot, shorter squarer cabin, sloped front/rear glazing, 24-segment tyres and 13-arch-segment flares, five-spoke wheels and detailed chrome trim. Red open engine vs white closed hood are accessible in GARAGE through a live 3D preview.
+- Selected garage paint persists via user://nitro_garage.cfg across app restarts, and is used by all race tracks.
+- New adaptive physics-driven audio controller in `scripts/audio/drive_audio.gd` maps 17 committed OGG clips to sliding, road speed, turbo, exhaust, handbrake, kerb, gravel and impact. Fails silently only when a clip is missing.
+- **SFX ASSETS NOW COMMITTED:** 17 named OGG files are available in `game/assets/audio/` and load through the actual mixer `game/scripts/audio/drive_audio.gd`. They are no longer just a ZIP attachment. The 17 16-bit WAV masters are in the repository root `audio_masters/`, deliberately outside the Godot runtime folder to avoid packaging source masters in Android. See `docs/audio/SFX_CATALOG.md` for exactly what each file does.
+- No continuous Engine Master was uploaded; the provided limiter sample is triggered only at high simulated speed, not used as a looping engine idle. No physical phone speaker/fidelity test has run.
+- Source model: GPT-6, 2026-11-19. Source videos: 1000076241.mp4 (tyres), 1000076242.mp4 (turbo/exhaust), 1000076358.mp4 (track/collision).
