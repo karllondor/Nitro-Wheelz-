@@ -9,8 +9,10 @@ const RESULTS = preload("res://scripts/ui/race_results.gd")
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
 const PAUSE_VIEW = preload("res://scripts/ui/race_pause.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
+const AUDIO = preload("res://scripts/audio/drive_audio.gd")
 
 var model: NitroDriveModel
+var sfx: NitroDriveAudio
 var track: NitroDriftTrack
 var car_root: Node3D
 var front_wheels: Array[Node3D] = []
@@ -65,6 +67,9 @@ func _ready() -> void:
     model = DRIVE.new()
     model.reset(track.start_position(),track.start_heading())
     _make_car()
+    sfx = AUDIO.new()
+    sfx.name = "Layered WAN SFX"
+    add_child(sfx)
     _make_cameras()
     _make_tyre_marks()
     _make_ui()
@@ -175,6 +180,10 @@ func _physics_process(delta: float) -> void:
             _wall_feedback(float(collision["impact_speed"]))
     var info: Dictionary = track.sample_info(model.position)
     offroad = false
+    if sfx != null:
+        sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
+        if absf(float(info["distance"])-float(info["width"])) < 0.75:
+            sfx.kerb_event(model.speed_kmh())
 
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
@@ -188,6 +197,8 @@ func _show_results() -> void:
     # Separate full-screen result presentation. Never stack the old pause
     # popup, HUD and touch controls underneath the finish buttons.
     results_open = true
+    if sfx != null:
+        sfx.silence()
     if hud != null:
         hud.visible = false
     if touch != null:
@@ -212,6 +223,8 @@ func _wall_feedback(impact_speed: float) -> void:
         return
     collision_cooldown = 0.35
     wall_collision_count += 1
+    if sfx != null:
+        sfx.wall_event(impact_speed)
     camera_shake_strength = clampf(impact_speed*0.035,0.16,0.43)
     # On Android Godot requires the VIBRATE export permission. The user may
     # disable vibrations in system accessibility settings.
@@ -419,6 +432,8 @@ func _toggle_pause() -> void:
         return
     paused = not paused
     if paused:
+        if sfx != null:
+            sfx.silence()
         if touch != null:
             touch.release_all()
             touch.visible = false
@@ -454,6 +469,8 @@ func _restart() -> void:
         touch.set_process_input(true)
         touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     model.reset(track.start_position(),track.start_heading())
+    if sfx != null:
+        sfx.reset()
     time_elapsed = 0.0
     race_started = false
     lap = 1
