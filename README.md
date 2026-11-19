@@ -80,7 +80,7 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 ## v0.1.12 — Car dimensions, garage and sound-import workflow
 - Lada 2106 dimensions from technical manual: 4.166m body and 2.424m wheelbase, synchronized in visual geometry and model physics. Widebody/drift wheel track intentionally stylized, not stock 1.611m body width.
 - Redesigned silhouette: proportionally longer bonnet and boot, shorter squarer cabin, sloped front/rear glazing, 24-segment tyres and 13-arch-segment flares, five-spoke wheels and detailed chrome trim. Red open engine vs white closed hood are accessible in GARAGE through a live 3D preview.
-- Selected garage paint persists in ProjectSettings during this app run and is used by all race tracks.
+- Selected garage paint persists via user://nitro_garage.cfg across app restarts, and is used by all race tracks.
 - New adaptive physics-driven audio controller in `scripts/audio/drive_audio.gd` maps 17 OGG clips to sliding, road speed, turbo, exhaust, handbrake, kerb, gravel and impact. Fails silently when assets are absent.
 - **CRITICAL:** GitHub connector cannot upload the local generated OGG binary directly; **the repository and its CI APK do not yet include those 17 clips**. They are available in the separate `nitro_wheelz_v0.1.12_dropin_sfx.zip` conversation attachment. Copy `game/assets/audio/*.ogg` from that ZIP into the repository and rebuild Android to activate recorded sound. WAV masters supplied as well. Never imply that the default APK already plays the supplied files.
 - No continuous Engine Master was uploaded; the provided limiter sample is triggered only at high simulated speed, not used as a looping engine idle. No physical phone speaker/fidelity test has run.
