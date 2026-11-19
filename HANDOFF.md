@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.21 synth-only car audio + realistic engine synth (test build, sound not approved)
+# Nitro Wheelz — v0.1.22 owner screenshot feedback on top of v0.1.21 (test build, sound not approved)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.

@@ -1,10 +1,13 @@
+## [0.1.22] — Owner screenshot feedback: HUD header, handbrake, results, camera 0  — TEST BUILD
+- results: this run's TIME in yellow, and this run's row in YOUR TOP RUNS highlighted yellow (points, time, THIS RUN) instead of the accent colour;
+- HUD: LAP moved beside the minimap ("LAP" over "1/3", left of the camera keep-out); track name larger (hh x 0.15, fitted); chase line (FIRST RUN / CHASING / BEATING) drawn straight on the header, no frame inside the frame; race clock larger; speedometer lower (0.585 h -> 0.63 h, still clear of the joystick);
+- handbrake: NW engraving centred in the base box; the box frame is now like every other control (thin edge, neon only on the lower-right corner);
+- **camera 0 (top-down) 20% further out**: orthographic base size 60 -> 72 (portrait), 72 -> 86.4 (landscape); speed zoom curve, lead and framing unchanged. A/B: same capture scripts before/after (RYU at start, Lada drifting), docs/QA_MATRIX.md. Chase camera unchanged. Physics unchanged.
+- From now on every build sent for testing gets its own version number (v0.1.21 had been reused for three pushes).
+- Android versionCode 22 / versionName 0.1.22.
+
 ## [0.1.21] — Audio cleanup, editor polish, HUD/garage fixes, realistic engine synth  — TEST BUILD, sound not yet approved
 Owner brief v0.1.21 (P0 audio, P1 editor / HUD / garage, P2 track selection) on top of the first v0.1.21 push.
-- **Owner feedback on the build (screenshots):**
-  - results: this run's TIME in yellow, and this run's row in YOUR TOP RUNS highlighted yellow (points, time, THIS RUN) instead of the accent colour;
-  - HUD: LAP moved beside the minimap ("LAP" over "1/3", left of the camera keep-out); track name larger (hh x 0.15, fitted); chase line (FIRST RUN / CHASING / BEATING) drawn straight on the header, no frame inside the frame; race clock larger; speedometer lower (0.585 h -> 0.63 h, still clear of the joystick);
-  - handbrake: NW engraving centred in the base box; the box frame is now like every other control (thin edge, neon only on the lower-right corner);
-  - **camera 0 (top-down) 20% further out**: orthographic base size 60 -> 72 (portrait), 72 -> 86.4 (landscape); speed zoom curve, lead and framing unchanged. A/B: same capture scripts before/after (RYU at start, Lada drifting), docs/QA_MATRIX.md. Chase camera unchanged. Physics unchanged.
 - **P0 audio, brief follow-up:**
   - original 17 OGG + 17 WAV masters + manifest + catalogue **archived** in `archive/recorded_sfx/` (outside `game/`, so never imported or exported); nothing recorded inside the game except the music; new `audio_regression_test.gd` fails if a recorded clip reappears or a race holds any audio player besides the synth;
   - **no rev flares while slowing down:** off the throttle the gearbox no longer drops gears (the engine winds down in gear, clutch in near a stop). Braking 120 -> 0 km/h: max rev rise +0 rpm (was up to +4300 rpm with the old speed map; in-game at 26 km/h braking 2300 rpm instead of 5182). On the throttle (drifts, kick-down) unchanged;

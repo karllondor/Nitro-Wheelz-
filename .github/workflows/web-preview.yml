@@ -40,7 +40,7 @@ jobs:
           echo "Web export generated; manual Android browser test remains NOT RUN."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.21_Web
+          name: Nitro-Wheelz_v0.1.22_Web
           path: builds/web/*
           if-no-files-found: error
           compression-level: 6
