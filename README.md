@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.9 HANDSET TEST CANDIDATE (independent branch, not merged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.10 BALANCED HANDLING & TRACK EDITOR TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,7 +51,7 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.9_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.10_Platform and are never overwritten.
 
 
 ## v0.1.9 mobile playtest
@@ -59,3 +59,11 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Finish screen is now a separate full-screen presentation with three-lap time, score, three-star result (provisional for non-Oval tracks), locally ranked best runs and recent play history. Data is local to this device only under `user://nitro_local_runs.json`, not an online leaderboard.
 - More responsive power-oversteer, reduced assist/damping and stronger handbrake initiation support steering+GAS drifts and low-speed donuts. This is a deliberately more demanding arcade tune; device approval is still required.
 - Build version 0.1.9 is visible in the menu, in Android versionName and in all APK/Web/Desktop artifact names.
+
+## v0.1.10 handoff (Model GPT-6)
+- **Driving:** reduces v0.1.9's unwanted spinning by restoring rear grip, increasing steering/yaw damping, and requiring actual rear slip before normal full-GAS power drift. Arcade car retains earlier handbrake one-tick response and intentional low-speed donut option. This is a tuning hypothesis awaiting real-phone approval, not a proven driving-feel fix.
+- **Start New:** choose **CIRCLE** (valid closed editable circuit) or **BLANK CANVAS** (place control points by taps, minimum eight before Track DNA validation). Existing **GENERATE TRACK** remains separate.
+- **Zoom:** +/− on the editing canvas, plus scroll wheel on desktop (0.5× to 4×). The camera/track bounds are refitted with the selected zoom.
+- **Node feedback:** selected node **orange**; validator-identified failing local knot(s) **red**, mapped back from sampled curve/edge segment indexes. Structural/global errors such as fewer than eight nodes are explained in status text and cannot be assigned to one node.
+- **Saving:** a track name is requested via dialog; each name uses its own local JSON file; the editor reloads the last saved valid track next time. Files are local to the handset, not published or shared online.
+- **QA:** Godot headless checks cover nominal straight throttle, mild steering recovery, deliberate power drift, donut, circle/blank, node dragging, validation marking and named save. True multi-touch, Android UI visibility and player feel remain **NOT RUN** until tested on device.
