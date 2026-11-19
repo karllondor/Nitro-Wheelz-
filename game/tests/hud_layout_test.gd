@@ -74,7 +74,7 @@ func _run() -> void:
             return
         # Readable text.
         var sz: Dictionary = HUD.text_sizes(m,"SHIN-KAWA FULL CIRCUIT")
-        var floors: Dictionary = {"banked_label":0.022,"name":0.020,"chase":0.022,"clock":0.022,
+        var floors: Dictionary = {"banked_label":0.022,"name":0.022,"chase":0.022,"clock":0.024,"lap_label":0.020,
             "combo_label":0.022,"to_bank":0.020,"lap":0.030,"combo_value":0.050,"score":0.050}
         for key in floors.keys():
             var rel: float = float(sz[key])/short
@@ -82,6 +82,10 @@ func _run() -> void:
                 _fail(tag+": %s text too small (%.1f px = %.3f of the short side)" % [key,float(sz[key]),rel])
                 return
             worst[key] = minf(float(worst.get(key,1.0)),rel)
+        # v0.1.21 owner: bigger track name and clock on phones (portrait).
+        if bool(m["portrait"]) and s.y >= 1.7*s.x and (float(sz["name"]) < 0.026*short or float(sz["clock"]) < 0.028*short):
+            _fail(tag+": track name / clock not enlarged (%.3f / %.3f)" % [float(sz["name"])/short,float(sz["clock"])/short])
+            return
     touch.queue_free()
     await process_frame
     var parts: PackedStringArray = []

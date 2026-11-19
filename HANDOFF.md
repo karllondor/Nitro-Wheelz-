@@ -103,6 +103,7 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - boot.gd: DRIVE sections CIRCUITS / MY TRACKS (saved_tracks(), EDIT) / QUICK. race_results.gd: optional EDIT TRACK.
 - New tests: audio_regression_test, editor_geometry_test, hud_layout_test; dynamic_camera_test drives both cars; main_menu_test checks the sections.
 - Per-car rankings (reviewed only): runs are keyed by track id in user://nitro_local_runs.json; store the car variant in each run and filter by it in RESULTS.track_runs()/sorted_local(), keeping old runs as "any car".
+- Owner screenshot feedback: hud_style.metrics() lap slot beside the map (portrait), name/chase/total rects, gauge 0.63 h; race_hud text_sizes() + frameless _draw_chase(); race_touch handbrake base frame (glow_path) + centred NW; race_results GOLD this-run row + TIME; race.gd OVERHEAD_BASE_* x1.2.
 - Known limits: validate + diagnose on finger release is ~0.2 s for a 28-node track in the container (more on a phone); a figure-eight must be fixed by hand; landscape HUD is for desktop.
 
 ## NEXT ACTION

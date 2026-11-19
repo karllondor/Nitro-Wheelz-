@@ -86,13 +86,18 @@ static func text_sizes(m: Dictionary, track_title: String = "SHIN-KAWA DRIFT PAR
         score_txt: String = "999,999") -> Dictionary:
     var hh: float = Rect2(m["header"]).size.y
     var sc: float = Rect2(m["score"]).size.y
+    var lap_r: Rect2 = m["lap"]
+    var lap_split: bool = bool(m.get("portrait",false))
+    var lap_value: String = lap_txt.trim_prefix("LAP ") if lap_split else lap_txt
     return {
-        "lap":STYLE.fit_size(lap_txt,hh*0.16,Rect2(m["lap"]).size.x),
-        "banked_label":STYLE.fit_size("BANKED SCORE",hh*0.105,Rect2(m["total_label"]).size.x,false),
+        # Portrait: "LAP" label over the big "1/3" beside the minimap.
+        "lap":STYLE.fit_size(lap_value,hh*0.17,lap_r.size.x),
+        "lap_label":STYLE.fit_size("LAP",hh*0.10,lap_r.size.x),
+        "banked_label":STYLE.fit_size("BANKED SCORE",hh*0.115,Rect2(m["total_label"]).size.x,false),
         "score":STYLE.fit_size(score_txt,hh*0.31,Rect2(m["total"]).size.x),
-        "clock":hh*0.115,
-        "name":STYLE.fit_size(track_title.to_upper(),hh*0.10,Rect2(m["name"]).size.x),
-        "chase":Rect2(m["chase"]).size.y*0.40,
+        "clock":STYLE.fit_size("00:00.00",hh*0.14,Rect2(m["total"]).size.x,false),
+        "name":STYLE.fit_size(track_title.to_upper(),hh*0.15,Rect2(m["name"]).size.x),
+        "chase":Rect2(m["chase"]).size.y*0.50,
         "combo_label":sc*0.19,
         "combo_value":sc*0.44,
         "to_bank":sc*0.17}
@@ -119,8 +124,15 @@ func _draw_header(m: Dictionary, u: float) -> void:
     var lp: Rect2 = m["lap"]
     var lap_txt: String = "LAP %d/%d" % [lap,lap_limit]
     var sizes: Dictionary = text_sizes(m,track_name,lap_txt,_score_string(score))
-    STYLE.text(self,Vector2(lp.position.x,lp.end.y-lp.size.y*0.16),lap_txt,
-        float(sizes["lap"]),STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
+    if bool(m["portrait"]):
+        # Beside the minimap: small "LAP" over the big "1/3".
+        STYLE.text(self,Vector2(lp.position.x,lp.position.y+lp.size.y*0.34),"LAP",float(sizes["lap_label"]),
+            STYLE.MUTED,HORIZONTAL_ALIGNMENT_CENTER,lp.size.x,false)
+        STYLE.text(self,Vector2(lp.position.x,lp.end.y-lp.size.y*0.04),"%d/%d" % [lap,lap_limit],
+            float(sizes["lap"]),STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,lp.size.x,true)
+    else:
+        STYLE.text(self,Vector2(lp.position.x,lp.end.y-lp.size.y*0.16),lap_txt,
+            float(sizes["lap"]),STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
     var tl: Rect2 = m["total_label"]
     STYLE.text(self,Vector2(tl.position.x,tl.end.y-tl.size.y*0.18),"BANKED SCORE",float(sizes["banked_label"]),STYLE.MUTED,
         HORIZONTAL_ALIGNMENT_RIGHT,tl.size.x,false)
@@ -136,8 +148,8 @@ func _draw_header(m: Dictionary, u: float) -> void:
     # Centre, under the keep-out: track name (light) and the chase pill.
     var nm: Rect2 = m["name"]
     var name_txt: String = track_name.to_upper()
-    STYLE.text(self,Vector2(nm.position.x,nm.end.y-nm.size.y*0.18),name_txt,
-        float(sizes["name"]),STYLE.MUTED,HORIZONTAL_ALIGNMENT_CENTER,nm.size.x,true)
+    STYLE.text(self,Vector2(nm.position.x,nm.end.y-nm.size.y*0.16),name_txt,
+        float(sizes["name"]),STYLE.WHITE.lerp(STYLE.MUTED,0.35),HORIZONTAL_ALIGNMENT_CENTER,nm.size.x,true)
     _draw_chase(Rect2(m["chase"]),u)
     _draw_lap_line(r,u)
 
@@ -231,16 +243,19 @@ func point_at_progress(f: float) -> Vector2:
 
 # ------------------------------------------------------- chase + live chain
 
+## Chase line straight on the header glass (owner: no frame inside the
+## header frame): star + FIRST RUN / CHASING best / BEATING best, centred.
 func _draw_chase(r: Rect2, u: float) -> void:
     var state: Dictionary = chase_label()
     var beating: bool = bool(state["beating"])
-    STYLE.panel(self,r,u,12.0,STYLE.SKEW,true,1.4 if beating else 0.6)
     var col: Color = STYLE.GOLD if beating else STYLE.WHITE
-    var star_r: float = r.size.y*0.24
-    STYLE.star(self,Vector2(r.position.x+r.size.x*0.10,r.get_center().y),star_r,beating or best_score > 0,u)
+    var star_r: float = r.size.y*0.26
     var txt: String = str(state["text"])
-    STYLE.text(self,Vector2(r.position.x+r.size.x*0.18,r.position.y+r.size.y*0.67),txt,
-        STYLE.fit_size(txt,r.size.y*0.40,r.size.x*0.76),col,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.78,true)
+    var size: float = STYLE.fit_size(txt,r.size.y*0.50,r.size.x-star_r*3.0)
+    var tw: float = STYLE.text_width(txt,size)
+    var x0: float = r.get_center().x-(tw+star_r*2.6)*0.5
+    STYLE.star(self,Vector2(x0+star_r,r.get_center().y),star_r,beating or best_score > 0,u)
+    STYLE.text(self,Vector2(x0+star_r*2.6,r.position.y+r.size.y*0.70),txt,size,col,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
 
 ## COMBO box: the running chain (raw points x multiplier) and what it will
 ## add to the BANKED SCORE. Banks when you straighten up; the bar shows the

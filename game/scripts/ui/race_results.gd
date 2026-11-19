@@ -349,8 +349,9 @@ func _hero(r: Rect2, k: float, u: float) -> void:
         var f: Array = facts[i]
         var x: float = r.position.x+cols*float(i)
         STYLE.text(c,Vector2(x,yl+38.0*k),str(f[0]),22.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_CENTER,cols,false)
+        # Our race time in yellow (owner v0.1.21); rank #1 gold as before.
         STYLE.text(c,Vector2(x,yl+92.0*k),str(f[1]),STYLE.fit_size(str(f[1]),50.0*k,cols*0.9),
-            STYLE.GOLD if i == 1 and rank == 1 else STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,cols)
+            STYLE.GOLD if i == 0 or (i == 1 and rank == 1) else STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,cols)
         STYLE.text(c,Vector2(x,yl+124.0*k),str(f[2]),21.0*k,f[3],HORIZONTAL_ALIGNMENT_CENTER,cols,false)
         if i > 0:
             c.draw_line(Vector2(x,yl+18.0*k),Vector2(x,yl+122.0*k),Color(1,1,1,0.08),2.0*k)
@@ -446,9 +447,9 @@ func _top_runs(r: Rect2, k: float, u: float) -> void:
         var mine: bool = place == rank
         var row := Rect2(box.position.x+12.0*k,ry+4.0*k,box.size.x-24.0*k,row_h-8.0*k)
         if mine:
-            var fill := Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.20)
-            c.draw_rect(row,fill)
-            c.draw_rect(Rect2(row.position,Vector2(6.0*k,row.size.y)),STYLE.PINK)
+            # This run highlighted in yellow (owner v0.1.21).
+            c.draw_rect(row,Color(STYLE.GOLD.r,STYLE.GOLD.g,STYLE.GOLD.b,0.16))
+            c.draw_rect(Rect2(row.position,Vector2(6.0*k,row.size.y)),STYLE.GOLD)
         if extra and i == rows.size()-1:
             STYLE.text(c,Vector2(box.position.x,ry-2.0*k),"• • •",18.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_CENTER,box.size.x,false)
         var ty: float = row.get_center().y+13.0*k
@@ -457,12 +458,12 @@ func _top_runs(r: Rect2, k: float, u: float) -> void:
             c.draw_circle(Vector2(box.position.x+52.0*k,row.get_center().y),24.0*k,Color(medal.r,medal.g,medal.b,0.22))
         STYLE.text(c,Vector2(box.position.x+cx[0]*k,ty),str(place),32.0*k,medal,HORIZONTAL_ALIGNMENT_CENTER,46.0*k)
         STYLE.text(c,Vector2(box.position.x+cx[1]*k,ty),points(int(run["score"])),38.0*k,
-            STYLE.WHITE if mine or place == 1 else Color(0.90,0.90,0.94))
-        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),clock(float(run["seconds"])),30.0*k,STYLE.MUTED,
-            HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+            STYLE.GOLD if mine else (STYLE.WHITE if place == 1 else Color(0.90,0.90,0.94)))
+        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),clock(float(run["seconds"])),30.0*k,
+            STYLE.GOLD if mine else STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,mine)
         var n_st: int = int(run.get("stars",0))
         for si in range(3):
             STYLE.star(c,Vector2(box.position.x+(cx[3]+14.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
         var when: String = "THIS RUN" if mine else short_date(str(run.get("date","")))
-        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),when,22.0*k,STYLE.PINK_SOFT if mine else STYLE.DIM,
+        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),when,22.0*k,STYLE.GOLD if mine else STYLE.DIM,
             HORIZONTAL_ALIGNMENT_LEFT,-1.0,mine)

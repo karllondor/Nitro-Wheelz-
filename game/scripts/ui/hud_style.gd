@@ -105,17 +105,21 @@ static func metrics(s: Vector2) -> Dictionary:
         # camera there (it cut the old TOTAL SCORE label on the owner's phone).
         var dead := Rect2(w*0.5-w*0.09,0.0,w*0.18,hy+hh*0.30)
         var map := Rect2(header.position.x+w*0.016,hy+hh*0.09,w*0.285,hh*0.76)
-        var lap := Rect2(dead.end.x+w*0.01,hy+hh*0.05,w*0.16,hh*0.24)
-        var total_label := Rect2(lap.end.x+w*0.01,hy+hh*0.05,header.end.x-w*0.022-lap.end.x-w*0.01,hh*0.24)
-        var total := Rect2(w*0.665,hy+hh*0.30,header.end.x-w*0.022-w*0.665,hh*0.55)
-        var name := Rect2(map.end.x+w*0.012,dead.end.y+hh*0.01,total.position.x-map.end.x-w*0.024,hh*0.16)
-        var chase := Rect2(name.position.x,name.end.y+hh*0.03,name.size.x,hh*0.28)
+        # v0.1.21 owner: LAP sits beside the minimap (left of the camera
+        # keep-out, "LAP" over "1/3"); the top band right of the keep-out
+        # holds only the BANKED SCORE label.
+        var lap := Rect2(map.end.x+w*0.010,hy+hh*0.03,dead.position.x-map.end.x-w*0.016,dead.end.y-hy-hh*0.03)
+        var total_label := Rect2(dead.end.x+w*0.012,hy+hh*0.05,header.end.x-w*0.022-dead.end.x-w*0.012,hh*0.24)
+        var total := Rect2(w*0.665,hy+hh*0.30,header.end.x-w*0.022-w*0.665,hh*0.57)
+        # Centre column under the keep-out: bigger track name, and the chase
+        # line drawn straight on the header (no frame inside the frame).
+        var name := Rect2(map.end.x+w*0.012,dead.end.y+hh*0.02,total.position.x-map.end.x-w*0.024,hh*0.22)
+        var chase := Rect2(name.position.x,name.end.y+hh*0.04,name.size.x,hh*0.26)
         var buttons_y: float = header.end.y+w*0.014
         var gauge_r: float = w*0.135
-        # Wide portraits (tablets, 3:4): lift the speedometer + drift-angle
-        # box so they stay clear of the steering joystick (top at
-        # 0.853 h - 0.175 w). Phones (16:9 and taller) are unchanged.
-        var gauge_c := Vector2(mx+gauge_r+w*0.012,minf(s.y*0.585,s.y*0.853-w*0.418))
+        # Speedometer lower on the screen (owner, v0.1.21), always clear of
+        # the steering joystick (top at 0.853 h - 0.175 w) on wide portraits.
+        var gauge_c := Vector2(mx+gauge_r+w*0.012,minf(s.y*0.63,s.y*0.853-w*0.413))
         return {
             "portrait":true,"header":header,"dead":dead,"map":map,"lap":lap,
             "total_label":total_label,"total":total,"name":name,"chase":chase,

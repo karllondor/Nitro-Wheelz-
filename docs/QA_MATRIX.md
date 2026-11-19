@@ -33,6 +33,8 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | HUD on 11 screens (16:9-21:9 phones, 360x640, tablets, landscape): no overlaps, minimap size, text >= 2.0-2.2% of short side | Linux container | PASS (was 1.6% for BANKED SCORE) | hud_layout_test |
 | Same camera for Lada and RYU-32, car in view in both cameras | Linux container | PASS | dynamic_camera_test |
 | Android APK / Web build | GitHub Actions | see CI run for the pushed commit | android-debug.yml / web-preview.yml |
+| Camera 0 A/B (owner: 20% further out) | Xvfb + llvmpipe, 720x1600 | overhead size x1.2 at every speed (60 -> 72 base); car ~17% smaller on screen; zoom-vs-speed ratios, lead, framing and chase camera unchanged | capture_visuals race_start / race_blue / race_drift before vs after |
+| Owner HUD feedback (LAP by the map, bigger name + clock, frameless chase, lower speedometer, handbrake frame + centred NW, yellow this-run on results) | Linux container + Xvfb | PASS layout (hud_layout_test, 11 screens), screenshots reviewed | hud_layout_test, capture_visuals |
 | Physics golden trace bit-identical | Linux container | PASS | car_profiles_test |
 | Lada JSON == synth defaults (new fingerprint, re-recorded once) | Linux container | PASS | car_profiles_test |
 | Realism checks vs feature-off controls (cycle change, V8 burble, overrun misfires, idle tick, stereo) | Linux container | PASS (0.93/0.24, 2.49/0.76, 38/0, x2.96, 0.977) | engine_audio_test |

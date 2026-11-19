@@ -51,8 +51,9 @@ var chase_occlusion_point: Vector3 = Vector3.ZERO
 var chase_is_blocked: bool = false
 const CAMERA_LOOKAHEAD_SECONDS: float = 0.45
 const CAMERA_LEAD_MAX_METRES: float = 19.0
-const OVERHEAD_BASE_PORTRAIT: float = 60.0
-const OVERHEAD_BASE_LANDSCAPE: float = 72.0
+## Owner v0.1.21: top-down camera (camera 0) 20% further out (was 60 / 72).
+const OVERHEAD_BASE_PORTRAIT: float = 72.0
+const OVERHEAD_BASE_LANDSCAPE: float = 86.4
 ## Owner request: the car reads 15% larger against the 24 m circuit. Visual
 ## only — the driving model, wheelbase and wall contacts are unchanged.
 const RACE_CAR_SCALE: float = 1.15

@@ -211,11 +211,13 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
     for p in base_pts:
         base_cols.append(Color(0.16,0.16,0.19).lerp(Color(0.035,0.035,0.045),
             clampf((p.y-base.position.y)/base.size.y,0.0,1.0)))
-    var glow_pts: PackedVector2Array = base_pts.duplicate()
-    glow_pts.append(base_pts[0])
-    STYLE.glow_line(self,glow_pts,STYLE.PINK,2.4*u,1.6 if pressed else 1.0)
+    var outline: PackedVector2Array = base_pts.duplicate()
+    outline.append(base_pts[0])
     draw_polygon(base_pts,base_cols)
-    draw_polyline(glow_pts,STYLE.PINK.lerp(Color.WHITE,0.4),1.6*u,true)
+    # Same frame as every other control (owner): thin edge all round, neon
+    # only along the lower-right corner.
+    draw_polyline(outline,STYLE.EDGE,maxf(1.0,1.5*u),true)
+    STYLE.glow_line(self,STYLE.glow_path(base,w*0.17,0.0),STYLE.PINK,2.2*u,1.6 if pressed else 1.0)
     for side in [-1.0,1.0]:
         var bolt := Vector2(cx+side*base.size.x*0.32,base.position.y+base.size.y*0.17)
         draw_circle(bolt,w*0.045,Color(0.55,0.56,0.60))
@@ -225,7 +227,8 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
     # faint light catch below-right.
     var logo_h: float = base.size.y*0.30
     var logo_w: float = logo_h*float(NW_MASK.get_width())/float(NW_MASK.get_height())
-    var logo := Rect2(Vector2(cx,base.position.y+base.size.y*0.62)-Vector2(logo_w,logo_h)*0.5,Vector2(logo_w,logo_h))
+    # Centred in the box (owner), between the two bolts' row and the bottom.
+    var logo := Rect2(Vector2(cx,base.get_center().y)-Vector2(logo_w,logo_h)*0.5,Vector2(logo_w,logo_h))
     var lip: float = maxf(0.75,0.8*u)
     draw_texture_rect(NW_MASK,Rect2(logo.position+Vector2(lip,lip),logo.size),false,Color(1,1,1,0.10))
     draw_texture_rect(NW_MASK,Rect2(logo.position-Vector2(lip,lip),logo.size),false,Color(0,0,0,0.55))
