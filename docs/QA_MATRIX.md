@@ -21,6 +21,16 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.15 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 16 Godot tests incl. new wall_body_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Barrier penetration, 60 s random driving x3 tracks, race scene | Linux container | PASS: 0.000 m (old centre-only code: 1.00-1.20 m) | scratch probe, numbers in CHANGELOG |
+| Negative controls: centre-only collision, siren squeal, impact without thud | Linux container | PASS (each test FAILs) | local run |
+| Stills: HUD v3, garage side-on red / white, editor + help | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd |
+| Garage cars visible on Android after MSAA removal (v0.1.14) | Owner's phone | PASS (owner screenshots) | chat 2026-11-19 |
+| HUD keep-out vs. the owner's actual camera cut-out, new sounds on speakers | Physical Android | NOT RUN | owner to confirm |
+
 ## v0.1.14 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

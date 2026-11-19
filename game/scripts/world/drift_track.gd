@@ -215,6 +215,87 @@ func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
     return {"hit":true,"position":corrected,"velocity":reflected,
         "impact_speed":outward_speed,"normal":outward}
 
+## Oriented car footprint against the walls. The centre-point test above
+## keeps the car's middle 1.28 m from the barrier, which is enough side-on
+## but let the nose or tail (2.4 m from the centre at race scale) pass into
+## and through the barrier when the car met it at an angle. Probes on the
+## corners, bumpers and doors are pushed back to the barrier face, and the
+## contact adds a yaw kick from its lever arm (car swings off the wall).
+const BODY_HALF_LENGTH: float = 2.30   # 4.166 m shell x1.15 race scale, rounded bumpers
+const BODY_HALF_WIDTH: float = 1.05
+const BODY_SKIN: float = 0.05
+const BODY_PROBES: Array[Vector2] = [Vector2(1,1),Vector2(1,-1),Vector2(-1,1),Vector2(-1,-1),
+    Vector2(1,0),Vector2(-1,0),Vector2(0.45,1),Vector2(0.45,-1),Vector2(-0.45,1),Vector2(-0.45,-1)]
+const PROBE_WINDOW: int = 24
+
+func resolve_body(pos: Vector2, heading: float, travel_velocity: Vector2) -> Dictionary:
+    var first: Dictionary = resolve_wall(pos,travel_velocity)
+    var p: Vector2 = first["position"]
+    var v: Vector2 = first["velocity"]
+    var hit: bool = bool(first["hit"])
+    var impact: float = float(first["impact_speed"])
+    var normal: Vector2 = first["normal"]
+    var yaw_impulse: float = 0.0
+    var fwd := Vector2(sin(heading),-cos(heading))
+    var rgt := Vector2(cos(heading),sin(heading))
+    var hint: int = int(sample_info(p)["index"])
+    for _pass in range(3):
+        var worst: float = 0.0
+        var worst_out: Vector2 = Vector2.ZERO
+        var worst_arm: Vector2 = Vector2.ZERO
+        for o in BODY_PROBES:
+            var arm: Vector2 = fwd*(o.x*BODY_HALF_LENGTH)+rgt*(o.y*BODY_HALF_WIDTH)
+            var c: Vector3 = _probe_penetration(p+arm,hint)
+            if c.z > worst:
+                worst = c.z
+                worst_out = Vector2(c.x,c.y)
+                worst_arm = arm
+        if worst <= 0.0:
+            break
+        hit = true
+        normal = worst_out
+        p -= worst_out*(worst+0.005)
+        var vn: float = maxf(v.dot(worst_out),0.0)
+        if vn > 0.0:
+            v = (v-worst_out*(1.18*vn))*0.80
+            impact = maxf(impact,vn)
+            # Angular impulse of a corner contact (unit mass, I ~ 1.75 m^2).
+            var lever: float = worst_arm.cross(-worst_out)
+            yaw_impulse += 0.6*lever*1.18*vn/(1.75+lever*lever)
+    return {"hit":hit,"position":p,"velocity":v,"impact_speed":impact,
+        "normal":normal,"yaw_impulse":clampf(yaw_impulse,-2.5,2.5)}
+
+## Returns (outward.x, outward.y, penetration) of one body point past the
+## barrier face, searching only the centreline near the car (hint index).
+func _probe_penetration(q: Vector2, hint: int) -> Vector3:
+    var n: int = centerline.size()
+    var best_sq: float = INF
+    var index: int = hint
+    var seg_t: float = 0.0
+    var nearest: Vector2 = q
+    for k in range(-PROBE_WINDOW,PROBE_WINDOW+1):
+        var i: int = posmod(hint+k,n)
+        var a: Vector2 = centerline[i]
+        var delta: Vector2 = centerline[(i+1)%n]-a
+        var t: float = clampf((q-a).dot(delta)/maxf(delta.length_squared(),0.000001),0.0,1.0)
+        var pt: Vector2 = a+delta*t
+        var dsq: float = q.distance_squared_to(pt)
+        if dsq < best_sq:
+            best_sq = dsq
+            index = i
+            seg_t = t
+            nearest = pt
+    var next_i: int = (index+1)%n
+    var across: Vector2 = (right_edge[index].lerp(right_edge[next_i],seg_t)-
+        left_edge[index].lerp(left_edge[next_i],seg_t)).normalized()
+    var side: float = -1.0 if (q-nearest).dot(across) < 0.0 else 1.0
+    var boundary: Vector2 = left_edge[index].lerp(left_edge[next_i],seg_t) if side < 0.0 \
+        else right_edge[index].lerp(right_edge[next_i],seg_t)
+    var outward: Vector2 = across*side
+    # Barrier face is drawn 0.10 m outside the edge; keep a small skin.
+    var limit: Vector2 = boundary+outward*(0.10-BODY_SKIN)
+    return Vector3(outward.x,outward.y,(q-limit).dot(outward))
+
 func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
         height: float,tint: Color,texture: Texture2D = null,tile_m: float = 7.0) -> void:
     var st := SurfaceTool.new()

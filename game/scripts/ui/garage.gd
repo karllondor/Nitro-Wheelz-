@@ -4,6 +4,7 @@ extends Control
 const CAR = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const LOGO = preload("res://assets/brand/nitro_wheelz_logo.svg")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const BACKDROP_SHADER = preload("res://assets/shaders/studio_backdrop.gdshader")
 var preview: SubViewport
 var car: NitroLadaLowPoly
 var turntable: Node3D
@@ -17,7 +18,6 @@ var ui_unit: float = 1.0
 var studio_env: Environment
 var studio_key: DirectionalLight3D
 var studio_fill: DirectionalLight3D
-var studio_floor: StandardMaterial3D
 
 func _ready() -> void:
     var s: Vector2 = get_viewport_rect().size
@@ -132,30 +132,21 @@ func _build_studio() -> void:
     studio_fill.name = "Fill light"
     studio_fill.rotation_degrees = Vector3(-25.0,205.0,0.0)
     preview.add_child(studio_fill)
-    var floor := MeshInstance3D.new()
-    floor.name = "Studio floor"
-    var plane := PlaneMesh.new()
-    plane.size = Vector2(60,60)
-    floor.mesh = plane
-    studio_floor = StandardMaterial3D.new()
-    studio_floor.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    floor.material_override = studio_floor
-    preview.add_child(floor)
     _apply_studio()
 
 func _apply_studio() -> void:
     if studio_env == null:
         return
+    # Neutral grey studio for both paints (owner: not too dark, not too
+    # light, grey gradient like the poster reference).
     var white: bool = active_variant == "white"
-    var bg: Color = Color(0.80,0.74,0.93) if white else Color(0.87,0.87,0.90)
-    studio_env.background_color = bg
-    studio_floor.albedo_color = bg
-    studio_env.ambient_light_color = Color(0.86,0.80,0.98) if white else Color(0.88,0.88,0.92)
-    studio_env.ambient_light_energy = 0.8
-    studio_key.light_color = Color(1.0,0.86,0.94) if white else Color(1.0,0.99,0.97)
-    studio_key.light_energy = 1.15
-    studio_fill.light_color = Color(0.62,0.58,1.0) if white else Color(0.85,0.88,1.0)
-    studio_fill.light_energy = 0.55
+    studio_env.background_color = Color(0.36,0.36,0.375)
+    studio_env.ambient_light_color = Color(0.90,0.90,0.93)
+    studio_env.ambient_light_energy = 0.70 if white else 0.80
+    studio_key.light_color = Color(1.0,0.98,0.96)
+    studio_key.light_energy = 1.05 if white else 1.15
+    studio_fill.light_color = Color(0.86,0.89,1.0)
+    studio_fill.light_energy = 0.50
 
 func _build_turntable() -> void:
     turntable = Node3D.new()
@@ -163,11 +154,29 @@ func _build_turntable() -> void:
     turntable.rotation.y = deg_to_rad(145.0)  # front three-quarter, like the sheet
     preview.add_child(turntable)
     var camera := Camera3D.new()
-    camera.position = Vector3(0.0,2.5,8.0)
-    camera.fov = 34.0
+    camera.name = "Garage camera"
+    # Horizontal FOV (KEEP_WIDTH): the whole 4.2 m car stays inside the tall
+    # card at every turntable angle, side-on included (it was cut off).
+    camera.keep_aspect = Camera3D.KEEP_WIDTH
+    camera.position = Vector3(0.0,2.3,8.6)
+    camera.fov = 36.0
     preview.add_child(camera)
-    camera.look_at(Vector3(0,0.5,0),Vector3.UP)
+    camera.look_at(Vector3(0,0.55,0),Vector3.UP)
     camera.current = true
+    # Screen-space grey gradient backdrop, parented to the camera.
+    var backdrop := MeshInstance3D.new()
+    backdrop.name = "Studio backdrop"
+    var quad := QuadMesh.new()
+    quad.size = Vector2(160,160)
+    backdrop.mesh = quad
+    var mat := ShaderMaterial.new()
+    mat.shader = BACKDROP_SHADER
+    var card: Vector2 = Vector2(preview.size)
+    mat.set_shader_parameter("aspect",card.x/maxf(card.y,1.0))
+    backdrop.material_override = mat
+    backdrop.position = Vector3(0,0,-60.0)
+    backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    camera.add_child(backdrop)
 
 func _process(delta: float) -> void:
     if turntable != null and not dragging:

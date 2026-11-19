@@ -102,24 +102,45 @@ func _run() -> void:
         t.queue_free()
         await process_frame
 
-    # --- HUD layout: drawn PAUSE/CAM == touch targets, no overlaps.
+    # --- HUD layout v3: drawn PAUSE/CAM == touch targets, no overlaps,
+    # nothing in the front-camera keep-out, chase inside the header.
     for screen in [Vector2(1280,2844),Vector2(1280,2276),Vector2(1280,720)]:
         var m: Dictionary = STYLE.metrics(screen)
         var full := Rect2(Vector2.ZERO,screen)
-        for key in ["header","map","total","score","chase","pause","camera","angle","speed"]:
+        for key in ["header","map","lap","total_label","total","name","chase","score","pause","camera","angle","speed"]:
             if not full.encloses(Rect2(m[key])):
                 _fail("HUD element off-screen: "+key)
                 return
+        var head: Rect2 = m["header"]
+        for key in ["map","lap","total_label","total","name","chase"]:
+            if not head.encloses(Rect2(m[key])):
+                _fail("Header element outside the header: "+key)
+                return
+        var parts: Array[String] = ["map","lap","total_label","total","name","chase"]
+        for i in range(parts.size()):
+            for j in range(i+1,parts.size()):
+                if Rect2(m[parts[i]]).intersects(Rect2(m[parts[j]])):
+                    _fail("Header elements overlap: %s / %s" % [parts[i],parts[j]])
+                    return
+        var dead: Rect2 = m["dead"]
+        if bool(m["portrait"]):
+            if dead.size.x < screen.x*0.15 or dead.position.y > 0.0:
+                _fail("Portrait HUD must keep a top-centre camera keep-out")
+                return
+            for key in parts:
+                if Rect2(m[key]).intersects(dead):
+                    _fail("HUD text inside the front-camera keep-out: "+key)
+                    return
+            if Rect2(m["total"]).position.x < screen.x*0.6:
+                _fail("TOTAL SCORE must sit on the right")
+                return
         for a in ["pause","camera"]:
-            for b in ["header","total","score","chase"]:
+            for b in ["header","score"]:
                 if Rect2(m[a]).intersects(Rect2(m[b])):
                     _fail("HUD button "+a+" overlaps "+b)
                     return
-        if Rect2(m["chase"]).intersects(Rect2(m["header"])) or Rect2(m["score"]).intersects(Rect2(m["header"])):
-            _fail("Chase/live-chain readouts must sit outside the header")
-            return
-        if not Rect2(m["header"]).encloses(Rect2(m["map"])) or Rect2(m["map"]).intersects(Rect2(m["total"])):
-            _fail("Minimap must sit inside the header, left of the stats")
+        if Rect2(m["score"]).intersects(head):
+            _fail("Live chain readout must sit outside the header")
             return
         if Rect2(m["speed"]).intersects(Rect2(m["angle"])) or Rect2(m["angle"]).position.y < Rect2(m["speed"]).end.y:
             _fail("Speedometer must sit above the drift angle")
@@ -172,6 +193,30 @@ func _run() -> void:
     if anchor.y >= 1650.0 or anchor.y <= Rect2(ms["score"]).end.y:
         _fail("Scoring callouts must pop above the car, below the live chain")
         return
+    # Minimap: dot always on the centreline; long side laid horizontally.
+    var tall := PackedVector2Array()
+    for k in range(200):
+        var ang: float = TAU*float(k)/200.0
+        tall.append(Vector2(cos(ang)*40.0,sin(ang)*160.0))
+    probe.track_points = tall
+    for f in [0.0,0.13,0.5,0.77,0.999]:
+        var on_line: Vector2 = probe.point_at_progress(f)
+        var nearest: float = INF
+        for p in tall:
+            nearest = minf(nearest,p.distance_to(on_line))
+        if nearest > 3.2:
+            _fail("Minimap dot left the white line at progress %.3f" % f)
+            return
+    var map_rect := Rect2(0,0,360,160)
+    probe._rebuild_outline(map_rect)
+    var lo := Vector2(INF,INF)
+    var hi := Vector2(-INF,-INF)
+    for q in probe._outline_cache:
+        lo = Vector2(minf(lo.x,q.x),minf(lo.y,q.y))
+        hi = Vector2(maxf(hi.x,q.x),maxf(hi.y,q.y))
+    if (hi-lo).x < (hi-lo).y*2.0:
+        _fail("A tall track must be turned so its long side is horizontal")
+        return
     probe.lap = 2
     probe.lap_limit = 3
     probe.track_progress = 0.5
@@ -184,7 +229,7 @@ func _run() -> void:
     if STYLE.text_width("SHIN-KAWA 02:00.81",30.0) < 50.0:
         _fail("Exo 2 HUD font did not load")
         return
-    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD v2 layout/touch agreement, chase-score pill, OFL font")
+    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD v3 layout (camera keep-out, chase in header), minimap orientation + on-line dot, touch agreement, chase-score pill, OFL font")
     print("NOT RUN: on-device look, GPU cost of scenery/smoke on Android, human comparison with approved reference")
     quit(0)
 

@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.14 owner feedback: HUD v2 / editor / settings / engine (not released)
+# Nitro Wheelz — v0.1.15 barrier fix / HUD v3 / garage studio / tyre + impact sound (not released)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -42,7 +42,15 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - Tests extended (visual_identity, brand_pause_surface, editor_results, engine_audio); full suite PASS; negative controls FAIL as expected.
 - NOT RUN: Android (garage fix, HUD readability, engine on speakers), CI for this push until checked.
 
+## OWNER FEEDBACK PASS 3 (v0.1.15)
+- Barrier bug: drift_track.gd resolve_body() (oriented 10-point footprint, BODY_HALF_LENGTH 2.30 / BODY_HALF_WIDTH 1.05 at x1.15 race scale, local centreline search PROBE_WINDOW 24, yaw kick) used by race.gd; resolve_wall() kept for the point tests. New game/tests/wall_body_test.gd registered in tools/run_godot_checks.sh.
+- HUD v3: hud_style.metrics() keys dead/map/lap/total_label/total/name/chase/score; race_hud.gd header, minimap rotation + point_at_progress(), framed chain, callouts x0.8; STYLE.glow_arc/fit_size; race_touch.gd engraved NW (nw_initials_mask.png) + joystick glow.
+- Garage: studio_backdrop.gdshader on a camera-parented quad, KEEP_WIDTH camera fov 36, floor removed, neutral lights.
+- Editor: header (bold white title left, accent name centred), bigger fonts, calmer frame.
+- Audio: engine_synth.gd squeal/impact/scrape rewritten; drive_audio.wall_contact(); race.gd feeds wall slide speed.
+- NOT RUN: Android check of the camera keep-out on the owner's phone, sounds on speakers.
+
 ## NEXT ACTION
-1. Owner installs the v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

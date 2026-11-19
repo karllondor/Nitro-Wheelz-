@@ -189,28 +189,29 @@ func _make_ui() -> void:
     var scale: float = clampf(s.x/720.0,0.75,2.0)
     theme = STYLE.screen_theme(clampf(s.x/700.0,0.85,1.8))
     STYLE.ensure_settings()
+    var title := Label.new()
+    title.name = "Editor title"
+    title.text = "TRACK\nEDITOR"
+    title.position = Vector2(s.x*0.03,s.y*0.008)
+    title.size = Vector2(s.x*0.24,s.y*0.052)
+    title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    title.add_theme_constant_override("line_spacing",int(-6.0*scale))
+    title.add_theme_font_size_override("font_size",int(30.0*scale))
+    title.add_theme_font_override("font",STYLE.BOLD)
+    title.add_theme_color_override("font_color",STYLE.WHITE)
+    add_child(title)
     header_name = Label.new()
     header_name.name = "Saved track name"
-    header_name.position = Vector2(s.x*0.035,s.y*0.012)
-    header_name.size = Vector2(s.x*0.47,s.y*0.045)
+    header_name.position = Vector2(s.x*0.27,s.y*0.012)
+    header_name.size = Vector2(s.x*0.46,s.y*0.045)  # centred on screen
+    header_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     header_name.clip_text = true
     header_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     header_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     header_name.add_theme_font_override("font",STYLE.BOLD)
-    header_name.add_theme_font_size_override("font_size",int(22.0*scale))
-    header_name.add_theme_color_override("font_color",STYLE.WHITE)
+    header_name.add_theme_font_size_override("font_size",int(27.0*scale))
+    header_name.add_theme_color_override("font_color",STYLE.PINK)
     add_child(header_name)
-    var title := Label.new()
-    title.name = "Editor title"
-    title.text = "TRACK EDITOR"
-    title.position = Vector2(s.x*0.50,s.y*0.012)
-    title.size = Vector2(s.x*0.355,s.y*0.045)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size",int(20.0*scale))
-    title.add_theme_font_override("font",STYLE.BOLD)
-    title.add_theme_color_override("font_color",STYLE.PINK_SOFT)
-    add_child(title)
     map_view = Control.new()
     map_view.name = "Clipped edit window"
     map_view.clip_contents = true
@@ -228,9 +229,11 @@ func _make_ui() -> void:
     message_label.clip_text = true
     message_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     message_label.add_theme_font_override("font",STYLE.BOLD)
-    message_label.add_theme_font_size_override("font_size",int(16.0*scale))
+    message_label.add_theme_font_size_override("font_size",int(20.0*scale))
     add_child(message_label)
-    _button("?",0.875,0.012,0.095,0.045,func(): _show_dialog("help"))
+    var help_button: Button = _button("?",0.875,0.010,0.095,0.046,func(): _show_dialog("help"))
+    help_button.add_theme_font_size_override("font_size",int(clampf(s.x/30.0,14.0,30.0)))
+    help_button.size = Vector2(s.x*0.095,s.y*0.046)
     # Zoom controls float in the top-right corner of the edit window.
     var zoom_buttons: Array[Button] = [
         _button("FIT",0.845,0.080,0.112,0.042,Callable(self,"_fit_all")),
@@ -238,7 +241,7 @@ func _make_ui() -> void:
         _button("ZOOM -",0.845,0.174,0.112,0.042,func(): _zoom(0.8))]
     zoom_strip = Rect2()
     for zb in zoom_buttons:
-        zb.add_theme_font_size_override("font_size",int(clampf(s.x/48.0,11.0,22.0)))
+        zb.add_theme_font_size_override("font_size",int(clampf(s.x/36.0,13.0,28.0)))
         zb.size = Vector2(s.x*0.112,s.y*0.042)
         zb.position.x = canvas.end.x-s.x*0.012-zb.size.x
         var r := Rect2(zb.position,zb.size)
@@ -291,7 +294,7 @@ func _modal_button(parent: Node,caption: String,action: Callable,scale: float) -
     var button := Button.new()
     button.text = caption
     button.custom_minimum_size.y = 48.0*scale
-    button.add_theme_font_size_override("font_size",int(20.0*scale))
+    button.add_theme_font_size_override("font_size",int(23.0*scale))
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.pressed.connect(action)
     parent.add_child(button)
@@ -325,14 +328,14 @@ func _show_dialog(kind: String) -> void:
     margin.add_child(stack)
     var title := Label.new()
     title.text = "SAVE TRACK" if kind=="save" else ("HOW TO EDIT" if kind=="help" else "START NEW TRACK")
-    title.add_theme_font_size_override("font_size",int(24.0*sc))
+    title.add_theme_font_size_override("font_size",int(28.0*sc))
     title.add_theme_color_override("font_color",Color(1.0,0.82,0.25))
     stack.add_child(title)
     var hint := Label.new()
     hint.text = "Give your circuit a name" if kind=="save" else (
         "\n".join(HELP_LINES) if kind=="help" else "Unsaved edits will be replaced")
     hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    hint.add_theme_font_size_override("font_size",int((20.0 if kind=="help" else 16.0)*sc))
+    hint.add_theme_font_size_override("font_size",int((24.0 if kind=="help" else 19.0)*sc))
     hint.add_theme_color_override("font_color",Color(0.86,0.84,0.92))
     if kind=="help":
         hint.add_theme_constant_override("line_spacing",int(6.0*sc))
@@ -341,7 +344,7 @@ func _show_dialog(kind: String) -> void:
         help_check = CheckBox.new()
         help_check.name = "Do not show again"
         help_check.text = "Don't show again"
-        help_check.add_theme_font_size_override("font_size",int(20.0*sc))
+        help_check.add_theme_font_size_override("font_size",int(23.0*sc))
         help_check.custom_minimum_size.y = 48.0*sc
         help_check.add_theme_icon_override("unchecked",_tick_icon(false,sc))
         help_check.add_theme_icon_override("checked",_tick_icon(true,sc))
@@ -497,7 +500,8 @@ func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callab
     button.text = text
     button.position = Vector2(s.x*xx,s.y*yy)
     button.size = Vector2(s.x*ww,s.y*hh)
-    button.add_theme_font_size_override("font_size",int(clampf(s.x/31.0,14.0,30.0)))
+    # Larger labels: owner found the old 23 px hard to read on the phone.
+    button.add_theme_font_size_override("font_size",int(clampf(s.x/25.0,16.0,36.0)))
     STYLE.style_button(button,clampf(s.x/700.0,0.85,1.8))
     button.pressed.connect(action)
     add_child(button)
@@ -816,7 +820,10 @@ func _draw_map() -> void:
             v.draw_circle(point,10.0,tint)
             v.draw_circle(point,4.0,Color(0.035,0.041,0.050))
     # Validation frame: green = drivable, red = needs fixing.
-    var frame: Color = Color(0.25,0.92,0.48,0.95) if ready_to_play else Color(1.0,0.22,0.26,0.95)
+    # Calm thin green when drivable; red with a soft glow when it needs work.
     var inset := Rect2(Vector2(2,2),canvas.size-Vector2(4,4))
-    v.draw_rect(inset,Color(frame.r,frame.g,frame.b,0.22),false,9.0)
-    v.draw_rect(inset,frame,false,3.0)
+    if ready_to_play:
+        v.draw_rect(inset,Color(0.25,0.92,0.48,0.55),false,2.0)
+    else:
+        v.draw_rect(inset,Color(1.0,0.22,0.26,0.22),false,10.0)
+        v.draw_rect(inset,Color(1.0,0.22,0.26,0.95),false,3.0)

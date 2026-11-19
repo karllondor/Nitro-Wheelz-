@@ -11,7 +11,10 @@ class_name NitroEngineSynth
 ##  * throttle load sharpens the pulses and adds combustion rasp + ITB
 ##    induction roar; lifting off leaves a hollow overrun with crackle/pops;
 ##  * ignition cut on upshifts and a bouncing rev limiter.
-## Tyre squeal and impact layers kept. Cheap per-sample maths only (Android).
+## Tyres: squeal = white noise through narrow resonances whose pitch
+## wanders, with stick-slip flutter (no fixed siren tone). Impacts: a
+## falling-pitch body thud + crunch + rattle. Wall contact: grinding scrape.
+## Cheap per-sample maths only (Android).
 
 const SAMPLE_RATE: float = 22050.0
 const TABLE_SIZE: int = 2048
@@ -35,6 +38,8 @@ var rpm: float = IDLE_RPM
 var target_rpm: float = IDLE_RPM
 var load: float = 0.0          # 0 coast/overrun .. 1 full throttle
 var squeal: float = 0.0        # tyre slip loudness 0..1
+var scrape: float = 0.0        # body sliding along a wall 0..1
+var scrape_target: float = 0.0
 var gear: int = 1
 var master: float = 0.55
 var afterfire: float = 0.0     # overrun crackle window after lifting off
@@ -62,13 +67,24 @@ var _r1: float = 0.0
 var _r2: float = 0.0
 var _i1: float = 0.0
 var _i2: float = 0.0
-var _squeal_phase_a: float = 0.0
-var _squeal_phase_b: float = 0.0
-var _noise_lp: float = 0.0
-var _noise_bp: float = 0.0
 var _thump: float = 0.0
 var _thump_phase: float = 0.0
+var _imp_t: float = 1.0
+var _imp_c1: float = 0.0
+var _imp_c2: float = 0.0
+var _imp_lp: float = 0.0
 var _wobble: float = 0.0
+var _sq_drift := PackedFloat32Array([0.0,0.0,0.0])
+var _sq_state := PackedFloat32Array([0.0,0.0,0.0,0.0,0.0,0.0])
+var _sq_flutter_ph: float = 0.0
+var _sq_flutter_rate: float = 16.0
+var _sq_gain: float = 1.0
+var _sq_gain_target: float = 1.0
+var _sc1: float = 0.0
+var _sc2: float = 0.0
+var _sc3: float = 0.0
+var _sc4: float = 0.0
+var _grit: float = 1.0
 var _coef: Dictionary = {}
 
 func _init() -> void:
@@ -140,8 +156,15 @@ func on_limiter() -> bool:
     return _cut_timer > 0.0 and rpm > LIMIT_RPM-400.0
 
 func impact(strength: float) -> void:
-    _thump = maxf(_thump,clampf(strength,0.0,1.0))
+    _thump = maxf(_thump if _imp_t < 0.12 else 0.0,clampf(strength,0.0,1.0))
     _thump_phase = 0.0
+    _imp_t = 0.0
+
+## Two-pole resonator coefficients: (a1, a2, input gain).
+static func _reso(freq: float, bw: float) -> Vector3:
+    var r: float = exp(-PI*bw/SAMPLE_RATE)
+    var w: float = TAU*clampf(freq,40.0,SAMPLE_RATE*0.45)/SAMPLE_RATE
+    return Vector3(2.0*r*cos(w),r*r,(1.0-r*r)*sin(w))
 
 ## Firing frequency: four-stroke fires CYLINDERS/2 times per crank turn.
 func firing_hz() -> float:
@@ -187,9 +210,23 @@ func render(frames: int) -> PackedVector2Array:
     var cp: Vector3 = _coef["pipe"]
     var cr: Vector3 = _coef["rasp"]
     var ci: Vector3 = _coef["intake"]
-    var sq_amp: float = master*0.55*squeal
-    var sq_a: float = (1150.0+squeal*180.0)/SAMPLE_RATE
-    var sq_b: float = (1720.0+squeal*240.0)/SAMPLE_RATE
+    var sq_amp: float = master*squeal
+    # Squeal pitch wanders (random walk) and rises a little with slip.
+    for k in range(3):
+        _sq_drift[k] = clampf(_sq_drift[k]*0.94+_rng.randf_range(-0.035,0.035),-0.12,0.12)
+    var f0: float = (860.0+340.0*squeal)*(1.0+_sq_drift[0])
+    var q0: Vector3 = _reso(f0,38.0)
+    var q1: Vector3 = _reso(f0*1.93*(1.0+_sq_drift[1]*0.5),70.0)
+    var q2: Vector3 = _reso(520.0*(1.0+_sq_drift[2]),260.0)
+    if _rng.randf() < 0.08:
+        _sq_flutter_rate = _rng.randf_range(9.0,24.0)
+        _sq_gain_target = _rng.randf_range(0.65,1.0)
+    var fl_inc: float = _sq_flutter_rate/SAMPLE_RATE
+    var fl_depth: float = 0.35
+    scrape = lerpf(scrape,scrape_target,0.35)
+    var sc_amp: float = master*scrape
+    var s1: Vector3 = _reso(1900.0,1300.0)
+    var s2: Vector3 = _reso(430.0,260.0)
     var size_f: float = float(TABLE_SIZE)
     for i in range(frames):
         _cycle += cyc_inc
@@ -224,16 +261,45 @@ func render(frames: int) -> PackedVector2Array:
         _dc_y = dc
         var s: float = dc*amp
         if sq_amp > 0.002:
-            _squeal_phase_a = fmod(_squeal_phase_a+sq_a*(1.0+_wobble*0.02),1.0)
-            _squeal_phase_b = fmod(_squeal_phase_b+sq_b,1.0)
-            _noise_lp += (noise-_noise_lp)*0.22
-            _noise_bp = _noise_lp-_noise_bp*0.6
-            var tone: float = _table[int(_squeal_phase_a*size_f)%TABLE_SIZE]*0.45+_table[int(_squeal_phase_b*size_f)%TABLE_SIZE]*0.25
-            s += (tone+_noise_bp*0.6)*sq_amp
-        if _thump > 0.001:
-            _thump_phase += 70.0/SAMPLE_RATE
-            s += (_table[int(fmod(_thump_phase,1.0)*size_f)%TABLE_SIZE]+noise*0.5)*_thump*master*1.4
-            _thump *= 0.9993
+            var y0: float = q0.z*noise+q0.x*_sq_state[0]-q0.y*_sq_state[1]
+            _sq_state[1] = _sq_state[0]
+            _sq_state[0] = y0
+            var y1: float = q1.z*noise+q1.x*_sq_state[2]-q1.y*_sq_state[3]
+            _sq_state[3] = _sq_state[2]
+            _sq_state[2] = y1
+            var y2: float = q2.z*noise+q2.x*_sq_state[4]-q2.y*_sq_state[5]
+            _sq_state[5] = _sq_state[4]
+            _sq_state[4] = y2
+            _sq_flutter_ph = fmod(_sq_flutter_ph+fl_inc,1.0)
+            var tri: float = absf(_sq_flutter_ph*2.0-1.0)
+            _sq_gain += (_sq_gain_target-_sq_gain)*0.0006
+            var am: float = (1.0-fl_depth*tri)*_sq_gain
+            s += (y0*7.2+y1*3.6+y2*1.8)*am*sq_amp
+        if sc_amp > 0.002:
+            # Grinding scrape: bright grit + low body rumble, gritty AM.
+            if (i & 63) == 0:
+                _grit = _rng.randf_range(0.45,1.0)
+            var z1: float = s1.z*noise+s1.x*_sc1-s1.y*_sc2
+            _sc2 = _sc1
+            _sc1 = z1
+            var z2: float = s2.z*noise+s2.x*_sc3-s2.y*_sc4
+            _sc4 = _sc3
+            _sc3 = z2
+            s += (z1*2.6+z2*3.2)*_grit*sc_amp
+        if _imp_t < 0.45:
+            # Impact: falling-pitch body thud, crunch and panel rattle.
+            var a_imp: float = _thump*master*1.25
+            var f_thud: float = 42.0+95.0*exp(-_imp_t/0.035)
+            _thump_phase = fmod(_thump_phase+f_thud/SAMPLE_RATE,1.0)
+            var thud: float = sin(TAU*_thump_phase)*exp(-_imp_t/0.11)
+            var yc: float = 0.42*noise+1.55*_imp_c1-0.70*_imp_c2
+            _imp_c2 = _imp_c1
+            _imp_c1 = yc
+            var crunch: float = yc*exp(-_imp_t/0.030)
+            _imp_lp += (noise-_imp_lp)*0.12
+            var rattle: float = _imp_lp*exp(-_imp_t/0.07)*(0.6+0.4*float((i>>7)&1))
+            s += (thud*0.95+crunch*0.55+rattle*0.9)*a_imp
+            _imp_t += 1.0/SAMPLE_RATE
         # Soft knee limiter: never clips, untouched below 0.8.
         var a: float = absf(s)
         if a > 0.8:

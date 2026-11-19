@@ -38,12 +38,18 @@ var _outline_cache: PackedVector2Array = PackedVector2Array()
 var _outline_rect: Rect2 = Rect2()
 var _map_scale: float = 1.0
 var _map_mid: Vector2 = Vector2.ZERO
+var _map_rot: float = 0.0
+var _cum: PackedFloat32Array = PackedFloat32Array()
+var _cum_points: int = -1
+var _shown_chain: int = 0
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     STYLE.ensure_settings()
 
 func _process(delta: float) -> void:
+    if drift_score > 0:
+        _shown_chain = drift_score
     var target: float = 1.0 if drift_score > 0 else 0.0
     chain_alpha = move_toward(chain_alpha,target,delta*(6.0 if target > chain_alpha else 2.5))
     queue_redraw()
@@ -55,7 +61,7 @@ func overall_progress() -> float:
 func chase_label() -> Dictionary:
     var running: int = score+int(round(float(drift_score)*combo))
     if best_score <= 0:
-        return {"text":"FIRST RUN  •  SET THE SCORE","beating":false}
+        return {"text":"FIRST RUN","beating":false}
     if running > best_score:
         return {"text":"NEW BEST  "+_score_string(running),"beating":true}
     return {"text":"CHASING  "+_score_string(best_score),"beating":false}
@@ -65,7 +71,6 @@ func _draw() -> void:
     var m: Dictionary = STYLE.metrics(s)
     var u: float = float(m["unit"])
     _draw_header(m,u)
-    _draw_chase(Rect2(m["chase"]),u)
     _draw_chain(Rect2(m["score"]),u)
     _draw_gauge(Vector2(m["gauge_centre"]),float(m["gauge_radius"]),u)
     _draw_angle(Rect2(m["angle"]),u)
@@ -75,22 +80,30 @@ func _draw() -> void:
 
 func _draw_header(m: Dictionary, u: float) -> void:
     var r: Rect2 = m["header"]
+    var hh: float = r.size.y
     STYLE.panel(self,r,u,18.0,0.0,true,1.0)
     _minimap(Rect2(m["map"]),u)
+    # Top band, beside the camera keep-out: LAP (left) and the score label.
+    var lp: Rect2 = m["lap"]
+    var lap_txt: String = "LAP %d/%d" % [lap,lap_limit]
+    STYLE.text(self,Vector2(lp.position.x,lp.end.y-lp.size.y*0.16),lap_txt,
+        STYLE.fit_size(lap_txt,hh*0.16,lp.size.x),STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
+    var tl: Rect2 = m["total_label"]
+    STYLE.text(self,Vector2(tl.position.x,tl.end.y-tl.size.y*0.22),"TOTAL SCORE",hh*0.075,STYLE.MUTED,
+        HORIZONTAL_ALIGNMENT_RIGHT,tl.size.x,false)
+    # Right: the most important number, clock under it.
     var st: Rect2 = m["total"]
-    var x: float = st.position.x
-    var h: float = r.size.y
-    var y0: float = r.position.y
-    STYLE.text(self,Vector2(x,y0+h*0.17),"TOTAL SCORE",h*0.080,STYLE.MUTED,
-        HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
-    STYLE.text(self,Vector2(x,y0+h*0.50),_score_string(score),h*0.33,STYLE.WHITE,
-        HORIZONTAL_ALIGNMENT_LEFT,st.size.x)
-    STYLE.text(self,Vector2(x,y0+h*0.73),"LAP %d/%d" % [lap,lap_limit],h*0.15,
-        STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
-    STYLE.text(self,Vector2(x,y0+h*0.73),STYLE.time_string(race_time),h*0.12,
+    var score_txt: String = _score_string(score)
+    STYLE.text(self,Vector2(st.position.x,st.position.y+st.size.y*0.56),score_txt,
+        STYLE.fit_size(score_txt,hh*0.31,st.size.x),STYLE.WHITE,HORIZONTAL_ALIGNMENT_RIGHT,st.size.x)
+    STYLE.text(self,Vector2(st.position.x,st.end.y-st.size.y*0.02),STYLE.time_string(race_time),hh*0.115,
         STYLE.MUTED,HORIZONTAL_ALIGNMENT_RIGHT,st.size.x,false)
-    STYLE.text(self,Vector2(x,y0+h*0.865),track_name.to_upper(),h*0.068,STYLE.DIM,
-        HORIZONTAL_ALIGNMENT_LEFT,st.size.x,false)
+    # Centre, under the keep-out: track name (light) and the chase pill.
+    var nm: Rect2 = m["name"]
+    var name_txt: String = track_name.to_upper()
+    STYLE.text(self,Vector2(nm.position.x,nm.end.y-nm.size.y*0.18),name_txt,
+        STYLE.fit_size(name_txt,hh*0.088,nm.size.x),STYLE.MUTED,HORIZONTAL_ALIGNMENT_CENTER,nm.size.x,true)
+    _draw_chase(Rect2(m["chase"]),u)
     _draw_lap_line(r,u)
 
 ## Thin line across the whole panel, split into one segment per lap:
@@ -113,34 +126,73 @@ func _draw_lap_line(r: Rect2, u: float) -> void:
             var pts := PackedVector2Array([Vector2(x0,y),Vector2(x0+seg*fill,y)])
             STYLE.glow_line(self,pts,STYLE.PINK,thickness*0.75,0.7)
 
+## Track outline turned so its long side runs horizontally (largest fit in
+## the wide map box); the car dot is placed ON the white line from the
+## lap progress, so it never wanders off it.
 func _minimap(rect: Rect2, u: float) -> void:
     if track_points.size() < 8:
         return
     if _outline_rect != rect or _outline_cache.is_empty():
-        _outline_rect = rect
-        var lo := Vector2(INF,INF)
-        var hi := Vector2(-INF,-INF)
-        for p in track_points:
-            lo = Vector2(minf(lo.x,p.x),minf(lo.y,p.y))
-            hi = Vector2(maxf(hi.x,p.x),maxf(hi.y,p.y))
-        var box: Vector2 = hi-lo
-        _map_scale = minf(rect.size.x*0.90/maxf(box.x,0.01),rect.size.y*0.90/maxf(box.y,0.01))
-        _map_mid = (lo+hi)*0.5
-        _outline_cache = PackedVector2Array()
-        var step: int = maxi(1,int(track_points.size()/140))
-        for i in range(0,track_points.size(),step):
-            _outline_cache.append(rect.get_center()+(track_points[i]-_map_mid)*_map_scale)
-        _outline_cache.append(_outline_cache[0])
+        _rebuild_outline(rect)
     draw_polyline(_outline_cache,Color(1,1,1,0.10),9.0*u,true)
     draw_polyline(_outline_cache,STYLE.WHITE,3.0*u,true)
-    var start_dot: Vector2 = rect.get_center()+(track_points[0]-_map_mid)*_map_scale
-    var tangent: Vector2 = (track_points[1]-track_points[track_points.size()-1]).normalized()
+    var start_dot: Vector2 = _map_point(track_points[0],rect)
+    var tangent: Vector2 = (_map_point(track_points[1],rect)-_map_point(track_points[track_points.size()-1],rect)).normalized()
     var across := Vector2(-tangent.y,tangent.x)*6.0*u
     draw_line(start_dot-across,start_dot+across,STYLE.WHITE,3.5*u,true)
-    var dot: Vector2 = rect.get_center()+(car_world_position-_map_mid)*_map_scale
+    var dot: Vector2 = _map_point(point_at_progress(track_progress),rect)
     draw_circle(dot,9.0*u,Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.28))
     draw_circle(dot,5.5*u,STYLE.PINK)
     draw_arc(dot,5.5*u,0.0,TAU,20,STYLE.WHITE,1.4*u,true)
+
+func _map_point(p: Vector2, rect: Rect2) -> Vector2:
+    return rect.get_center()+(p.rotated(-_map_rot)-_map_mid)*_map_scale
+
+func _rebuild_outline(rect: Rect2) -> void:
+    _outline_rect = rect
+    var step: int = maxi(1,int(track_points.size()/140))
+    var sub := PackedVector2Array()
+    for i in range(0,track_points.size(),step):
+        sub.append(track_points[i])
+    var best: float = -1.0
+    for k in range(36):
+        var ang: float = PI*float(k)/36.0
+        var lo := Vector2(INF,INF)
+        var hi := Vector2(-INF,-INF)
+        for p in sub:
+            var q: Vector2 = p.rotated(-ang)
+            lo = Vector2(minf(lo.x,q.x),minf(lo.y,q.y))
+            hi = Vector2(maxf(hi.x,q.x),maxf(hi.y,q.y))
+        var box: Vector2 = hi-lo
+        var sc: float = minf(rect.size.x*0.90/maxf(box.x,0.01),rect.size.y*0.88/maxf(box.y,0.01))
+        # Keep the authored orientation unless turning is clearly bigger.
+        if sc > best*1.04:
+            best = sc
+            _map_rot = ang
+            _map_scale = sc
+            _map_mid = (lo+hi)*0.5
+    _outline_cache = PackedVector2Array()
+    for p in sub:
+        _outline_cache.append(_map_point(p,rect))
+    _outline_cache.append(_outline_cache[0])
+
+## Centreline point at a lap fraction (same arc length as the race uses).
+func point_at_progress(f: float) -> Vector2:
+    var n: int = track_points.size()
+    if n == 0:
+        return car_world_position
+    if _cum_points != n:
+        _cum_points = n
+        _cum = PackedFloat32Array()
+        _cum.resize(n+1)
+        _cum[0] = 0.0
+        for i in range(n):
+            _cum[i+1] = _cum[i]+track_points[i].distance_to(track_points[(i+1)%n])
+    var total: float = _cum[n]
+    var target: float = fposmod(f,1.0)*total
+    var i: int = clampi(_cum.bsearch(target)-1,0,n-1)
+    var seg: float = maxf(_cum[i+1]-_cum[i],0.0001)
+    return track_points[i].lerp(track_points[(i+1)%n],clampf((target-_cum[i])/seg,0.0,1.0))
 
 # ------------------------------------------------------- chase + live chain
 
@@ -151,26 +203,44 @@ func _draw_chase(r: Rect2, u: float) -> void:
     var col: Color = STYLE.GOLD if beating else STYLE.WHITE
     var star_r: float = r.size.y*0.24
     STYLE.star(self,Vector2(r.position.x+r.size.x*0.10,r.get_center().y),star_r,beating or best_score > 0,u)
-    STYLE.text(self,Vector2(r.position.x+r.size.x*0.17,r.position.y+r.size.y*0.66),str(state["text"]),
-        r.size.y*0.36,col,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.80,true)
+    var txt: String = str(state["text"])
+    STYLE.text(self,Vector2(r.position.x+r.size.x*0.18,r.position.y+r.size.y*0.67),txt,
+        STYLE.fit_size(txt,r.size.y*0.40,r.size.x*0.76),col,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.78,true)
 
 func _draw_chain(r: Rect2, u: float) -> void:
     if chain_alpha <= 0.01:
         return
     var a: float = chain_alpha
-    var big: float = r.size.y*0.62
-    var txt: String = "+"+_score_string(drift_score)
+    var big: float = r.size.y*0.56
+    var txt: String = "+"+_score_string(_shown_chain)
     var mult: String = "x%.1f" % combo
     var w_txt: float = STYLE.text_width(txt,big)
     var w_mult: float = STYLE.text_width(mult,big*0.45)
-    var x: float = r.get_center().x-(w_txt+w_mult+r.size.y*0.15)*0.5
-    var base: float = r.position.y+r.size.y*0.70
+    var content: float = w_txt+w_mult+r.size.y*0.15
+    # Subtle glass frame with a soft accent edge, sized to the number.
+    var fw: float = clampf(content+r.size.y*0.75,r.size.x*0.50,r.size.x)
+    var frame := Rect2(r.get_center().x-fw*0.5,r.position.y,fw,r.size.y)
+    var pts: PackedVector2Array = STYLE.shape(frame,14.0*u,STYLE.SKEW)
+    var cols := PackedColorArray()
+    for p in pts:
+        var t: float = clampf((p.y-frame.position.y)/frame.size.y,0.0,1.0)
+        var g: Color = STYLE.GLASS_TOP.lerp(STYLE.GLASS_BOTTOM,t)
+        g.a *= 0.62*a
+        cols.append(g)
+    draw_polygon(pts,cols)
+    var outline: PackedVector2Array = pts.duplicate()
+    outline.append(pts[0])
+    draw_polyline(outline,Color(1,1,1,0.16*a),maxf(1.0,1.2*u),true)
+    STYLE.glow_line(self,STYLE.glow_path(frame,14.0*u,STYLE.SKEW),
+        Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.75*a),1.8*u,0.8)
+    var x: float = frame.get_center().x-content*0.5
+    var base: float = frame.position.y+frame.size.y*0.80
     STYLE.text(self,Vector2(x,base),txt,big,Color(1,1,1,a))
     var mc: Color = STYLE.PINK_SOFT
     mc.a = a
     STYLE.text(self,Vector2(x+w_txt+r.size.y*0.15,base),mult,big*0.45,mc)
-    STYLE.text(self,Vector2(r.position.x,r.position.y+r.size.y*0.02),"DRIFT",r.size.y*0.20,
-        Color(STYLE.MUTED.r,STYLE.MUTED.g,STYLE.MUTED.b,a),HORIZONTAL_ALIGNMENT_CENTER,r.size.x,false)
+    STYLE.text(self,Vector2(frame.position.x,frame.position.y+frame.size.y*0.25),"DRIFT",r.size.y*0.17,
+        Color(STYLE.MUTED.r,STYLE.MUTED.g,STYLE.MUTED.b,a),HORIZONTAL_ALIGNMENT_CENTER,frame.size.x,false)
 
 # --------------------------------------------------------------- callouts
 
@@ -179,10 +249,12 @@ func _draw_chain(r: Rect2, u: float) -> void:
 func callout_anchor(m: Dictionary, s: Vector2) -> Vector2:
     if car_screen.x < 0.0:
         return Vector2(m["callout"])
-    var lo: float = Rect2(m["score"]).end.y+minf(s.x,s.y)*0.20
+    var lo: float = Rect2(m["score"]).end.y+minf(s.x,s.y)*0.12
     # Keep the newest line clear of the speedometer on the left.
     var hi: float = Vector2(m["gauge_centre"]).y-float(m["gauge_radius"])-minf(s.x,s.y)*0.02
-    var y: float = clampf(car_screen.y-minf(s.x,s.y)*0.13,lo,maxf(lo,hi))
+    # Owner: about 20% higher on screen than just above the roof.
+    var y: float = (car_screen.y-minf(s.x,s.y)*0.13)*0.80
+    y = clampf(y,lo,maxf(lo,hi))
     return Vector2(s.x*0.5,y)
 
 func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
@@ -222,6 +294,8 @@ func _draw_gauge(c: Vector2, r: float, u: float) -> void:
         cols.append(STYLE.GLASS_TOP.lerp(STYLE.GLASS_BOTTOM,clampf((sin(t)+1.0)*0.5,0.0,1.0)))
     draw_polygon(face,cols)
     draw_arc(c,r,0.0,TAU,64,STYLE.EDGE,1.6*u,true)
+    # Accent neon on the lower-right edge, like every other panel.
+    STYLE.glow_arc(self,c,r,-PI*0.12,PI*0.62,STYLE.PINK,2.2*u,1.0)
     # Track and live arc.
     draw_arc(c,r*0.86,GAUGE_START,GAUGE_START+GAUGE_SWEEP,72,Color(0.22,0.22,0.27,0.95),r*0.07,true)
     var f: float = clampf(speed/GAUGE_MAX_KMH,0.0,1.0)

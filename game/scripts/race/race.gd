@@ -257,11 +257,12 @@ func _physics_process(delta: float) -> void:
 
     # Resolve physical contact against the SAME raised wall shown on screen.
     # Never drive through the wall into sand and then teleport back.
-    var collision: Dictionary = track.resolve_wall(model.position,model.velocity)
+    # Whole oriented body (corners + bumpers), not just the centre point.
+    var collision: Dictionary = track.resolve_body(model.position,model.heading,model.velocity)
     if bool(collision["hit"]):
         model.position = Vector2(collision["position"])
         model.velocity = Vector2(collision["velocity"])
-        model.yaw_rate *= 0.35
+        model.yaw_rate = model.yaw_rate*0.35+float(collision.get("yaw_impulse",0.0))
         model.slide_hold = 0.0
         model.rear_traction = maxf(model.rear_traction,0.80)
         had_skid = false
@@ -271,6 +272,11 @@ func _physics_process(delta: float) -> void:
     var info: Dictionary = track.sample_info(model.position)
     offroad = false
     if sfx != null:
+        var slide: float = 0.0
+        if bool(collision["hit"]):
+            var n_wall: Vector2 = Vector2(collision["normal"])
+            slide = (model.velocity-n_wall*model.velocity.dot(n_wall)).length()
+        sfx.wall_contact(slide)
         sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
         if absf(float(info["distance"])-float(info["width"])) < 0.75:
             sfx.kerb_event(model.speed_kmh())

@@ -66,27 +66,37 @@ static func save_settings() -> void:
     cfg.save(SETTINGS_PATH)
 
 ## Layout shared by HUD drawing and touch hit-testing so visuals and
-## touch targets always coincide (HUD v2, owner sketch 2026-11-19):
-## header = big minimap + score/lap/time, full-width 3-lap progress line;
-## chase pill centred under it; live chain centred below (only while
-## scoring); round speedometer with the drift angle on the left.
+## touch targets always coincide (HUD v3, owner feedback 2026-11-19):
+## header = minimap | name + CHASING pill | TOTAL SCORE + clock, LAP in the
+## top band beside a centred keep-out for front-camera punch holes, and a
+## thin three-lap progress line. Live chain centred under the header (only
+## while scoring); round speedometer with the drift angle on the left.
 static func metrics(s: Vector2) -> Dictionary:
     var portrait: bool = s.y > s.x
     if portrait:
         var w: float = s.x
         var mx: float = w*0.022
         var top: float = maxf(s.y*0.016,w*0.03)
-        var header := Rect2(mx,top,w-2.0*mx,w*0.205)
-        var map := Rect2(header.position.x+w*0.018,header.position.y+w*0.014,w*0.34,w*0.150)
-        var stats := Rect2(map.end.x+w*0.03,header.position.y,header.end.x-map.end.x-w*0.05,w*0.175)
-        var chase := Rect2(w*0.30,header.end.y+w*0.014,w*0.40,w*0.064)
+        var header := Rect2(mx,top,w-2.0*mx,w*0.215)
+        var hy: float = header.position.y
+        var hh: float = header.size.y
+        # Nothing is drawn in the top-centre band: phones put the front
+        # camera there (it cut the old TOTAL SCORE label on the owner's phone).
+        var dead := Rect2(w*0.5-w*0.09,0.0,w*0.18,hy+hh*0.30)
+        var map := Rect2(header.position.x+w*0.016,hy+hh*0.09,w*0.285,hh*0.76)
+        var lap := Rect2(dead.end.x+w*0.01,hy+hh*0.05,w*0.16,hh*0.24)
+        var total_label := Rect2(lap.end.x+w*0.01,hy+hh*0.05,header.end.x-w*0.022-lap.end.x-w*0.01,hh*0.24)
+        var total := Rect2(w*0.665,hy+hh*0.30,header.end.x-w*0.022-w*0.665,hh*0.55)
+        var name := Rect2(map.end.x+w*0.012,dead.end.y+hh*0.01,total.position.x-map.end.x-w*0.024,hh*0.16)
+        var chase := Rect2(name.position.x,name.end.y+hh*0.03,name.size.x,hh*0.28)
         var buttons_y: float = header.end.y+w*0.014
         var gauge_r: float = w*0.135
         var gauge_c := Vector2(mx+gauge_r+w*0.012,s.y*0.585)
         return {
-            "portrait":true,"header":header,"map":map,"total":stats,"chase":chase,
-            "score":Rect2(w*0.5-w*0.24,chase.end.y+w*0.030,w*0.48,w*0.120),
-            "callout":Vector2(w*0.5,s.y*0.40),
+            "portrait":true,"header":header,"dead":dead,"map":map,"lap":lap,
+            "total_label":total_label,"total":total,"name":name,"chase":chase,
+            "score":Rect2(w*0.5-w*0.22,header.end.y+w*0.014,w*0.44,w*0.105),
+            "callout":Vector2(w*0.5,s.y*0.36),
             "pause":Rect2(w*0.735,buttons_y,w*0.110,w*0.070),
             "camera":Rect2(w*0.862,buttons_y,w*0.116,w*0.070),
             "gauge_centre":gauge_c,"gauge_radius":gauge_r,
@@ -96,15 +106,21 @@ static func metrics(s: Vector2) -> Dictionary:
         }
     var h: float = s.y
     var m: float = s.x*0.016
-    var header_l := Rect2(m,h*0.016,s.x*0.40,h*0.215)
-    var map_l := Rect2(header_l.position.x+h*0.02,header_l.position.y+h*0.02,s.x*0.15,h*0.155)
-    var stats_l := Rect2(map_l.end.x+s.x*0.015,header_l.position.y,header_l.end.x-map_l.end.x-s.x*0.025,h*0.19)
-    var chase_l := Rect2(s.x*0.44,h*0.03,s.x*0.20,h*0.075)
+    var header_l := Rect2(m,h*0.016,s.x*0.56,h*0.215)
+    var hy_l: float = header_l.position.y
+    var hh_l: float = header_l.size.y
+    var map_l := Rect2(header_l.position.x+h*0.02,hy_l+hh_l*0.09,s.x*0.14,hh_l*0.76)
+    var total_l := Rect2(header_l.end.x-s.x*0.175,hy_l+hh_l*0.30,s.x*0.16,hh_l*0.55)
+    var lap_l := Rect2(map_l.end.x+s.x*0.012,hy_l+hh_l*0.05,s.x*0.10,hh_l*0.24)
+    var total_label_l := Rect2(total_l.position.x,hy_l+hh_l*0.05,total_l.size.x,hh_l*0.24)
+    var name_l := Rect2(map_l.end.x+s.x*0.012,hy_l+hh_l*0.31,total_l.position.x-map_l.end.x-s.x*0.024,hh_l*0.16)
+    var chase_l := Rect2(name_l.position.x,name_l.end.y+hh_l*0.03,name_l.size.x,hh_l*0.28)
     var gr: float = h*0.15
     var gc := Vector2(m+gr+h*0.02,h*0.53)
     return {
-        "portrait":false,"header":header_l,"map":map_l,"total":stats_l,"chase":chase_l,
-        "score":Rect2(s.x*0.54-s.x*0.12,h*0.13,s.x*0.24,h*0.14),
+        "portrait":false,"header":header_l,"dead":Rect2(),"map":map_l,"lap":lap_l,
+        "total_label":total_label_l,"total":total_l,"name":name_l,"chase":chase_l,
+        "score":Rect2(s.x*0.60,h*0.03,s.x*0.22,h*0.14),
         "callout":Vector2(s.x*0.5,h*0.36),
         "pause":Rect2(s.x*0.921,h*0.030,s.x*0.057,h*0.125),
         "camera":Rect2(s.x*0.846,h*0.030,s.x*0.062,h*0.125),
@@ -113,6 +129,22 @@ static func metrics(s: Vector2) -> Dictionary:
         "angle":Rect2(gc.x-h*0.06,gc.y+gr+h*0.015,h*0.12,h*0.06),
         "unit":h/700.0
     }
+
+## Neon glow along an arc (the lower-right edge of round controls), same
+## layering as glow_line so circles match the panels.
+static func glow_arc(ci: CanvasItem, centre: Vector2, radius: float, a0: float, a1: float,
+        colour: Color, width: float, intensity: float = 1.0) -> void:
+    var layers: Array = [[7.0,0.05],[4.2,0.10],[2.4,0.24],[1.0,1.0]]
+    for layer in layers:
+        var c: Color = colour
+        c.a = colour.a*float(layer[1])*intensity
+        ci.draw_arc(centre,radius,a0,a1,40,c,width*float(layer[0]),true)
+    ci.draw_arc(centre,radius,a0,a1,40,colour.lerp(Color.WHITE,0.45),width*0.42,true)
+
+## Font size that fits `txt` into `width` (never larger than `size`).
+static func fit_size(txt: String, size: float, width: float, bold: bool = true) -> float:
+    var tw: float = text_width(txt,size,bold)
+    return size if tw <= width else maxf(8.0,size*width/tw)
 
 static func skew_point(p: Vector2, rect: Rect2, skew: float) -> Vector2:
     return Vector2(p.x+(rect.get_center().y-p.y)*skew,p.y)

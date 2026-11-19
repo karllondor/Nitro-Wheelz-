@@ -80,6 +80,53 @@ func _run() -> void:
     if drive.afterfire < 0.9:
         _fail("Lifting off at high revs must open the overrun crackle window")
         return
+    # Tyre squeal: band-limited noise around 0.8-1.3 kHz whose energy is
+    # spread (no single siren tone), and it actually adds that band.
+    var tyre: NitroEngineSynth = SYNTH.new()
+    tyre.rpm = SYNTH.IDLE_RPM
+    tyre.render(4096)
+    var quiet: PackedVector2Array = tyre.render(8192)
+    tyre.squeal = 1.0
+    tyre.render(2048)
+    var loud: PackedVector2Array = tyre.render(8192)
+    var peak_hz: float = 0.0
+    var peak_e: float = 0.0
+    for k in range(41):
+        var hz: float = 700.0+20.0*float(k)
+        var e: float = _goertzel(loud,hz)
+        if e > peak_e:
+            peak_e = e
+            peak_hz = hz
+    # Refine the peak to 1 Hz so a pure tone cannot hide between bins.
+    var coarse: float = peak_hz
+    for k in range(-20,21):
+        var hz2: float = coarse+float(k)
+        var e2: float = _goertzel(loud,hz2)
+        if e2 > peak_e:
+            peak_e = e2
+            peak_hz = hz2
+    if peak_e < 20.0*maxf(_goertzel(quiet,peak_hz),1e-6):
+        _fail("Tyre squeal does not add its ~1 kHz band (peak %.0f Hz)" % peak_hz)
+        return
+    # A siren/sine has almost nothing 45 Hz either side of its peak; a
+    # screech (resonant noise with wandering pitch) does.
+    var side: float = _goertzel(loud,peak_hz-45.0)+_goertzel(loud,peak_hz+45.0)
+    if side < peak_e/40.0:
+        _fail("Tyre squeal is a pure siren tone, not a noisy screech")
+        return
+    # Impact: a low body thud right after the hit.
+    var hit: NitroEngineSynth = SYNTH.new()
+    hit.rpm = SYNTH.IDLE_RPM
+    hit.render(4096)
+    var before_hit: PackedVector2Array = hit.render(3300)
+    hit.impact(1.0)
+    var after_hit: PackedVector2Array = hit.render(3300)
+    var lf: float = _goertzel(after_hit,55.0)+_goertzel(after_hit,70.0)+_goertzel(after_hit,85.0)
+    var mf: float = _goertzel(after_hit,380.0)+_goertzel(after_hit,420.0)+_goertzel(after_hit,460.0)
+    if lf < 5.0*maxf(_goertzel(before_hit,55.0)+_goertzel(before_hit,70.0)+_goertzel(before_hit,85.0),1e-6) \
+            or lf < 6.0*mf:
+        _fail("Wall impact lacks a low body thud (LF "+str(lf)+" vs MF "+str(mf)+")")
+        return
     # Headroom: full load + squeal + impact must not clip.
     synth.rpm = SYNTH.LIMIT_RPM
     synth.load = 1.0
@@ -107,13 +154,21 @@ func _run() -> void:
     if sound.synth.rpm <= 3000.0 or sound.synth.squeal <= 0.1:
         _fail("Drive state did not reach the synth (rpm %.0f squeal %.2f)" % [sound.synth.rpm,sound.synth.squeal])
         return
+    sound.wall_contact(15.0)
+    if sound.synth.scrape_target < 0.5:
+        _fail("Sliding along a wall must drive the scrape layer")
+        return
+    sound.wall_contact(0.0)
+    if sound.synth.scrape_target != 0.0:
+        _fail("Scrape must stop when the car leaves the wall")
+        return
     sound.silence()
     if not sound.synth_muted:
         _fail("Pause/finish must mute the synth")
         return
     sound.queue_free()
     await process_frame
-    print("PASS: gearbox rpm, inline-four ITB firing pitch, uneven idle, shift cut, limiter bounce, overrun crackle, no clipping, controller wiring")
+    print("PASS: gearbox rpm, inline-four ITB firing pitch, uneven idle, shift cut, limiter bounce, overrun crackle, noisy tyre squeal, impact thud, wall scrape, no clipping, controller wiring")
     print("NOT RUN: subjective sound quality on phone speakers/headphones")
     quit(0)
 

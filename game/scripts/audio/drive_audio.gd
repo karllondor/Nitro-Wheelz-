@@ -157,6 +157,12 @@ func wall_event(impact_mps: float) -> void:
         _one_shot("barrier_scrape_heavy",-9.0)
         scrape_cooldown = 1.8
 
+## Continuous body-on-wall contact (sliding speed along the barrier, m/s);
+## 0 when the car is clear of the walls. Drives the synth scrape layer.
+func wall_contact(slide_mps: float) -> void:
+    if synth != null:
+        synth.scrape_target = clampf((slide_mps-1.0)/22.0,0.0,1.0) if slide_mps > 1.0 else 0.0
+
 func kerb_event(speed_kmh: float) -> void:
     if has_source_audio and speed_kmh > 12.0 and roll_cooldown <= 0.0:
         _one_shot("curb_rumble",-16.0)
@@ -170,6 +176,8 @@ func reset() -> void:
         synth.rpm = SYNTH.IDLE_RPM
         synth.load = 0.0
         synth.squeal = 0.0
+        synth.scrape = 0.0
+        synth.scrape_target = 0.0
     previous_gas = 0.0
     previous_handbrake = 0.0
     previous_drifting = false
@@ -185,5 +193,7 @@ func silence() -> void:
     if synth != null:
         synth.rpm = SYNTH.IDLE_RPM
         synth.squeal = 0.0
+        synth.scrape = 0.0
+        synth.scrape_target = 0.0
     for player in voices.values():
         (player as AudioStreamPlayer).volume_db = -56.0
