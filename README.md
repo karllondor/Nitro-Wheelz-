@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.15 OWNER-FEEDBACK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.16 OWNER-FEEDBACK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,7 +51,7 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.15_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.16_Platform and are never overwritten.
 
 
 ## v0.1.9 mobile playtest
@@ -76,6 +76,10 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Physics: approximately 10% reduction to yaw torque contribution and power-oversteer kick relative to v0.1.10. Handbrake flick remains unchanged.
 - Surfaces: source-derived reduced WebP samples from the two provided images (dark asphalt / sand) are tiled on the shared procedural corridor, shoulders and ground using world-space UVs. The lighter textures may repeat at close range until a later visual polish pass.
 - Tests: strict Godot import + tests for playable scenes, touch logic, pause exclusivity, loaded logo texture, asphalt/sand materials, editor Undo/dialog, and date formatting. Physical Android controls and perceived speed require owner approval.
+
+## v0.1.16 — Finish screen redesign
+- Clear full-screen results: big drift points + change vs best, time/rank/best chain, per-lap table, drift stats, your top runs by points with this run highlighted.
+- Smaller, subtle NW engraving on the handbrake.
 
 ## v0.1.15 — Barrier fix, HUD v3, garage studio, tyre/impact sound
 - The whole car body now collides with the barriers (no more driving through them nose-first).

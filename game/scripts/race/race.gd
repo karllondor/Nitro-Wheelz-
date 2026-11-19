@@ -30,6 +30,9 @@ var race_started: bool = false
 var lap: int = 1
 var last_progress: float = 0.0
 var lap_started_at: float = 0.0
+## Per-lap results for the finish screen: {"time": s, "score": banked pts}.
+var lap_splits: Array[Dictionary] = []
+var lap_score_at_start: int = 0
 var lap_score: int = 0
 var scorer: NitroDriftScorer = SCORER.new()
 var active_drift_points: int = 0
@@ -314,7 +317,8 @@ func _show_results() -> void:
     view.show_race(track.track_id,track.display_name,time_elapsed,lap_score,target,
         Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
         {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
-        "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost})
+        "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
+        "laps":lap_splits.duplicate(true)})
 
 func _wall_feedback(impact_speed: float) -> void:
     if collision_cooldown > 0.0:
@@ -336,15 +340,19 @@ func _lap_logic(progress: float, tangent: Vector2, _delta: float) -> void:
     # Count only a forward finish-line crossing after sufficient driving time.
     if last_progress > 0.94 and progress < 0.06 and time_elapsed-lap_started_at > 7.0:
         if model.velocity.dot(tangent) > 1.5:
+            if lap >= 3:
+                # Bank the running chain so the final corner still counts.
+                scorer.bank()
+                lap_score = scorer.total
+            lap_splits.append({"time":time_elapsed-lap_started_at,
+                "score":maxi(0,scorer.total-lap_score_at_start)})
+            lap_score_at_start = scorer.total
             lap += 1
             lap_started_at = time_elapsed
             if lap > 3:
                 lap = 3
                 finished = true
                 model.velocity = Vector2.ZERO
-                # Bank the running chain so the final corner still counts.
-                scorer.bank()
-                lap_score = scorer.total
     last_progress = progress
 
 func _drift_scoring(dt: float, edge_distance: float) -> void:
@@ -581,6 +589,8 @@ func _restart() -> void:
     lap = 1
     last_progress = 0.0
     lap_started_at = 0.0
+    lap_splits.clear()
+    lap_score_at_start = 0
     lap_score = 0
     scorer.reset()
     active_drift_points = 0

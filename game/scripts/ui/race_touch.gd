@@ -220,15 +220,16 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
         var bolt := Vector2(cx+side*base.size.x*0.32,base.position.y+base.size.y*0.17)
         draw_circle(bolt,w*0.045,Color(0.55,0.56,0.60))
         draw_circle(bolt+Vector2(-1,-1)*w*0.012,w*0.026,Color(0.92,0.93,0.96))
-    # Owner's NW initials ENGRAVED into the base plate: brushed-metal cut,
-    # dark lip above-left and a light catch below-right (pressed-in look).
-    var logo_h: float = base.size.y*0.44
+    # Owner's NW initials as a small, delicate engraving in the base plate:
+    # a shade lighter than the plate, hairline dark lip above-left and a
+    # faint light catch below-right.
+    var logo_h: float = base.size.y*0.30
     var logo_w: float = logo_h*float(NW_MASK.get_width())/float(NW_MASK.get_height())
-    var logo := Rect2(Vector2(cx,base.position.y+base.size.y*0.60)-Vector2(logo_w,logo_h)*0.5,Vector2(logo_w,logo_h))
-    var lip: float = maxf(1.0,1.3*u)
-    draw_texture_rect(NW_MASK,Rect2(logo.position+Vector2(lip,lip),logo.size),false,Color(1,1,1,0.20))
-    draw_texture_rect(NW_MASK,Rect2(logo.position-Vector2(lip,lip),logo.size),false,Color(0,0,0,0.90))
-    draw_texture_rect(NW_MASK,logo,false,Color(0.46,0.47,0.51) if not pressed else Color(0.56,0.57,0.62))
+    var logo := Rect2(Vector2(cx,base.position.y+base.size.y*0.62)-Vector2(logo_w,logo_h)*0.5,Vector2(logo_w,logo_h))
+    var lip: float = maxf(0.75,0.8*u)
+    draw_texture_rect(NW_MASK,Rect2(logo.position+Vector2(lip,lip),logo.size),false,Color(1,1,1,0.10))
+    draw_texture_rect(NW_MASK,Rect2(logo.position-Vector2(lip,lip),logo.size),false,Color(0,0,0,0.55))
+    draw_texture_rect(NW_MASK,logo,false,Color(0.24,0.245,0.27) if not pressed else Color(0.30,0.305,0.33))
     # Chrome shaft (three vertical strips fake a cylinder).
     var shaft_top: float = y+h*0.34+pull
     var shaft_bottom: float = base.position.y+base.size.y*0.06

@@ -1,13 +1,28 @@
 extends Control
 class_name NitroRaceResults
-## Local-only three-lap race history. No network leaderboard or fabricated ranks.
+## Full-screen finish screen + local-only history (no network leaderboard,
+## no fabricated ranks). Redesigned v0.1.16 for owner feedback ("hard to
+## read, you don't know where to look"): one clear hierarchy, top to bottom
+##   1. track + FINISHED / NEW BEST + stars
+##   2. hero card: DRIFT POINTS (biggest number) and the change vs your best,
+##      then TIME / RANK / BEST CHAIN
+##   3. LAPS: time + points per lap with bars, best lap marked
+##   4. drift stat chips
+##   5. YOUR TOP RUNS on this track (by points), this run highlighted
+##   6. RESTART / GARAGE buttons
+## Everything is drawn with the HUD style (glass panels, accent neon).
 const STORAGE: String = "user://nitro_local_runs.json"
 const STYLE = preload("res://scripts/ui/hud_style.gd")
-const GOLD: Color = Color(1.0,0.78,0.26)
-const WHITE: Color = Color(0.97,0.97,0.99)
-const MUTED: Color = Color(0.68,0.71,0.78)
+const GOOD := Color(0.36,0.95,0.58)
+const BAD := Color(1.0,0.45,0.45)
+const SILVER := Color(0.80,0.83,0.90)
+const BRONZE := Color(0.86,0.55,0.30)
+
 var replay: Callable
 var garage: Callable
+var data: Dictionary = {}
+var canvas: Control
+var buttons: Array[Button] = []
 
 static func star_count(track_id: String,seconds: float,target: float) -> int:
     var times: Array[float] = []
@@ -31,15 +46,19 @@ static func read_runs() -> Array:
         return raw
     return []
 
-static func save_run(track_id: String,seconds: float,score: int,stars: int) -> bool:
+static func save_run(track_id: String,seconds: float,score: int,stars: int,
+        laps: Array = [],date: String = "") -> bool:
     var runs: Array = read_runs()
-    runs.append({
+    var record: Dictionary = {
         "track_id":track_id,
         "seconds":snappedf(seconds,0.01),
         "score":score,
         "stars":stars,
-        "date":Time.get_datetime_string_from_system()
-    })
+        "date":date if not date.is_empty() else Time.get_datetime_string_from_system()
+    }
+    if not laps.is_empty():
+        record["laps"] = laps
+    runs.append(record)
     if runs.size() > 250:
         runs.pop_front()
     var f: FileAccess = FileAccess.open(STORAGE,FileAccess.WRITE)
@@ -56,9 +75,19 @@ static func track_runs(track_id: String) -> Array:
             matches.append(item)
     return matches
 
+## Fastest first (kept for the time-based stars and older tests).
 static func sorted_local(track_id: String) -> Array:
     var entries: Array = track_runs(track_id)
     entries.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return float(a["seconds"]) < float(b["seconds"]))
+    return entries
+
+## Drift ranking: most points first, faster time breaks ties.
+static func sorted_by_score(track_id: String) -> Array:
+    var entries: Array = track_runs(track_id)
+    entries.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        if int(a["score"]) != int(b["score"]):
+            return int(a["score"]) > int(b["score"])
         return float(a["seconds"]) < float(b["seconds"]))
     return entries
 
@@ -78,100 +107,326 @@ static func clock(seconds: float) -> String:
     var mins: int = int(seconds/60.0)
     return "%d:%05.2f" % [mins,fmod(seconds,60.0)]
 
+static func points(value: int) -> String:
+    var digits: String = str(absi(value))
+    var out: String = ""
+    while digits.length() > 3:
+        out = ","+digits.substr(digits.length()-3,3)+out
+        digits = digits.substr(0,digits.length()-3)
+    return ("-" if value < 0 else "")+digits+out
+
+## Everything the screen shows, computed once (also used by tests).
+static func summarize(track_id: String,track_name: String,seconds: float,score: int,
+        stars: int,previous: Array,current: Array,stamp: String,stats: Dictionary) -> Dictionary:
+    var prior_best_score: int = -1
+    var prior_best_time: float = INF
+    for run in previous:
+        prior_best_score = maxi(prior_best_score,int(run["score"]))
+        prior_best_time = minf(prior_best_time,float(run["seconds"]))
+    var ranked: Array = current.duplicate()
+    ranked.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        if int(a["score"]) != int(b["score"]):
+            return int(a["score"]) > int(b["score"])
+        return float(a["seconds"]) < float(b["seconds"]))
+    var rank: int = -1
+    for i in range(ranked.size()):
+        var r: Dictionary = ranked[i]
+        if str(r.get("date","")) == stamp and int(r["score"]) == score \
+                and absf(float(r["seconds"])-snappedf(seconds,0.01)) < 0.005:
+            rank = i+1
+            break
+    var laps: Array = stats.get("laps",[])
+    var best_lap: int = -1
+    for i in range(laps.size()):
+        if best_lap < 0 or float(laps[i]["time"]) < float(laps[best_lap]["time"]):
+            best_lap = i
+    return {
+        "track_id":track_id,"track_name":track_name,"seconds":seconds,"score":score,
+        "stars":stars,"first_run":previous.is_empty(),
+        "prior_best_score":prior_best_score,"prior_best_time":prior_best_time,
+        "new_best":previous.is_empty() or score > prior_best_score,
+        "faster":seconds < prior_best_time,
+        "rank":rank,"runs":ranked.size(),"top":ranked.slice(0,5),
+        "this_run":{"seconds":snappedf(seconds,0.01),"score":score,"stars":stars,"date":stamp},
+        "laps":laps,"best_lap":best_lap,"stats":stats
+    }
+
 func show_race(track_id: String,track_name: String,seconds: float,score: int,
         target: float,on_replay: Callable,on_garage: Callable,stats: Dictionary = {}) -> void:
     replay = on_replay
     garage = on_garage
+    STYLE.ensure_settings()
     mouse_filter = Control.MOUSE_FILTER_STOP
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var stars: int = star_count(track_id,seconds,target)
-    var previous: Array = sorted_local(track_id)
-    var prior_best: float = float(previous[0]["seconds"]) if not previous.is_empty() else INF
-    var stored: bool = save_run(track_id,seconds,score,stars)
-    var current: Array = sorted_local(track_id)
+    var previous: Array = track_runs(track_id)
+    var stamp: String = Time.get_datetime_string_from_system()
+    var stored: bool = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp)
+    data = summarize(track_id,track_name,seconds,score,stars,previous,track_runs(track_id),stamp,stats)
+    data["stored"] = stored
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/720.0,0.85,1.85)
-
+    theme = STYLE.screen_theme(sc)
     var shade := ColorRect.new()
-    shade.color = Color(0.008,0.012,0.020,0.94)
+    shade.color = Color(0.008,0.010,0.018,0.96)
     shade.mouse_filter = Control.MOUSE_FILTER_STOP
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(shade)
+    canvas = Control.new()
+    canvas.name = "Results board"
+    canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    canvas.draw.connect(_draw_board)
+    add_child(canvas)
+    var lay: Dictionary = layout(s)
+    _action("RESTART",Rect2(lay["restart"]),replay,float(lay["u"]),true)
+    _action("GARAGE / MENU",Rect2(lay["menu"]),garage,float(lay["u"]),false)
 
-    var scroll := ScrollContainer.new()
-    scroll.position = Vector2(s.x*0.035,s.y*0.035)
-    scroll.size = Vector2(s.x*0.93,s.y*0.93)
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    add_child(scroll)
-    var panel := PanelContainer.new()
-    panel.custom_minimum_size.x = s.x*0.91
-    panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
-    theme = STYLE.screen_theme(sc)
-    scroll.add_child(panel)
-    var padding := MarginContainer.new()
-    for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
-        padding.add_theme_constant_override(side,int(23.0*sc))
-    panel.add_child(padding)
-    var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation",int(10.0*sc))
-    padding.add_child(v)
-
-    _label(v,"NITRO WHEELZ  •  "+track_name.to_upper(),17,MUTED,sc)
-    _label(v,("THREE STARS" if stars == 3 else "FINISHED"),35,WHITE,sc)
-    var glyph: String = "★".repeat(stars)+"☆".repeat(3-stars)
-    _label(v,glyph,33,GOLD,sc)
-    _label(v,clock(seconds),64,WHITE,sc)
-    var difference: String = "FIRST RECORDED RUN" if previous.is_empty() else (
-        "NEW PERSONAL BEST" if seconds < prior_best else "+%.2f s VS BEST" % (seconds-prior_best))
-    _label(v,difference,19,MUTED,sc)
-    _label(v,"%d DRIFT POINTS  •  THREE LAPS" % score,21,STYLE.PINK,sc)
-    if not stats.is_empty():
-        _label(v,"BEST CHAIN %d  •  %d TRANSITIONS  •  %d KERB CLIPS  •  %d CHAINS LOST" % [
-            int(stats.get("best_chain",0)),int(stats.get("transitions",0)),
-            int(stats.get("kerb_clips",0)),int(stats.get("chains_lost",0))],15,MUTED,sc)
-    if track_id != "benchmark_oval":
-        _label(v,"Stars: provisional local practice thresholds",15,MUTED,sc)
-    if not stored:
-        _label(v,"WARNING: run could not be saved on this device",17,Color(1.0,0.43,0.43),sc)
-    _label(v,"LOCAL LEADERBOARD  •  THIS DEVICE ONLY",23,WHITE,sc)
-    var local_rank: int = -1
-    for index in range(current.size()):
-        var run: Dictionary = current[index]
-        if float(run["seconds"]) == snappedf(seconds,0.01) and int(run["score"]) == score and local_rank == -1:
-            local_rank = index+1
-    _label(v,("#%d of %d runs" % [local_rank,current.size()]) if local_rank > 0 else "No stored runs",23,GOLD,sc)
-    for i in range(mini(5,current.size())):
-        var item: Dictionary = current[i]
-        _label(v,"%02d   %s   %s   %d PTS" % [i+1,clock(float(item["seconds"])),
-            "★".repeat(int(item.get("stars",0))),int(item["score"])],17,WHITE,sc)
-    _label(v,"RECENT DRIVES",22,WHITE,sc)
-    var latest: Array = track_runs(track_id)
-    latest.reverse()
-    for i in range(mini(5,latest.size())):
-        var item: Dictionary = latest[i]
-        _label(v,"%s    %d PTS    %s" % [clock(float(item["seconds"])),
-            int(item["score"]),short_date(str(item.get("date","")))],15,MUTED,sc)
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation",int(12.0*sc))
-    v.add_child(row)
-    _action(row,"RESTART",replay,sc)
-    _action(row,"GARAGE / MENU",garage,sc)
-    _label(v,"LOCAL SAVE • NO ONLINE RANKING • v"+str(ProjectSettings.get_setting("application/config/version","?")),13,MUTED,sc)
-
-func _label(parent: Node,txt: String,size: int,col: Color,scale: float) -> void:
-    var l := Label.new()
-    l.text = txt
-    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    l.add_theme_font_size_override("font_size",int(size*scale))
-    l.add_theme_color_override("font_color",col)
-    parent.add_child(l)
-
-func _action(parent: HBoxContainer,label: String,callback: Callable,scale: float) -> void:
+func _action(label: String,rect: Rect2,callback: Callable,u: float,primary: bool) -> void:
     var button := Button.new()
     button.text = label
-    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    button.custom_minimum_size.y = 58.0*scale
-    button.add_theme_font_size_override("font_size",int(19.0*scale))
-    STYLE.style_button(button,scale)
+    button.position = rect.position
+    button.size = rect.size
+    button.add_theme_font_size_override("font_size",int(26.0*u))
+    STYLE.style_button(button,u,primary)
     button.pressed.connect(callback)
-    parent.add_child(button)
+    add_child(button)
+    button.size = rect.size
+    buttons.append(button)
+
+# --------------------------------------------------------------- layout
+
+## Section rectangles. Portrait: one column, scaled down uniformly when the
+## screen is short. Landscape: summary left, laps + top runs right.
+func layout(s: Vector2) -> Dictionary:
+    var portrait: bool = s.y >= s.x
+    var lay: Dictionary = {}
+    if portrait:
+        # Designed on a 1000-unit wide column, 2140 units tall.
+        var k: float = minf(s.x*0.94/1000.0,s.y*0.97/2140.0)
+        var x0: float = (s.x-1000.0*k)*0.5
+        var y0: float = maxf((s.y-2140.0*k)*0.5,s.y*0.02)
+        var R := func(x: float,y: float,w: float,h: float) -> Rect2:
+            return Rect2(x0+x*k,y0+y*k,w*k,h*k)
+        lay = {"title":R.call(0,40,1000,150),"hero":R.call(0,215,1000,470),
+            "laps":R.call(0,725,1000,420),"chips":R.call(0,1175,1000,130),
+            "top":R.call(0,1345,1000,570),"restart":R.call(0,1950,580,150),
+            "menu":R.call(610,1950,390,150),"u":k*1000.0/700.0,"k":k}
+    else:
+        var k2: float = minf(s.x*0.46/1000.0,s.y*0.93/1080.0)
+        var col: float = 1000.0*k2
+        var gap: float = s.x*0.03
+        var xl: float = (s.x-2.0*col-gap)*0.5
+        var xr: float = xl+col+gap
+        var yt: float = (s.y-1080.0*k2)*0.5
+        var L := func(x: float,y: float,w: float,h: float) -> Rect2:
+            return Rect2(xl+x*k2,yt+y*k2,w*k2,h*k2)
+        var Rr := func(x: float,y: float,w: float,h: float) -> Rect2:
+            return Rect2(xr+x*k2,yt+y*k2,w*k2,h*k2)
+        lay = {"title":L.call(0,0,1000,150),"hero":L.call(0,175,1000,470),
+            "chips":L.call(0,680,1000,130),"restart":L.call(0,860,580,150),
+            "menu":L.call(610,860,390,150),
+            "laps":Rr.call(0,0,1000,420),"top":Rr.call(0,450,1000,570),
+            "u":k2*1000.0/700.0,"k":k2}
+    return lay
+
+# ---------------------------------------------------------------- drawing
+
+func _draw_board() -> void:
+    if data.is_empty():
+        return
+    var s: Vector2 = get_viewport_rect().size
+    var lay: Dictionary = layout(s)
+    var k: float = float(lay["k"])
+    var u: float = float(lay["u"])
+    _title(Rect2(lay["title"]),k,u)
+    _hero(Rect2(lay["hero"]),k,u)
+    _laps(Rect2(lay["laps"]),k,u)
+    _chips(Rect2(lay["chips"]),k,u)
+    _top_runs(Rect2(lay["top"]),k,u)
+    var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS: PRACTICE TIME TARGETS  •  v"+str(
+        ProjectSettings.get_setting("application/config/version","?"))
+    if not bool(data.get("stored",true)):
+        foot = "WARNING: THIS RUN COULD NOT BE SAVED ON THIS DEVICE"
+    var menu: Rect2 = lay["menu"]
+    STYLE.text(canvas,Vector2(Rect2(lay["restart"]).position.x,menu.end.y+34.0*k),foot,22.0*k,
+        STYLE.DIM if bool(data.get("stored",true)) else BAD,HORIZONTAL_ALIGNMENT_CENTER,
+        menu.end.x-Rect2(lay["restart"]).position.x,false)
+
+func _title(r: Rect2, k: float, u: float) -> void:
+    var c: Control = canvas
+    STYLE.text(c,Vector2(r.position.x,r.position.y+38.0*k),
+        str(data["track_name"]).to_upper()+"  •  3 LAPS",30.0*k,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.62,false)
+    var headline: String = "NEW BEST!" if bool(data["new_best"]) and not bool(data["first_run"]) else (
+        "FIRST RUN" if bool(data["first_run"]) else "FINISHED")
+    STYLE.text(c,Vector2(r.position.x,r.position.y+122.0*k),headline,78.0*k,
+        STYLE.GOLD if headline == "NEW BEST!" else STYLE.WHITE)
+    var stars: int = int(data["stars"])
+    for i in range(3):
+        STYLE.star(c,Vector2(r.end.x-(3-i)*92.0*k+40.0*k,r.position.y+82.0*k),38.0*k,i < stars,u)
+
+func _hero(r: Rect2, k: float, u: float) -> void:
+    var c: Control = canvas
+    STYLE.panel(c,r,u,22.0,0.0,true,1.4)
+    var score: int = int(data["score"])
+    STYLE.text(c,Vector2(r.position.x,r.position.y+62.0*k),"DRIFT POINTS",30.0*k,STYLE.MUTED,
+        HORIZONTAL_ALIGNMENT_CENTER,r.size.x,false)
+    var big: String = points(score)
+    var size: float = STYLE.fit_size(big,190.0*k,r.size.x*0.9)
+    # Soft accent glow behind the main number.
+    var glow := Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.028)
+    for g in range(4):
+        c.draw_circle(Vector2(r.get_center().x,r.position.y+175.0*k),(190.0-40.0*float(g))*k,glow)
+    STYLE.text(c,Vector2(r.position.x,r.position.y+238.0*k),big,size,STYLE.WHITE,
+        HORIZONTAL_ALIGNMENT_CENTER,r.size.x)
+    var delta_txt: String
+    var delta_col: Color
+    if bool(data["first_run"]):
+        delta_txt = "FIRST RUN ON THIS TRACK  •  SET THE BENCHMARK"
+        delta_col = STYLE.PINK_SOFT
+    elif bool(data["new_best"]):
+        delta_txt = "▲ +%s PTS  •  NEW PERSONAL BEST" % points(score-int(data["prior_best_score"]))
+        delta_col = STYLE.GOLD
+    else:
+        delta_txt = "%s PTS TO YOUR BEST (%s)" % [points(int(data["prior_best_score"])-score),
+            points(int(data["prior_best_score"]))]
+        delta_col = BAD
+    STYLE.text(c,Vector2(r.position.x,r.position.y+300.0*k),delta_txt,
+        STYLE.fit_size(delta_txt,32.0*k,r.size.x*0.9),delta_col,HORIZONTAL_ALIGNMENT_CENTER,r.size.x,true)
+    # Divider + three facts.
+    var yl: float = r.position.y+335.0*k
+    c.draw_line(Vector2(r.position.x+40.0*k,yl),Vector2(r.end.x-40.0*k,yl),Color(1,1,1,0.10),2.0*k)
+    var cols: float = r.size.x/3.0
+    var secs: float = float(data["seconds"])
+    var time_sub: String = ""
+    var time_col: Color = STYLE.MUTED
+    if not bool(data["first_run"]):
+        var d: float = secs-float(data["prior_best_time"])
+        time_sub = ("-%.2f s BEST" % absf(d)) if d < 0.0 else ("+%.2f s" % d)
+        time_col = GOOD if d < 0.0 else STYLE.MUTED
+    var rank: int = int(data["rank"])
+    var facts: Array = [
+        ["TIME",clock(secs),time_sub,time_col],
+        ["RANK","#%d" % rank if rank > 0 else "-","OF %d RUNS" % int(data["runs"]),STYLE.MUTED],
+        ["BEST CHAIN",points(int((data["stats"] as Dictionary).get("best_chain",0))),"PTS",STYLE.MUTED]]
+    for i in range(3):
+        var f: Array = facts[i]
+        var x: float = r.position.x+cols*float(i)
+        STYLE.text(c,Vector2(x,yl+38.0*k),str(f[0]),22.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_CENTER,cols,false)
+        STYLE.text(c,Vector2(x,yl+92.0*k),str(f[1]),STYLE.fit_size(str(f[1]),50.0*k,cols*0.9),
+            STYLE.GOLD if i == 1 and rank == 1 else STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,cols)
+        STYLE.text(c,Vector2(x,yl+124.0*k),str(f[2]),21.0*k,f[3],HORIZONTAL_ALIGNMENT_CENTER,cols,false)
+        if i > 0:
+            c.draw_line(Vector2(x,yl+18.0*k),Vector2(x,yl+122.0*k),Color(1,1,1,0.08),2.0*k)
+
+func _section(r: Rect2, title: String, note: String, k: float) -> float:
+    var c: Control = canvas
+    c.draw_rect(Rect2(r.position.x,r.position.y+8.0*k,8.0*k,34.0*k),STYLE.PINK)
+    STYLE.text(c,Vector2(r.position.x+24.0*k,r.position.y+38.0*k),title,36.0*k,STYLE.WHITE)
+    if not note.is_empty():
+        STYLE.text(c,Vector2(r.position.x,r.position.y+38.0*k),note,22.0*k,STYLE.DIM,
+            HORIZONTAL_ALIGNMENT_RIGHT,r.size.x,false)
+    return r.position.y+64.0*k
+
+func _laps(r: Rect2, k: float, u: float) -> void:
+    var c: Control = canvas
+    var laps: Array = data["laps"]
+    var y: float = _section(r,"LAPS","TIME  •  POINTS",k)
+    var box := Rect2(r.position.x,y,r.size.x,r.end.y-y)
+    STYLE.panel(c,box,u,18.0,0.0,false,0.0)
+    if laps.is_empty():
+        STYLE.text(c,Vector2(box.position.x,box.get_center().y+12.0*k),"LAP SPLITS NOT RECORDED FOR THIS RUN",
+            26.0*k,STYLE.MUTED,HORIZONTAL_ALIGNMENT_CENTER,box.size.x,false)
+        return
+    var max_pts: int = 1
+    for l in laps:
+        max_pts = maxi(max_pts,int(l["score"]))
+    var row_h: float = box.size.y/float(maxi(laps.size(),3))
+    var best: int = int(data["best_lap"])
+    for i in range(laps.size()):
+        var l: Dictionary = laps[i]
+        var ry: float = box.position.y+row_h*float(i)
+        var cy: float = ry+row_h*0.5
+        if i > 0:
+            c.draw_line(Vector2(box.position.x+24.0*k,ry),Vector2(box.end.x-24.0*k,ry),Color(1,1,1,0.07),2.0*k)
+        STYLE.text(c,Vector2(box.position.x+30.0*k,cy+14.0*k),"LAP %d" % (i+1),36.0*k,STYLE.WHITE)
+        var is_best: bool = i == best and laps.size() > 1
+        STYLE.text(c,Vector2(box.position.x+210.0*k,cy+14.0*k),clock(float(l["time"])),36.0*k,
+            STYLE.GOLD if is_best else STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,is_best)
+        if is_best:
+            STYLE.text(c,Vector2(box.position.x+210.0*k,cy+42.0*k),"FASTEST LAP",17.0*k,STYLE.GOLD,
+                HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+        # Points bar.
+        var bx: float = box.position.x+440.0*k
+        var bw: float = box.end.x-bx-200.0*k
+        var bh: float = 18.0*k
+        var bar := Rect2(bx,cy-bh*0.5,bw,bh)
+        c.draw_rect(bar,Color(1,1,1,0.07))
+        var f: float = clampf(float(l["score"])/float(max_pts),0.0,1.0)
+        if f > 0.0:
+            c.draw_rect(Rect2(bar.position,Vector2(bw*f,bh)),STYLE.PINK)
+            c.draw_rect(Rect2(bar.position,Vector2(bw*f,bh*0.35)),Color(1,1,1,0.22))
+        STYLE.text(c,Vector2(box.end.x-190.0*k,cy+14.0*k),points(int(l["score"])),36.0*k,STYLE.WHITE,
+            HORIZONTAL_ALIGNMENT_RIGHT,170.0*k)
+
+func _chips(r: Rect2, k: float, u: float) -> void:
+    var c: Control = canvas
+    var st: Dictionary = data["stats"]
+    var chips: Array = [["TRANSITIONS",int(st.get("transitions",0)),STYLE.WHITE],
+        ["KERB CLIPS",int(st.get("kerb_clips",0)),STYLE.WHITE],
+        ["CHAINS LOST",int(st.get("chains_lost",0)),BAD if int(st.get("chains_lost",0)) > 0 else STYLE.WHITE]]
+    var gap: float = 22.0*k
+    var w: float = (r.size.x-gap*2.0)/3.0
+    for i in range(3):
+        var chip := Rect2(r.position.x+(w+gap)*float(i),r.position.y,w,r.size.y)
+        STYLE.panel(c,chip,u,16.0,STYLE.SKEW,i == 0,0.5)
+        var ch: Array = chips[i]
+        STYLE.text(c,Vector2(chip.position.x,chip.position.y+66.0*k),str(ch[1]),54.0*k,ch[2],
+            HORIZONTAL_ALIGNMENT_CENTER,chip.size.x)
+        STYLE.text(c,Vector2(chip.position.x,chip.position.y+106.0*k),str(ch[0]),21.0*k,STYLE.MUTED,
+            HORIZONTAL_ALIGNMENT_CENTER,chip.size.x,false)
+
+func _top_runs(r: Rect2, k: float, u: float) -> void:
+    var c: Control = canvas
+    var y: float = _section(r,"YOUR TOP RUNS","THIS TRACK  •  BY POINTS",k)
+    var box := Rect2(r.position.x,y,r.size.x,r.end.y-y)
+    STYLE.panel(c,box,u,18.0,0.0,false,0.0)
+    # Column positions (units of the 1000-wide design).
+    var cx: Array[float] = [30.0,150.0,480.0,700.0,810.0]
+    var hy: float = box.position.y+40.0*k
+    var heads: Array[String] = ["#","POINTS","TIME","","DATE"]
+    for i in range(heads.size()):
+        STYLE.text(c,Vector2(box.position.x+cx[i]*k,hy),heads[i],20.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+    var rows: Array = (data["top"] as Array).duplicate()
+    var rank: int = int(data["rank"])
+    var extra: bool = rank > rows.size()
+    if extra:
+        rows.append(data["this_run"])
+    var row_h: float = (box.end.y-hy-14.0*k)/6.0
+    for i in range(rows.size()):
+        var run: Dictionary = rows[i]
+        var ry: float = hy+14.0*k+row_h*float(i)
+        var place: int = rank if (extra and i == rows.size()-1) else i+1
+        var mine: bool = place == rank
+        var row := Rect2(box.position.x+12.0*k,ry+4.0*k,box.size.x-24.0*k,row_h-8.0*k)
+        if mine:
+            var fill := Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.20)
+            c.draw_rect(row,fill)
+            c.draw_rect(Rect2(row.position,Vector2(6.0*k,row.size.y)),STYLE.PINK)
+        if extra and i == rows.size()-1:
+            STYLE.text(c,Vector2(box.position.x,ry-2.0*k),"• • •",18.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_CENTER,box.size.x,false)
+        var ty: float = row.get_center().y+13.0*k
+        var medal: Color = STYLE.GOLD if place == 1 else (SILVER if place == 2 else (BRONZE if place == 3 else STYLE.MUTED))
+        if place <= 3:
+            c.draw_circle(Vector2(box.position.x+52.0*k,row.get_center().y),24.0*k,Color(medal.r,medal.g,medal.b,0.22))
+        STYLE.text(c,Vector2(box.position.x+cx[0]*k,ty),str(place),32.0*k,medal,HORIZONTAL_ALIGNMENT_CENTER,46.0*k)
+        STYLE.text(c,Vector2(box.position.x+cx[1]*k,ty),points(int(run["score"])),38.0*k,
+            STYLE.WHITE if mine or place == 1 else Color(0.90,0.90,0.94))
+        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),clock(float(run["seconds"])),30.0*k,STYLE.MUTED,
+            HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+        var n_st: int = int(run.get("stars",0))
+        for si in range(3):
+            STYLE.star(c,Vector2(box.position.x+(cx[3]+14.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
+        var when: String = "THIS RUN" if mine else short_date(str(run.get("date","")))
+        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),when,22.0*k,STYLE.PINK_SOFT if mine else STYLE.DIM,
+            HORIZONTAL_ALIGNMENT_LEFT,-1.0,mine)

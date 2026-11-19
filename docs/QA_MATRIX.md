@@ -21,6 +21,14 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.16 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 17 Godot tests incl. new results_screen_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Negative controls: rank by time, missing lap splits | Linux container | PASS (test FAILs) | local run |
+| Finish screen stills portrait 720x1600 + landscape 1280x720, handbrake close-up | Xvfb + llvmpipe | RENDERED, NOT DEVICE | tests/capture_visuals.gd `results` |
+| Finish screen readability on the owner's phone | Physical Android | NOT RUN | owner to confirm |
+
 ## v0.1.15 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

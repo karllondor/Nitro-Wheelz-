@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.15 barrier fix / HUD v3 / garage studio / tyre + impact sound (not released)
+# Nitro Wheelz — v0.1.16 finish screen redesign (not released)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -50,7 +50,13 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - Audio: engine_synth.gd squeal/impact/scrape rewritten; drive_audio.wall_contact(); race.gd feeds wall slide speed.
 - NOT RUN: Android check of the camera keep-out on the owner's phone, sounds on speakers.
 
+## OWNER FEEDBACK PASS 4 (v0.1.16)
+- race_results.gd rewritten: drawn board (layout() section rects, portrait single column scaled to fit, landscape two columns), static summarize() for the data, sorted_by_score(), points(); save_run() takes optional laps + date. sorted_local() (by time) kept.
+- race.gd records lap_splits (time + banked points per lap) and passes stats["laps"].
+- race_touch.gd: smaller, subtle NW engraving.
+- New game/tests/results_screen_test.gd registered; capture_visuals.gd `results` shot (seeded capture-only history, cleaned up afterwards).
+
 ## NEXT ACTION
-1. Owner installs the v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

@@ -8,7 +8,7 @@ extends SceneTree
 ##       --rendering-driver opengl3 --resolution 720x1600 \
 ##       --script res://tests/capture_visuals.gd -- /abs/output/dir [shots...]
 ## Shots: race_drift race_start race_chase garage_red garage_white menu editor
-##        editor_help race_pause race_accent builder_partial builder_loop race_built
+##        editor_help race_pause race_accent results builder_partial builder_loop race_built
 
 var out_dir: String = "user://captures"
 var shots: PackedStringArray = PackedStringArray([
@@ -47,6 +47,8 @@ func _run() -> void:
             "editor_help":
                 load("res://scripts/ui/track_editor.gd").set_help_hidden(false)
                 await _scene_shot(shot,"res://scenes/track_editor.tscn")
+            "results":
+                await _results_shot(shot)
             "race_pause":
                 await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,false,true)
             "race_accent":
@@ -164,4 +166,32 @@ func _scene_shot(name: String,path: String,after_ready: String = "") -> void:
         await process_frame
     await _save(name)
     node.queue_free()
+    await process_frame
+
+## Finish screen with a seeded local history (capture-only track id).
+func _results_shot(name: String) -> void:
+    var results_script = load("res://scripts/ui/race_results.gd")
+    var id: String = "capture_results_track"
+    var history: Array = [[61.2,7105,2],[59.71,7259,3],[54.24,2460,3],[63.22,3588,2],[84.22,1995,1],[70.1,5120,2]]
+    for h in history:
+        results_script.save_run(id,float(h[0]),int(h[1]),int(h[2]),[],"2026-11-19T10:%02d:00" % randi_range(10,59))
+    var layer := CanvasLayer.new()
+    root.add_child(layer)
+    var view: Control = results_script.new()
+    layer.add_child(view)
+    view.show_race(id,"Sweepers",61.92,7680,90.0,func(): pass,func(): pass,
+        {"best_chain":956,"transitions":5,"kerb_clips":13,"chains_lost":2,
+        "laps":[{"time":21.84,"score":2210},{"time":19.66,"score":2890},{"time":20.42,"score":2580}]})
+    for i in range(4):
+        await process_frame
+    await _save(name)
+    layer.queue_free()
+    # Leave no capture history behind.
+    var keep: Array = []
+    for run in results_script.read_runs():
+        if str(run.get("track_id","")) != id:
+            keep.append(run)
+    var f := FileAccess.open(results_script.STORAGE,FileAccess.WRITE)
+    f.store_string(JSON.stringify(keep,"  "))
+    f.close()
     await process_frame
