@@ -36,8 +36,8 @@ func _run() -> void:
     var initial_orientation: Vector3 = overhead.global_transform.basis.z
     model.heading = PI*0.72
     race._update_camera(0.15)
-    if initial_orientation.dot(overhead.global_transform.basis.z) < 0.9999:
-        _fail("Top-down world rotated along car heading")
+    if initial_orientation.dot(overhead.global_transform.basis.z) > 0.995:
+        _fail("Drone follow view did not respond to heading")
         return
     var lateral: Vector3 = race._camera_lead_target(Vector2(18,0))
     if lateral.x < 7.0 or absf(lateral.z) > 0.001:
@@ -53,10 +53,10 @@ func _run() -> void:
     if overhead.size >= far_size:
         _fail("Braking does not bring camera back towards car")
         return
-    if chase.fov < 65.0 or chase.fov > 78.0:
+    if chase.fov < 75.0 or chase.fov > 84.0:
         _fail("Chase FOV outside intended playtest bounds")
         return
-    print("PASS: dynamic Camera3D zoom, acceleration/braking smoothing, true-velocity lookahead and north-up orientation")
+    print("PASS: dynamic Camera3D zoom, acceleration/braking smoothing, true-velocity lookahead and drone-follow orientation")
     print("NOT RUN: real handset visibility, chase occlusion by decorative scenery")
     race.queue_free()
     quit(0)

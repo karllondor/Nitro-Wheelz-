@@ -1,3 +1,50 @@
+## [0.1.11] — Brand, one modal per action, Undo, asphalt/sand textures
+- Logo vector trace from user image (white NITRO, purple WHEELZ, yellow crown) at top of menu and editor; dark/purple/gold themed controls.
+- New exclusive PAUSE CanvasLayer with RESUME, RESTART, GARAGE; old HUD/touch overlapping PAUSED/RESTART popups removed. FINISHED stays separate.
+- Local results display concise day/month and HH:MM; underlying ISO timestamps remain untouched.
+- Editor supports 48-step undo for drag, new, add/remove and reset; custom responsive overlay panels replace tiny native dialogs and keep keyboard field high on phone.
+- Road UV world-coordinate tiling with source-derived compressed textures: supplied asphalt and sand assets stored in repository, exterior ground and shoulder use sand.
+- ~10% yaw torque/power kick softening vs 0.1.10; handbrake grip remains immediate.
+- Version 0.1.11, Android code 11 and unique platform artifact names. Automated suite added brand/pause/texture/headless UI checks; handset results NOT RUN.
+- Model: GPT-6. Based on feedback files Screenshot_2026-11-19-01-25-52-822_com.karllondor.nitrowheelz.jpg, 1000076369.png, 1000076169.png, 1000076170.png and 1000076371.mp4.
+
+## [0.1.10] — Handling rebalance and usable track editing
+- Rebalance original driving model between overly stable v0.1.8 and involuntary sliding v0.1.9. Restore yaw damping, rear grip and countersteer support; power oversteer requires actual slip, except deliberately extreme low-speed donut inputs. Preserve instant rear lock on handbrake.
+- Editing: Start New → Circle / Blank Canvas; tap-to-place knots, zoom ± and desktop wheel; name the track when saving; separate local JSON files for each name, reopen last saved valid project.
+- Edited knots use orange active highlighting; red invalid node pairs are mapped to compiler sample/ring indexes. Global errors remain text-only.
+- Regression suite adds new circle/blank editing, zoom, red error knots, naming and moderate GAS steering/recovery checks.
+- All platform build numbers and Android versionCode set to 0.1.10 / 10. Human handset driving approval and phone dialog layout still NOT RUN.
+- Comparison clips: 1000076248.mp4 (driving), 1000076249.mp4 (track editing). Engine Godot 4.7.2, model GPT-6.
+
+## [0.1.9] — Actual Track Editor, result board and dynamic drift retune
+- New **EDIT TRACK • BETA** separate from procedural Generate Track. Drag/Add/Delete spline control points, validate closed road and shared collision, save custom loop to user:// and play; fail-closed on invalid data.
+- Result scene replaces the FINISHED popup and stacked Restart/Garage UI. Local-only history and best times stored separately per track. Display time, score and provisional stars. No online leaderboard.
+- Steering+full GAS can now release the rear and produce power-oversteer without handbrake. Higher turning authority and less assisted stability permit deliberate donuts; handbrake flick impulse increased. Reverse stays separately modelled.
+- Distinct Android APK versionCode=9, versionName=0.1.9 and matching versioned desktop/web artifacts.
+- New headless tests: editable geometry & persistence, local records/stars, power-entry/drift and donut. Hardware feel and manually driven complete races still need review.
+- Model: GPT-6. Source clips: 1000076235, 1000076237, 1000076238, 1000076239, 1000076240; no claim of matched input timing or exact reference car dynamics.
+
+## [0.1.8] — Responsive handbrake, minimap, new course and Track Creator beta
+- Unique v0.1.8 in game menu, Android versionName/versionCode and all Android/Web/Desktop artifact names.
+- Same-physics-tick rear handbrake lock and brief steering overlap window for immediate entry; mobile GAS remains binary.
+- Drone/chase framing raised to keep the car above controls; staggered-hole metal brake and tall gas, lowered handbrake.
+- Live red vehicle dot and white start/finish marker on minimap.
+- New original Shin-Kawa Full Circuit referencing supplied schematic's sweeper and S-curve rhythm, not identical source geometry.
+- Android-accessible seeded validated Track Creator beta menu action, guarded by Track DNA compiler and saved under user://.
+- Add automated geometry, generator determinism and touch/physics regressions.
+- Android device feel, three human-driven laps, exact route and proprietary assets remain NOT RUN / not implemented.
+
+## [0.1.7] — Benchmarks Oval/Sweepers, speed-perception camera tune, HUD playtest
+- Added two optional comparison tracks: near-271m/24m two-sweeper Oval and near-295m/23m independent Sweepers-style loop.
+- Track layouts use original control points; dimensionally comparable to DRIFTIT public guide, NOT identical proprietary course data.
+- Keep original Shin-Kawa as the default selectable circuit; garage now offers 3 circuits.
+- Fix Track DNA's false-negative local proximity validation on short tracks using physical distance along track rather than a constant knot neighbourhood.
+- Bring overhead framing closer on portrait phones; chase moves closer and steeper, plus a small blend of true travel direction for visible drifting.
+- Replace prototype HUD/touch rendering with approved black/pink visual direction: minimap, time, score tiles, camera/pause, numerical angle, portrait metal pedals and vertical handbrake. Prototype score/time data is real; star progression remains unimplemented.
+- Regression: new Oval/Sweepers geometry/collision scene test, existing Godot controls/physics/camera tests.
+- Android visual performance, subjective speed, real three laps and DriftIt matching recordings: NOT RUN. CI must be checked by commit SHA before marking build PASS.
+
+
 # Nitro Wheelz change history
 
 ## [0.1.6] — P1 dynamic camera and desktop exports

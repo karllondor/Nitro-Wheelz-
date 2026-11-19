@@ -17,11 +17,12 @@ esac
 python3 tools/check_project.py
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
-for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test dynamic_camera_test; do
+for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test benchmark_track_test generated_track_test editor_results_test brand_pause_surface_test dynamic_camera_test; do
+    echo "START TEST: $spec"
     if [ "$spec" = import ]; then
-        "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"
+        timeout 45s "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"
     else
-        "$GODOT_BIN" --headless --path game --script "res://tests/$spec.gd" 2>&1 | tee "$LOG_DIR/$spec.log"
+        timeout 45s "$GODOT_BIN" --headless --path game --script "res://tests/$spec.gd" 2>&1 | tee "$LOG_DIR/$spec.log"
     fi
     if grep -Eq 'SCRIPT ERROR|ERROR:|FAIL:' "$LOG_DIR/$spec.log"; then
         echo "FAIL: Godot reported runtime/parse errors in $spec" >&2
