@@ -36,15 +36,50 @@ func _run() -> void:
     if (data["control_points"] as Array).size()!=initial_count:
         _fail("Delete Node did not remove waypoint")
         return
-    editor.call("_reset_shape")
-    editor.call("_validate")
-    if not bool(editor.get("ready_to_play")):
-        _fail("Reset track does not validate")
+    editor.call("_start_new_circle")
+    data = editor.get("data")
+    if (data["control_points"] as Array).size() != 16 or not bool(editor.get("ready_to_play")):
+        _fail("Start New Circle should produce a 16-knot valid loop")
         return
-    editor.call("_save")
-    var saved: Dictionary = DNA.read_track("user://nitro_custom_track.json")
-    if not bool(saved.get("ok",false)):
-        _fail("Saved track cannot be played by Track DNA")
+    var before_zoom: float = float(editor.get("pixels_per_metre"))
+    editor.call("_zoom",1.25)
+    if float(editor.get("pixels_per_metre")) <= before_zoom:
+        _fail("Zoom+ did not increase editable view scale")
+        return
+    # Duplicate a knot: validator should flag specific offending nodes red.
+    data["control_points"][3] = data["control_points"][2].duplicate()
+    editor.set("data",data)
+    editor.call("_validate")
+    var invalid: Dictionary = editor.get("invalid_nodes")
+    if bool(editor.get("ready_to_play")) or not invalid.has(2) or not invalid.has(3):
+        _fail("Invalid duplicate knots were not identified for red highlighting")
+        return
+
+    editor.call("_start_new_blank")
+    data = editor.get("data")
+    if not (data["control_points"] as Array).is_empty() or not bool(editor.get("add_mode")):
+        _fail("Start New Blank must begin with zero nodes and tap placement enabled")
+        return
+    # Place eight new knots using the same pointer entrypoint as on a phone.
+    for i in range(8):
+        var angle: float = PI+TAU*float(i)/8.0
+        var world: Vector2 = Vector2(cos(angle),sin(angle))*80.0
+        editor.call("_start_touch",editor.call("_screen_point",world),i)
+        editor.call("_release_touch",i)
+    data = editor.get("data")
+    if (data["control_points"] as Array).size()!=8:
+        _fail("Blank editor cannot place eight points by touching map")
+        return
+    if not bool(editor.get("ready_to_play")):
+        _fail("Eight-point closed loop rejected after touch placement")
+        return
+    if not bool(editor.call("_persist_track","QA Oval v010")):
+        _fail("Named track could not be saved")
+        return
+    var path: String = str(editor.get("last_saved_path"))
+    var saved: Dictionary = DNA.read_track(path)
+    if not bool(saved.get("ok",false)) or str(saved.get("track_name",""))!="QA Oval v010":
+        _fail("Named track save did not preserve valid geometry/name")
         return
     editor.queue_free()
     await process_frame
@@ -65,7 +100,7 @@ func _run() -> void:
     if ranked.size()!=2 or float(ranked[0]["seconds"]) >= float(ranked[1]["seconds"]):
         _fail("Local leaderboard sorting incorrect")
         return
-    print("PASS: track editor drag/add/delete/reset/save; local stars, clock, ranked persistent history")
+    print("PASS: drag/add/delete, new circle/blank, zoom, invalid-node highlighting, named save, local records")
     print("NOT RUN: real phone touch interaction, full 3-lap UI screenshot and online leaderboard")
     quit(0)
 
