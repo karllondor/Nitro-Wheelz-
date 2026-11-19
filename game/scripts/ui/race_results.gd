@@ -2,7 +2,7 @@ extends Control
 class_name NitroRaceResults
 ## Local-only three-lap race history. No network leaderboard or fabricated ranks.
 const STORAGE: String = "user://nitro_local_runs.json"
-const PINK: Color = Color(1.0,0.08,0.48)
+const PINK: Color = Color(0.57,0.30,0.98)
 const GOLD: Color = Color(1.0,0.78,0.26)
 const WHITE: Color = Color(0.97,0.97,0.99)
 const MUTED: Color = Color(0.68,0.71,0.78)
@@ -61,6 +61,18 @@ static func sorted_local(track_id: String) -> Array:
     entries.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
         return float(a["seconds"]) < float(b["seconds"]))
     return entries
+
+static func short_date(timestamp: String) -> String:
+    # Stored ISO timestamp is preserved for history; display only day + time.
+    if timestamp.length() < 16:
+        return timestamp
+    var month_names: Array[String] = ["Jan","Feb","Mar","Apr","May","Jun",
+        "Jul","Aug","Sep","Oct","Nov","Dec"]
+    var month_index: int = int(timestamp.substr(5,2))-1
+    if month_index < 0 or month_index >= 12:
+        return timestamp.substr(0,16)
+    return "%d %s  %s" % [int(timestamp.substr(8,2)),month_names[month_index],
+        timestamp.substr(11,5)]
 
 static func clock(seconds: float) -> String:
     var mins: int = int(seconds/60.0)
@@ -138,7 +150,7 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     for i in range(mini(5,latest.size())):
         var item: Dictionary = latest[i]
         _label(v,"%s    %d PTS    %s" % [clock(float(item["seconds"])),
-            int(item["score"]),str(item.get("date",""))],15,MUTED,sc)
+            int(item["score"]),short_date(str(item.get("date","")))],15,MUTED,sc)
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation",int(12.0*sc))
     v.add_child(row)
