@@ -24,7 +24,7 @@ var target_time: float = 0.0
 
 const WHITE := Color(0.98,0.98,1.0)
 const MUTED := Color(0.78,0.79,0.83)
-const PINK := Color(1.0,0.025,0.48)
+const PINK := Color(0.57,0.30,0.98)
 const GOLD := Color(1.0,0.77,0.24)
 
 func _ready() -> void:
@@ -147,14 +147,8 @@ func _draw() -> void:
         HORIZONTAL_ALIGNMENT_CENTER)
     _label(speed_box,("R " if reversing else "")+str(int(speed))+" KM/H",
         0.55,31,WHITE,HORIZONTAL_ALIGNMENT_CENTER)
-    if paused or finished:
-        draw_rect(Rect2(Vector2.ZERO,s),Color(0.012,0.015,0.025,0.65))
-        var popup := Rect2(s.x*0.19,s.y*0.37,s.x*0.62,s.y*0.16)
-        _panel(popup)
-        _label(popup,"FINISHED" if finished else "PAUSED",0.40,36,PINK,
-            HORIZONTAL_ALIGNMENT_CENTER)
-        _label(popup,"Tap RESTART or GARAGE / MENU",0.75,18,WHITE,
-            HORIZONTAL_ALIGNMENT_CENTER)
+    # Paused/finished overlays are now single independent CanvasLayers.
+    # Never render a duplicate dialog behind Restart/Garage buttons.
 
 func _score_string(value: int) -> String:
     var digits: String = str(value)
