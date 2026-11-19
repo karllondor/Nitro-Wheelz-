@@ -171,12 +171,12 @@ func _make_front_and_engine() -> void:
     _cube("Black front grille", Vector3(0, 0.80, -2.082),
         Vector3(1.02, 0.32, 0.04), BLACK)
     for row in range(4):
-        _cube("Horizontal grille trim", Vector3(0, 0.66+row*0.085, -2.226),
+        _cube("Horizontal grille trim", Vector3(0, 0.66+row*0.085, -2.113),
             Vector3(0.99, 0.015, 0.025), CHROME, 0.58)
     for side in [-1.0, 1.0]:
         for column in range(2):
             _cylinder("Round classic headlamp", Vector3(side*(0.56+column*0.26),
-                0.80, -2.226), 0.126, 0.035, LAMP).rotation.x = PI * 0.5
+                0.80, -2.113), 0.126, 0.035, LAMP).rotation.x = PI * 0.5
         _cube("Amber indicator", Vector3(side*0.81, 0.57, -2.111),
             Vector3(0.25, 0.10, 0.04), Color(1.0, 0.42, 0.04))
     _cube("Front silver bumper", Vector3(0, 0.46, -2.137),
@@ -189,9 +189,9 @@ func _make_front_and_engine() -> void:
         Vector3(0.85, 0.24, 0.70), RUBBER)
     for i in range(3):
         _cylinder("Triple polished intake trumpet", Vector3((i-1)*0.29,
-            1.16, -1.44), 0.115, 0.34, CHROME)
+            1.16, -1.53), 0.115, 0.34, CHROME)
         _cylinder("Intake dark throat", Vector3((i-1)*0.29,
-            1.346, -1.44), 0.075, 0.025, BLACK)
+            1.346, -1.53), 0.075, 0.025, BLACK)
 
 func _make_rear() -> void:
     _cube("Rear chrome bumper", Vector3(0, 0.48, 2.14),
