@@ -14,6 +14,10 @@ var spin_speed: float = 0.35
 var dragging: bool = false
 var paint_buttons: Dictionary = {}
 var ui_unit: float = 1.0
+var studio_env: Environment
+var studio_key: DirectionalLight3D
+var studio_fill: DirectionalLight3D
+var studio_floor: StandardMaterial3D
 
 func _ready() -> void:
     var s: Vector2 = get_viewport_rect().size
@@ -81,6 +85,7 @@ func _ready() -> void:
     preview.msaa_3d = Viewport.MSAA_4X
     display.add_child(preview)
     _build_studio()
+    _build_turntable()
     _spawn_car()
 
     var info := Label.new()
@@ -110,62 +115,57 @@ func _ready() -> void:
     _set_status()
 
 func _build_studio() -> void:
+    # Soft studio matching the approved model sheets: light grey for the red
+    # drift spec, lavender with a pink/violet key for the pearl-white car.
     var world := WorldEnvironment.new()
-    var env := Environment.new()
-    env.background_mode = Environment.BG_COLOR
-    env.background_color = Color(0.055,0.045,0.08)
-    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.70,0.66,0.86)
-    env.ambient_light_energy = 0.75
-    world.environment = env
+    studio_env = Environment.new()
+    studio_env.background_mode = Environment.BG_COLOR
+    studio_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    world.environment = studio_env
     preview.add_child(world)
-    var key := DirectionalLight3D.new()
-    key.name = "Key light"
-    key.rotation_degrees = Vector3(-48.0,32.0,0.0)
-    key.light_energy = 1.35
-    preview.add_child(key)
-    var rim := DirectionalLight3D.new()
-    rim.name = "Pink rim light"
-    rim.rotation_degrees = Vector3(-18.0,200.0,0.0)
-    rim.light_color = Color(1.0,0.30,0.65)
-    rim.light_energy = 0.9
-    preview.add_child(rim)
-    # Glossy dark plinth with a neon ring.
-    var plinth := MeshInstance3D.new()
-    var disc := CylinderMesh.new()
-    disc.top_radius = 3.3
-    disc.bottom_radius = 3.4
-    disc.height = 0.12
-    disc.radial_segments = 64
-    plinth.mesh = disc
-    plinth.position.y = -0.06
-    var plinth_mat := StandardMaterial3D.new()
-    plinth_mat.albedo_color = Color(0.07,0.065,0.09)
-    plinth_mat.roughness = 0.25
-    plinth_mat.metallic = 0.2
-    plinth.material_override = plinth_mat
-    preview.add_child(plinth)
-    var ring := MeshInstance3D.new()
-    var torus := TorusMesh.new()
-    torus.inner_radius = 3.32
-    torus.outer_radius = 3.42
-    torus.rings = 64
-    ring.mesh = torus
-    ring.position.y = 0.0
-    var ring_mat := StandardMaterial3D.new()
-    ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    ring_mat.albedo_color = STYLE.PINK
-    ring.material_override = ring_mat
-    preview.add_child(ring)
+    studio_key = DirectionalLight3D.new()
+    studio_key.name = "Key light"
+    studio_key.rotation_degrees = Vector3(-50.0,35.0,0.0)
+    preview.add_child(studio_key)
+    studio_fill = DirectionalLight3D.new()
+    studio_fill.name = "Fill light"
+    studio_fill.rotation_degrees = Vector3(-25.0,205.0,0.0)
+    preview.add_child(studio_fill)
+    var floor := MeshInstance3D.new()
+    floor.name = "Studio floor"
+    var plane := PlaneMesh.new()
+    plane.size = Vector2(60,60)
+    floor.mesh = plane
+    studio_floor = StandardMaterial3D.new()
+    studio_floor.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    floor.material_override = studio_floor
+    preview.add_child(floor)
+    _apply_studio()
+
+func _apply_studio() -> void:
+    if studio_env == null:
+        return
+    var white: bool = active_variant == "white"
+    var bg: Color = Color(0.80,0.74,0.93) if white else Color(0.87,0.87,0.90)
+    studio_env.background_color = bg
+    studio_floor.albedo_color = bg
+    studio_env.ambient_light_color = Color(0.86,0.80,0.98) if white else Color(0.88,0.88,0.92)
+    studio_env.ambient_light_energy = 0.8
+    studio_key.light_color = Color(1.0,0.86,0.94) if white else Color(1.0,0.99,0.97)
+    studio_key.light_energy = 1.15
+    studio_fill.light_color = Color(0.62,0.58,1.0) if white else Color(0.85,0.88,1.0)
+    studio_fill.light_energy = 0.55
+
+func _build_turntable() -> void:
     turntable = Node3D.new()
     turntable.name = "Turntable"
-    turntable.rotation.y = deg_to_rad(-35.0)
+    turntable.rotation.y = deg_to_rad(145.0)  # front three-quarter, like the sheet
     preview.add_child(turntable)
     var camera := Camera3D.new()
     camera.position = Vector3(0.0,2.5,8.0)
     camera.fov = 34.0
     preview.add_child(camera)
-    camera.look_at(Vector3(0,0.15,0),Vector3.UP)
+    camera.look_at(Vector3(0,0.5,0),Vector3.UP)
     camera.current = true
 
 func _process(delta: float) -> void:
@@ -225,6 +225,7 @@ func _choose(chosen: String) -> void:
     garage_cfg.set_value("garage","paint",chosen)
     garage_cfg.save("user://nitro_garage.cfg")
     _spawn_car()
+    _apply_studio()
     _set_status()
 
 func _action(caption: String,x: float,y: float,w: float,h: float,fn: Callable,sc: float) -> Button:

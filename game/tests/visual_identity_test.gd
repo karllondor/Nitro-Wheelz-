@@ -40,6 +40,12 @@ func _run() -> void:
         if box.end.y < 1.30 or box.end.y > 1.50:
             _fail("Roof height %.3f m does not read as a lowered 2106 saloon" % box.end.y)
             return
+        if bool(car.get("flat_body")) != (variant == "red"):
+            _fail("Red sheet must be faceted low-poly, white sheet smooth")
+            return
+        if (variant == "red") != (car.find_child("NW rear screen banner",true,false) != null):
+            _fail("NW banner belongs to the red drift spec only")
+            return
         if car.find_child("Soft contact shadow",true,false) == null:
             _fail("Contact shadow missing")
             return
@@ -63,6 +69,17 @@ func _run() -> void:
         var block_len: float = t.length_metres/float(blocks)
         if blocks%2 != 0 or block_len < 2.4 or block_len > 3.6:
             _fail("Kerb pattern would not close seamlessly on "+path)
+            return
+        var shadows: MeshInstance3D = t.find_child("Cloud shadows",true,false) as MeshInstance3D
+        if shadows == null or not (shadows.material_override is ShaderMaterial):
+            _fail("Drifting cloud shadows missing on "+path)
+            return
+        var env_node: WorldEnvironment = t.find_child("*",true,false) as WorldEnvironment
+        for child in t.get_children():
+            if child is WorldEnvironment:
+                env_node = child
+        if env_node == null or env_node.environment.background_mode != Environment.BG_SKY or env_node.environment.sky == null:
+            _fail("Cloudy sky missing on "+path)
             return
         if t.find_child("Blue white kerbs",true,false) == null:
             _fail("Kerbs missing on "+path)
@@ -110,6 +127,10 @@ func _run() -> void:
     if Rect2(layout["pause"]) != Rect2(metrics["pause"]) or Rect2(layout["camera"]) != Rect2(metrics["camera"]):
         _fail("Touch PAUSE/CAM targets differ from drawn HUD buttons")
         return
+    var race_car: Node3D = race.get("car_root")
+    if absf(race_car.scale.x-1.15) > 0.001:
+        _fail("Race car must read 15% larger than the stock shell")
+        return
     var hud: NitroRaceHUD = race.get("hud")
     if hud.target_time <= 0.0:
         _fail("HUD has no chasing time target")
@@ -140,7 +161,7 @@ func _run() -> void:
     if STYLE.text_width("SHIN-KAWA 02:00.81",30.0) < 50.0:
         _fail("Exo 2 HUD font did not load")
         return
-    print("PASS: die-cast car proportions, seamless kerbs, scenery clearance, HUD/touch agreement, projected stars, OFL font")
+    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD/touch agreement, projected stars, OFL font")
     print("NOT RUN: on-device look, GPU cost of scenery/smoke on Android, human comparison with approved reference")
     quit(0)
 

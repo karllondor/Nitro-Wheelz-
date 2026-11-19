@@ -11,6 +11,7 @@ Outputs (game/assets/surfaces/):
   dirt_verge.webp    256x256  packed earth / gravel verge outside the barrier
   flower_cluster.png  64x64   RGBA pink blossom cluster sprite (verge decals)
   blossom_leaf.png    64x64   RGBA cherry-blossom canopy speckle (tree tops)
+  cloud_noise.png    512x512  tileable fbm cloud density (sky + cloud shadows)
 Requires numpy + Pillow (developer tool only, not used by the game at runtime).
 """
 from pathlib import Path
@@ -126,6 +127,16 @@ def sprite_cluster(rng, colours, count, size=64, spread=0.36, petal=(2.2, 4.6)):
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGBA")
 
 
+def clouds(rng):
+    size = 512
+    big = periodic_noise(size, 1.9, rng)
+    mid = periodic_noise(size, 1.35, rng)
+    fine = periodic_noise(size, 0.9, rng)
+    v = big * 0.6 + mid * 0.3 + fine * 0.1
+    v = (v - v.min()) / max(v.max() - v.min(), 1e-9)
+    return Image.fromarray((v * 255).astype(np.uint8), "L")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20261119)
@@ -136,7 +147,9 @@ def main():
     blossom = [(255, 150, 205), (248, 110, 182), (255, 196, 228), (214, 74, 148)]
     sprite_cluster(rng, blossom, 150, spread=0.40, petal=(2.6, 4.6)).save(
         OUT / "blossom_leaf.png", optimize=True)
-    for name in ("grass_night.webp", "dirt_verge.webp", "flower_cluster.png", "blossom_leaf.png"):
+    clouds(np.random.default_rng(424242)).save(OUT / "cloud_noise.png", optimize=True)
+    for name in ("grass_night.webp", "dirt_verge.webp", "flower_cluster.png", "blossom_leaf.png",
+                 "cloud_noise.png"):
         print("WROTE", (OUT / name).relative_to(ROOT), (OUT / name).stat().st_size, "bytes")
 
 

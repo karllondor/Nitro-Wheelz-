@@ -3,7 +3,7 @@
 shader_type canvas_item;
 
 uniform vec4 tint : source_color = vec4(0.02, 0.01, 0.05, 1.0);
-uniform float strength : hint_range(0.0, 1.0) = 0.48;
+uniform float strength : hint_range(0.0, 1.0) = 0.34;
 uniform float inner : hint_range(0.0, 1.5) = 0.45;
 uniform float outer : hint_range(0.0, 2.0) = 1.05;
 

@@ -32,6 +32,10 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - P2: car/HUD/environment now follow the owner targets; only one car model exists.
 - Editor: BUILD TRACK • 3D implements tap-to-build on a tile grid with live scenery (inspired by the owner's reference video; the video itself could not be viewed). Tiles are 56 m because the uniform spline tightens S-bends ~35%; smaller tiles would require a different spline or relaxing the 16 m rule (not done).
 
+## OWNER FEEDBACK PASS (same v0.1.13 candidate)
+- Editor pan/pinch/FIT (editor_results_test extended), cars restyled to the two reference sheets, camera base 60 + race car x1.15 (visual only), golden-hour sky + cloud shadows (visual_identity_test extended). Full Godot suite PASS locally.
+- Android signing: debug APKs now use the NITRO_DEBUG_KEYSTORE_B64 secret when present (see docs/BUILD_RELEASE.md); until the owner adds it, every CI APK still needs an uninstall before install.
+
 ## NEXT ACTION
 1. Owner installs the v0.1.13 debug APK from CI and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.

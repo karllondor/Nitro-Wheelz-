@@ -27,17 +27,16 @@ const SHELL_FRONT: float = -2.02
 const SHELL_REAR: float = 2.02
 const SHELL_HALF_WIDTH: float = 0.805
 const SHELL_BOTTOM: float = 0.25
-const SHELL_EXPONENT: float = 6.0
-const CABIN_FRONT: float = -0.93
-const CABIN_REAR: float = 0.98
-const ROOF_Y: float = 1.415
+const CABIN_FRONT: float = -0.96
+const CABIN_REAR: float = 1.0
+const ROOF_Y: float = 1.45
 const WHEEL_TRACK_X: float = 0.812
-const FRONT_RAKE: float = 1.18
-const REAR_RAKE: float = 1.12
+const FRONT_RAKE: float = 1.55
+const REAR_RAKE: float = 1.38
 const ARCH_OUTER_X: float = DRIFT_BODY_WIDTH_M * 0.5
 
-const RED := Color(0.80,0.035,0.055)
-const PEARL := Color(0.86,0.855,0.89)
+const RED := Color(0.66,0.035,0.065)
+const PEARL := Color(0.90,0.89,0.94)
 
 var paint_variant: String = "red"   # red exposed-engine / pearl-white clean hood
 var shadow_height: float = 0.10     # race road sits at ~0.05 m
@@ -45,12 +44,23 @@ var shadow_height: float = 0.10     # race road sits at ~0.05 m
 var front_wheels: Array[Node3D] = []
 var rolling_wheels: Array[Node3D] = []
 var materials: Dictionary = {}
+# Shape style. Red drift spec = crisp faceted "low-poly" sheet look (flat
+# shading, square edges, polygonal flares). Pearl white = soft rounded body.
+var shell_exp: float = 6.0
+var plan_round: float = 0.09
+var elev_round: float = 0.11
+var roof_corner: float = 0.13
+var flat_body: bool = false
+var arch_outer: float = ARCH_OUTER_X
+var arch_section_exp: float = 0.5
+var arch_segments: int = 26
 
 static var _mesh_cache: Dictionary = {}
 
 func _ready() -> void:
     if paint_variant != "white":
         paint_variant = "red"
+    _apply_style()
     _make_materials()
     var shell := MeshInstance3D.new()
     shell.name = "Diecast body shell"
@@ -70,7 +80,28 @@ func _ready() -> void:
     add_child(front)
     _make_wheels()
     _make_shadow()
-    _make_badge()
+    if paint_variant == "red":
+        _make_badge()
+
+func _apply_style() -> void:
+    if paint_variant == "white":
+        shell_exp = 4.6
+        plan_round = 0.14
+        elev_round = 0.12
+        roof_corner = 0.12
+        flat_body = false
+        arch_outer = 0.905
+        arch_section_exp = 0.65
+        arch_segments = 26
+    else:
+        shell_exp = 11.0
+        plan_round = 0.05
+        elev_round = 0.045
+        roof_corner = 0.045
+        flat_body = true
+        arch_outer = ARCH_OUTER_X
+        arch_section_exp = 0.16
+        arch_segments = 9
 
 func _cached(part: String, builder: Callable) -> ArrayMesh:
     var key: String = paint_variant+":"+part
@@ -90,22 +121,28 @@ func _paint(col: Color, roughness: float, metallic: float, gloss: float,
     mat.set_shader_parameter("gloss",gloss)
     mat.set_shader_parameter("rim",rim)
     mat.set_shader_parameter("glow",glow)
+    # Neutral studio reflections (the sheets use a grey/white soft box).
+    mat.set_shader_parameter("studio",Color(0.97,0.97,1.0))
+    mat.set_shader_parameter("floor_tint",Color(0.11,0.11,0.13))
     return mat
 
 func _make_materials() -> void:
-    var body_col: Color = PEARL if paint_variant == "white" else RED
-    materials["paint"] = _paint(body_col,0.22,0.0,
-        0.45 if paint_variant == "white" else 1.0,0.6 if paint_variant == "white" else 0.85)
-    materials["glass"] = _paint(Color(0.035,0.045,0.075),0.06,0.0,1.35,1.0)
-    materials["chrome"] = _paint(Color(0.88,0.90,0.94),0.14,1.0,1.7,0.7)
-    materials["trim"] = _paint(Color(0.045,0.047,0.055),0.55,0.0,0.30,0.25)
-    materials["rubber"] = _paint(Color(0.055,0.055,0.062),0.85,0.0,0.10,0.10)
-    materials["rim"] = _paint(Color(0.96,0.96,0.97) if paint_variant == "red"
-        else Color(0.40,0.41,0.47),0.22,0.0,0.9,0.5,0.18 if paint_variant == "red" else 0.0)
-    materials["lamp"] = _paint(Color(1.0,0.95,0.78),0.10,0.0,0.6,0.3,1.6)
+    var white: bool = paint_variant == "white"
+    var body_col: Color = PEARL if white else RED
+    materials["paint"] = _paint(body_col,0.30 if not white else 0.26,0.0,
+        0.42 if white else 0.55,0.45 if white else 0.35)
+    materials["glass"] = _paint(Color(0.07,0.08,0.11) if not white else Color(0.16,0.15,0.26),
+        0.08,0.0,1.1,0.8)
+    materials["chrome"] = _paint(Color(0.86,0.87,0.89),0.16,1.0,1.35,0.5)
+    materials["trim"] = _paint(Color(0.05,0.052,0.06),0.55,0.0,0.30,0.25)
+    materials["rubber"] = _paint(Color(0.06,0.06,0.066),0.85,0.0,0.10,0.10)
+    materials["rim"] = _paint(Color(0.95,0.95,0.96) if not white
+        else Color(0.44,0.46,0.60),0.24,0.3,0.9,0.4,0.12 if not white else 0.0)
+    materials["lamp"] = _paint(Color(1.0,0.95,0.80),0.10,0.0,0.6,0.3,1.6)
     materials["tail"] = _paint(Color(0.85,0.03,0.05),0.12,0.0,0.7,0.3,1.25)
+    materials["reverse"] = _paint(Color(0.97,0.96,0.95),0.12,0.0,0.6,0.3,0.55)
     materials["amber"] = _paint(Color(1.0,0.45,0.04),0.15,0.0,0.6,0.3,1.0)
-    materials["engine"] = _paint(Color(0.10,0.10,0.115),0.45,0.4,0.5,0.3)
+    materials["engine"] = _paint(Color(0.12,0.12,0.135),0.45,0.4,0.5,0.3)
     materials["well"] = _paint(Color(0.015,0.015,0.02),0.9,0.0,0.0,0.0)
 
 # ------------------------------------------------------------- body shape
@@ -127,10 +164,10 @@ static func _deck(z: float) -> float:
         return lerpf(0.956,0.938,r)
     return lerpf(0.948,0.956,(z-CABIN_FRONT)/(CABIN_REAR-CABIN_FRONT))
 
-static func _shell_section(z: float) -> Vector4:
+func _shell_section(z: float) -> Vector4:
     # x: half width, y: bottom, z: top, w: unused
-    var hw: float = SHELL_HALF_WIDTH-_end_inset(z,0.09)
-    var top: float = _deck(z)-_end_inset(z,0.11)
+    var hw: float = SHELL_HALF_WIDTH-_end_inset(z,plan_round)
+    var top: float = _deck(z)-_end_inset(z,elev_round)
     var bottom: float = SHELL_BOTTOM+_end_inset(z,0.10)*0.7
     return Vector4(hw,bottom,top,0.0)
 
@@ -142,17 +179,17 @@ func _shell_point(u: float, v: float) -> Vector3:
     var z: float = lerpf(SHELL_FRONT,SHELL_REAR,_z_warp(clampf(u,0.0,1.0)))
     var sec: Vector4 = _shell_section(z)
     var theta: float = lerpf(PI*1.25,-PI*0.25,v)
-    var e: float = 2.0/SHELL_EXPONENT
+    var e: float = 2.0/shell_exp
     var yc: float = (sec.y+sec.z)*0.5
     var hh: float = (sec.z-sec.y)*0.5
     return Vector3(sec.x*KIT.sgnpow(cos(theta),e),yc+hh*KIT.sgnpow(sin(theta),e),z)
 
-static func deck_top(x: float, z: float) -> float:
+func deck_top(x: float, z: float) -> float:
     var sec: Vector4 = _shell_section(z)
     var yc: float = (sec.y+sec.z)*0.5
     var hh: float = (sec.z-sec.y)*0.5
     var q: float = clampf(absf(x)/sec.x,0.0,1.0)
-    return yc+hh*pow(maxf(1.0-pow(q,SHELL_EXPONENT),0.0),1.0/SHELL_EXPONENT)
+    return yc+hh*pow(maxf(1.0-pow(q,shell_exp),0.0),1.0/shell_exp)
 
 # ------------------------------------------------------------ greenhouse
 
@@ -173,7 +210,7 @@ func _cabin_point(u: float, v: float) -> Vector3:
     var belt: float = _deck(z)-0.004
     var top: float = _cabin_top(z,belt)
     var h: float = top-belt
-    var r: float = minf(0.13,h*0.55)
+    var r: float = minf(roof_corner,h*0.55)
     var ys: float = top-r
     var hws: float = _cabin_half_width(ys,belt)
     var crown: float = 0.018*clampf(h/(ROOF_Y-belt),0.0,1.0)
@@ -204,10 +241,10 @@ func _arch_point(u: float, v: float, side: float, axle_z: float) -> Vector3:
     var taper: float = clampf(minf(u,1.0-u)/0.08,0.0,1.0)
     taper = sqrt(taper)
     var psi: float = v*TAU
-    var e: float = 0.5
+    var e: float = arch_section_exp
     var lat_in: float = SHELL_HALF_WIDTH-0.035
-    var lat_c: float = (lat_in+ARCH_OUTER_X)*0.5
-    var lat_h: float = (ARCH_OUTER_X-lat_in)*0.5*taper
+    var lat_c: float = (lat_in+arch_outer)*0.5
+    var lat_h: float = (arch_outer-lat_in)*0.5*taper
     var rad_c: float = 0.485
     var rad_h: float = 0.056*maxf(taper,0.05)
     var lateral: float = lat_c+lat_h*KIT.sgnpow(cos(psi),e)
@@ -230,7 +267,7 @@ func _build_shell() -> ArrayMesh:
     var white: bool = paint_variant == "white"
 
     # Lower shell (one smooth lofted surface) and flat end caps.
-    KIT.grid(paint,id,Callable(self,"_shell_point"),0.0,1.0,60,0.0,1.0,40,false)
+    KIT.grid(paint,id,Callable(self,"_shell_point"),0.0,1.0,60,0.0,1.0,40,false,0.0,flat_body)
     for end_u in [0.0,1.0]:
         var ring := PackedVector3Array()
         for k in range(41):
@@ -244,20 +281,31 @@ func _build_shell() -> ArrayMesh:
 
     # Greenhouse with inset glass: windscreen, backlight, four side windows.
     var cab := Callable(self,"_cabin_point")
-    KIT.grid(paint,id,cab,0.0,1.0,52,0.0,1.0,44,false)
+    KIT.grid(paint,id,cab,0.0,1.0,52,0.0,1.0,44,false,0.0,flat_body)
     var span: float = CABIN_REAR-CABIN_FRONT
     var ws_end: float = (CABIN_FRONT+(ROOF_Y-0.035-_deck(-0.6))/FRONT_RAKE-CABIN_FRONT)/span
     var bl_start: float = (CABIN_REAR-(ROOF_Y-0.035-_deck(0.8))/REAR_RAKE-CABIN_FRONT)/span
     KIT.grid(glass,id,cab,0.035/span,ws_end,16,0.205,0.795,26,false,0.006)
     KIT.grid(glass,id,cab,bl_start,1.0-0.035/span,14,0.205,0.795,26,false,0.006)
-    for window in [[-0.56,-0.02],[0.07,0.64]]:
+    # Window frames: chrome on the red sheet, dark rubber on the white one.
+    var frame: SurfaceTool = trim if white else chrome
+    for window in [[-0.66,-0.03],[0.07,0.72]]:
         var u0: float = (float(window[0])-CABIN_FRONT)/span
         var u1: float = (float(window[1])-CABIN_FRONT)/span
-        KIT.grid(glass,id,cab,u0,u1,14,0.022,0.148,6,false,0.006)
-        KIT.grid(glass,id,cab,u0,u1,14,0.852,0.978,6,false,0.006)
+        var f0: float = u0-0.012/span
+        var f1: float = u1+0.012/span
+        KIT.grid(frame,id,cab,f0,f1,14,0.012,0.158,6,false,0.004)
+        KIT.grid(frame,id,cab,f0,f1,14,0.842,0.988,6,false,0.004)
+        KIT.grid(glass,id,cab,u0,u1,14,0.024,0.146,6,false,0.007)
+        KIT.grid(glass,id,cab,u0,u1,14,0.854,0.976,6,false,0.007)
+    # Black B-pillar between the door glasses.
+    var b0: float = (-0.03-CABIN_FRONT)/span
+    var b1: float = (0.07-CABIN_FRONT)/span
+    KIT.grid(trim,id,cab,b0,b1,2,0.016,0.154,4,false,0.006)
+    KIT.grid(trim,id,cab,b0,b1,2,0.846,0.984,4,false,0.006)
     # Chrome drip rails along the roof edge.
-    var rail0: float = (-0.60-CABIN_FRONT)/span
-    var rail1: float = (0.70-CABIN_FRONT)/span
+    var rail0: float = (-0.68-CABIN_FRONT)/span
+    var rail1: float = (0.74-CABIN_FRONT)/span
     KIT.grid(chrome,id,cab,rail0,rail1,20,0.17,0.182,1,false,0.009)
     KIT.grid(chrome,id,cab,rail0,rail1,20,0.818,0.83,1,false,0.009)
 
@@ -265,7 +313,7 @@ func _build_shell() -> ArrayMesh:
     for side in [-1.0,1.0]:
         for axle_z in [FRONT_AXLE_Z,REAR_AXLE_Z]:
             KIT.grid(paint,id,Callable(self,"_arch_point").bind(side,axle_z),
-                0.0,1.0,26,0.0,1.0,14,side > 0.0)
+                0.0,1.0,arch_segments,0.0,1.0,14 if not flat_body else 8,side > 0.0,0.0,flat_body)
             var ring := PackedVector3Array()
             for k in range(25):
                 var a: float = lerpf(-0.25,PI+0.25,float(k)/24.0)
@@ -273,21 +321,23 @@ func _build_shell() -> ArrayMesh:
                 ring.append(Vector3(side*(SHELL_HALF_WIDTH+0.002),y,axle_z-cos(a)*0.445))
             KIT.fan(well,id,Vector3(side*(SHELL_HALF_WIDTH+0.002),SHELL_BOTTOM+0.06,axle_z),
                 ring,Vector3(side,0,0))
+        # Flat side skirt between the arches (sheet: square rocker panel).
         KIT.superellipsoid(paint,Transform3D(Basis.IDENTITY,
-            Vector3(side*(SHELL_HALF_WIDTH+0.045),0.30,0.0)),Vector3(0.085,0.06,0.70),0.35,16,8)
-        # Chrome belt moulding, door shut lines and handles.
-        KIT.box(chrome,Transform3D(Basis.IDENTITY,Vector3(side*(SHELL_HALF_WIDTH+0.004),0.79,0.02)),
-            Vector3(0.014,0.024,3.62))
+            Vector3(side*(SHELL_HALF_WIDTH+0.025),0.29,0.0)),Vector3(0.05,0.055,0.70),0.16,12,6)
+        # Chrome belt moulding (red sheet only; the white sheet has clean sides).
+        if not white:
+            KIT.box(chrome,Transform3D(Basis.IDENTITY,Vector3(side*(SHELL_HALF_WIDTH+0.004),0.79,0.02)),
+                Vector3(0.014,0.024,3.62))
         for gap_z in [-0.64,0.04,0.74]:
             KIT.box(trim,Transform3D(Basis.IDENTITY,Vector3(side*(SHELL_HALF_WIDTH+0.002),0.60,gap_z)),
                 Vector3(0.008,0.62,0.012))
         for handle_z in [-0.22,0.52]:
-            KIT.superellipsoid(chrome,Transform3D(Basis.IDENTITY,
+            KIT.superellipsoid(paint if white else chrome,Transform3D(Basis.IDENTITY,
                 Vector3(side*(SHELL_HALF_WIDTH+0.012),0.86,handle_z)),Vector3(0.014,0.018,0.075),0.35,10,6)
         # Door mirror on a small stalk.
         KIT.box(trim,Transform3D(Basis.IDENTITY,Vector3(side*0.82,1.0,-0.66)),Vector3(0.10,0.035,0.05))
-        KIT.superellipsoid(paint,Transform3D(Basis.IDENTITY,Vector3(side*0.895,1.03,-0.66)),
-            Vector3(0.065,0.05,0.075),0.45,12,8)
+        KIT.superellipsoid(paint if white else chrome,Transform3D(Basis.IDENTITY,Vector3(side*0.895,1.03,-0.66)),
+            Vector3(0.065,0.05,0.075),0.45 if white else 0.2,12,8)
         KIT.box(glass,Transform3D(Basis.IDENTITY,Vector3(side*0.895,1.03,-0.585)),Vector3(0.10,0.07,0.01))
 
     _build_front(kit,white)
@@ -335,16 +385,17 @@ func _build_front(kit: KIT, white: bool) -> void:
                 Vector3(0.44,0.012,0.014))
         KIT.superellipsoid(chrome,Transform3D(Basis.IDENTITY,Vector3(0,0.745,face_z-0.036)),
             Vector3(0.045,0.055,0.012),0.6,12,8)
-    for side in [-1.0,1.0]:
-        KIT.superellipsoid(amber,Transform3D(Basis.IDENTITY,Vector3(side*0.60,0.585,face_z-0.02)),
-            Vector3(0.08,0.03,0.02),0.3,12,6)
+    if not white:
+        for side in [-1.0,1.0]:
+            KIT.superellipsoid(amber,Transform3D(Basis.IDENTITY,Vector3(side*0.60,0.585,face_z-0.02)),
+                Vector3(0.08,0.03,0.02),0.3,12,6)
     # Bumper: chrome on the red car, colour-matched on the white car.
     var bumper: SurfaceTool = paint if white else chrome
     KIT.superellipsoid(bumper,Transform3D(Basis.IDENTITY,Vector3(0,0.50,-2.013)),
         Vector3(0.87,0.058,0.07),0.32,28,10)
-    KIT.box(trim,Transform3D(Basis.IDENTITY,Vector3(0,0.385,-2.03)),Vector3(1.50,0.13,0.05))
-    # Drift splitter.
-    KIT.superellipsoid(trim,Transform3D(Basis.IDENTITY,Vector3(0,0.272,-1.96)),
+    KIT.box(paint if white else trim,Transform3D(Basis.IDENTITY,Vector3(0,0.385,-2.03)),Vector3(1.50,0.13,0.05))
+    # Drift splitter (black on the red sheet, colour-matched lip on white).
+    KIT.superellipsoid(paint if white else trim,Transform3D(Basis.IDENTITY,Vector3(0,0.272,-1.96)),
         Vector3(0.90,0.022,0.12),0.3,24,6)
 
 func _build_rear(kit: KIT, white: bool) -> void:
@@ -358,12 +409,16 @@ func _build_rear(kit: KIT, white: bool) -> void:
     for side in [-1.0,1.0]:
         KIT.superellipsoid(trim,Transform3D(Basis.IDENTITY,Vector3(side*0.495,0.76,face_z)),
             Vector3(0.235,0.102,0.016),0.25,14,8)
-        KIT.superellipsoid(tail,Transform3D(Basis.IDENTITY,Vector3(side*0.45,0.76,face_z+0.012)),
-            Vector3(0.17,0.082,0.012),0.3,14,8)
-        KIT.superellipsoid(amber,Transform3D(Basis.IDENTITY,Vector3(side*0.672,0.76,face_z+0.012)),
-            Vector3(0.045,0.082,0.012),0.3,10,8)
-        KIT.superellipsoid(lamp,Transform3D(Basis.IDENTITY,Vector3(side*0.24,0.715,face_z+0.014)),
-            Vector3(0.035,0.035,0.01),0.4,8,6)
+        if white:
+            KIT.superellipsoid(tail,Transform3D(Basis.IDENTITY,Vector3(side*0.45,0.76,face_z+0.012)),
+                Vector3(0.17,0.082,0.012),0.3,14,8)
+            KIT.superellipsoid(amber,Transform3D(Basis.IDENTITY,Vector3(side*0.672,0.76,face_z+0.012)),
+                Vector3(0.045,0.082,0.012),0.3,10,8)
+        else:
+            KIT.superellipsoid(tail,Transform3D(Basis.IDENTITY,Vector3(side*0.55,0.76,face_z+0.012)),
+                Vector3(0.15,0.082,0.012),0.2,14,8)
+            KIT.superellipsoid(kit.bucket("reverse",materials["reverse"]),Transform3D(Basis.IDENTITY,
+                Vector3(side*0.335,0.76,face_z+0.012)),Vector3(0.058,0.082,0.012),0.2,10,8)
     KIT.superellipsoid(trim,Transform3D(Basis.IDENTITY,Vector3(0,0.62,face_z+0.002)),
         Vector3(0.22,0.06,0.008),0.3,10,6)
     var bumper: SurfaceTool = paint if white else chrome
@@ -429,20 +484,21 @@ func _build_engine_bay() -> ArrayMesh:
         var z1: float = lerpf(-1.90,-1.02,float(k+1)/10.0)
         _deck_strip(well,Vector2(0.0,z0),Vector2(0.0,z1),1.08,0.005)
     var top: float = deck_top(0.0,-1.45)
-    KIT.superellipsoid(engine,Transform3D(Basis.IDENTITY,Vector3(0,top+0.02,-1.47)),
-        Vector3(0.31,0.07,0.36),0.35,16,8)
-    KIT.superellipsoid(paint,Transform3D(Basis.IDENTITY,Vector3(-0.12,top+0.085,-1.47)),
-        Vector3(0.09,0.035,0.30),0.4,12,8)
+    # Engine sits low in the open bay (sheet), only the stacks stand proud.
+    KIT.superellipsoid(engine,Transform3D(Basis.IDENTITY,Vector3(0,top-0.02,-1.47)),
+        Vector3(0.31,0.055,0.36),0.3,16,8)
+    KIT.superellipsoid(paint,Transform3D(Basis.IDENTITY,Vector3(-0.27,top+0.025,-1.40)),
+        Vector3(0.07,0.03,0.26),0.3,12,8)
     # Strut brace.
     KIT.box(chrome,Transform3D(Basis.IDENTITY,Vector3(0,top+0.03,-1.10)),Vector3(0.98,0.03,0.05))
     var up := Basis(Vector3.BACK,PI*0.5)
-    for i in range(3):
-        var at := Vector3(0.12+0.0,top+0.07,-1.72+float(i)*0.25)
-        var bell := PackedVector2Array([Vector2(0.0,0.050),Vector2(0.10,0.054),
-            Vector2(0.15,0.068),Vector2(0.175,0.088),Vector2(0.182,0.092),Vector2(0.178,0.070)])
+    for i in range(4):
+        var at := Vector3(-0.02+float(i%2)*0.19,top+0.03,-1.62+float(i/2)*0.19)
+        var bell := PackedVector2Array([Vector2(0.0,0.058),Vector2(0.06,0.060),
+            Vector2(0.10,0.070),Vector2(0.125,0.086),Vector2(0.132,0.090),Vector2(0.128,0.072)])
         KIT.lathe(chrome,Transform3D(up,at),bell,22,true)
         KIT.lathe(kit.bucket("well",materials["well"]),Transform3D(up,at),
-            PackedVector2Array([Vector2(0.17,0.07),Vector2(0.16,0.0)]),18,true)
+            PackedVector2Array([Vector2(0.12,0.072),Vector2(0.11,0.0)]),18,true)
     return kit.commit()
 
 # ------------------------------------------------------------------ wheels
@@ -467,18 +523,19 @@ func _build_wheel(side: float) -> ArrayMesh:
     var dish_depth: float = 0.05 if white else 0.10
     KIT.lathe(chrome,xf,PackedVector2Array([Vector2(0.136,0.258),
         Vector2(0.136-dish_depth,0.212)]),32,true)
-    KIT.lathe(rim,xf,PackedVector2Array([Vector2(0.136-dish_depth,0.212),
+    # Mesh wheels: dark barrel face so the lighter lacing reads clearly.
+    KIT.lathe(dark if white else rim,xf,PackedVector2Array([Vector2(0.136-dish_depth,0.212),
         Vector2(0.136-dish_depth,0.0)]),32,true)
     KIT.lathe(dark,xf,PackedVector2Array([Vector2(-0.07,0.27),Vector2(-0.07,0.0)]),20,true)
     var face: float = 0.136-dish_depth
     if white:
         # Cross-laced mesh wheel.
-        for k in range(14):
-            var phi: float = TAU*float(k)/14.0
-            for lean in [-0.22,0.22]:
+        for k in range(16):
+            var phi: float = TAU*float(k)/16.0
+            for lean in [-0.24,0.24]:
                 var basis := Basis(Vector3.RIGHT,phi+lean)
-                KIT.box(rim,xf*Transform3D(basis,Vector3(face+0.016,0.0,0.0)+basis*Vector3(0,0.135,0)),
-                    Vector3(0.018,0.15,0.016))
+                KIT.box(rim,xf*Transform3D(basis,Vector3(face+0.018,0.0,0.0)+basis*Vector3(0,0.13,0)),
+                    Vector3(0.024,0.16,0.02))
         KIT.superellipsoid(chrome,xf*Transform3D(Basis.IDENTITY,Vector3(face+0.025,0,0)),
             Vector3(0.03,0.065,0.065),0.6,14,8)
     else:
@@ -487,7 +544,7 @@ func _build_wheel(side: float) -> ArrayMesh:
             var phi2: float = TAU*float(k)/5.0
             var basis2 := Basis(Vector3.RIGHT,phi2)
             KIT.superellipsoid(rim,xf*Transform3D(basis2,Vector3(face+0.022,0,0)+basis2*Vector3(0,0.12,0)),
-                Vector3(0.024,0.10,0.034),0.4,10,8)
+                Vector3(0.022,0.105,0.052),0.22,10,8)
         KIT.superellipsoid(rim,xf*Transform3D(Basis.IDENTITY,Vector3(face+0.03,0,0)),
             Vector3(0.035,0.075,0.075),0.55,16,8)
         KIT.superellipsoid(chrome,xf*Transform3D(Basis.IDENTITY,Vector3(face+0.06,0,0)),

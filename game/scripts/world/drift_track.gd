@@ -14,9 +14,12 @@ const GRASS = preload("res://assets/surfaces/grass_night.webp")
 const DIRT = preload("res://assets/surfaces/dirt_verge.webp")
 const FLOWERS = preload("res://assets/surfaces/flower_cluster.png")
 const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
+const SKY_SHADER = preload("res://assets/shaders/dusk_sky.gdshader")
+const CLOUD_SHADOW_SHADER = preload("res://assets/shaders/cloud_shadows.gdshader")
+const CLOUDS = preload("res://assets/surfaces/cloud_noise.png")
 # Night drift-park palette (approved gameplay reference: dark asphalt,
 # blue/white kerbs, earth verge, olive grass, cherry blossom).
-const ASPHALT_TINT := Color(0.80,0.80,0.86)
+const ASPHALT_TINT := Color(1.0,0.99,1.04)
 const LINE_COLOUR := Color(0.88,0.88,0.86)
 const KERB_BLUE := Color(0.10,0.33,0.80)
 const KERB_WHITE := Color(0.86,0.87,0.90)
@@ -146,6 +149,8 @@ func _build_visuals() -> void:
         _build_start_line()
     _build_barriers()
     _build_track_props()
+    if with_environment:
+        _build_cloud_shadows()
 
 func _shift_edge(edge: Array[Vector2], metres: float) -> Array[Vector2]:
     var shifted: Array[Vector2] = []
@@ -454,7 +459,7 @@ func _build_environment() -> void:
     plane.mesh = ground
     plane.position.y = -0.08
     var m := StandardMaterial3D.new()
-    m.albedo_color = Color(0.92,0.95,0.92)
+    m.albedo_color = Color(1.18,1.18,1.08)
     m.albedo_texture = GRASS
     m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     m.uv1_scale = Vector3(900.0/18.0,900.0/18.0,1.0)
@@ -465,13 +470,21 @@ func _build_environment() -> void:
     var moon := DirectionalLight3D.new()
     moon.name = "Moonlight"
     moon.rotation_degrees = Vector3(-62,-38,0)
-    moon.light_color = Color(0.86,0.87,1.0)
+    moon.light_color = Color(1.0,0.90,0.80)
     moon.light_energy = 1.05
     moon.shadow_enabled = false
     add_child(moon)
     var env := WorldEnvironment.new()
     var res := Environment.new()
-    res.background_mode = Environment.BG_COLOR
+    # Golden-hour sky with drifting clouds (seen from the chase camera).
+    var sky := Sky.new()
+    var sky_mat := ShaderMaterial.new()
+    sky_mat.shader = SKY_SHADER
+    sky_mat.set_shader_parameter("clouds",CLOUDS)
+    sky_mat.set_shader_parameter("sun_dir",moon.basis*Vector3(0,0,1))
+    sky.sky_material = sky_mat
+    res.background_mode = Environment.BG_SKY
+    res.sky = sky
     res.background_color = Color(0.025,0.03,0.055)
     res.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     res.ambient_light_color = Color(0.52,0.48,0.66)
@@ -663,3 +676,26 @@ func _build_verge_flowers(rng: RandomNumberGenerator) -> void:
     var quad := PlaneMesh.new()
     quad.size = Vector2.ONE
     _multimesh("Verge blossom clusters",quad,mat,xf,cols)
+
+func _build_cloud_shadows() -> void:
+    # One transparent plane over the whole park: drifting cloud shadows
+    # darken asphalt, kerbs and grass (below the car, above the road).
+    var lo := Vector2(INF,INF)
+    var hi := Vector2(-INF,-INF)
+    for p in left_edge+right_edge:
+        lo = Vector2(minf(lo.x,p.x),minf(lo.y,p.y))
+        hi = Vector2(maxf(hi.x,p.x),maxf(hi.y,p.y))
+    var margin: float = 160.0
+    var plane := PlaneMesh.new()
+    plane.size = (hi-lo)+Vector2(margin,margin)*2.0
+    var node := MeshInstance3D.new()
+    node.name = "Cloud shadows"
+    node.mesh = plane
+    var mid: Vector2 = (lo+hi)*0.5
+    node.position = Vector3(mid.x,0.095,mid.y)
+    var mat := ShaderMaterial.new()
+    mat.shader = CLOUD_SHADOW_SHADER
+    mat.set_shader_parameter("clouds",CLOUDS)
+    node.material_override = mat
+    node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(node)

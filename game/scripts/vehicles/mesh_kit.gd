@@ -58,9 +58,10 @@ static func _xn(xf: Transform3D, n: Vector3) -> Vector3:
 ## Parametric surface f(u,v)->Vector3 sampled on a grid. Normals are central
 ## finite differences; `flip` inverts them when the parameterisation runs the
 ## other way. `offset` pushes the patch along its normal (glass, decals).
+## `flat` gives every quad a single normal (faceted low-poly shading).
 static func grid(st: SurfaceTool, xf: Transform3D, f: Callable,
         u0: float, u1: float, nu: int, v0: float, v1: float, nv: int,
-        flip: bool = false, offset: float = 0.0) -> void:
+        flip: bool = false, offset: float = 0.0, flat: bool = false) -> void:
     var pts: Array[PackedVector3Array] = []
     var nrm: Array[PackedVector3Array] = []
     var du: float = (u1-u0)/float(nu)
@@ -99,8 +100,21 @@ static func grid(st: SurfaceTool, xf: Transform3D, f: Callable,
             var b: Vector3 = pts[i+1][j]
             var c: Vector3 = pts[i][j+1]
             var d: Vector3 = pts[i+1][j+1]
-            tri(st,a,c,b,nrm[i][j],nrm[i][j+1],nrm[i+1][j])
-            tri(st,b,c,d,nrm[i+1][j],nrm[i][j+1],nrm[i+1][j+1])
+            if flat:
+                # Faceted "low-poly" look: one normal per quad, oriented by
+                # the smooth normals so the outside stays outside.
+                var fn: Vector3 = (b-a).cross(c-a)+(d-b).cross(c-b)
+                var ref: Vector3 = nrm[i][j]+nrm[i+1][j]+nrm[i][j+1]+nrm[i+1][j+1]
+                if fn.length_squared() < 1e-14:
+                    fn = ref
+                if fn.dot(ref) < 0.0:
+                    fn = -fn
+                fn = fn.normalized()
+                tri(st,a,c,b,fn,fn,fn)
+                tri(st,b,c,d,fn,fn,fn)
+            else:
+                tri(st,a,c,b,nrm[i][j],nrm[i][j+1],nrm[i+1][j])
+                tri(st,b,c,d,nrm[i+1][j],nrm[i][j+1],nrm[i+1][j+1])
 
 ## Rounded box. exponent 2 = ellipsoid, ~0.25 = crisp rounded box.
 static func superellipsoid(st: SurfaceTool, xf: Transform3D, half: Vector3,

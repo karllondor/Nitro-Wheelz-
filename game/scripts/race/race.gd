@@ -47,8 +47,11 @@ var chase_occlusion_point: Vector3 = Vector3.ZERO
 var chase_is_blocked: bool = false
 const CAMERA_LOOKAHEAD_SECONDS: float = 0.45
 const CAMERA_LEAD_MAX_METRES: float = 19.0
-const OVERHEAD_BASE_PORTRAIT: float = 46.0
-const OVERHEAD_BASE_LANDSCAPE: float = 58.0
+const OVERHEAD_BASE_PORTRAIT: float = 60.0
+const OVERHEAD_BASE_LANDSCAPE: float = 72.0
+## Owner request: the car reads 15% larger against the 24 m circuit. Visual
+## only — the driving model, wheelbase and wall contacts are unchanged.
+const RACE_CAR_SCALE: float = 1.15
 const OVERHEAD_FRAMING_PORTRAIT: float = 0.11
 const VIGNETTE_SHADER = preload("res://assets/shaders/night_vignette.gdshader")
 var wall_collision_count: int = 0
@@ -89,6 +92,7 @@ func _make_car() -> void:
     car_root.name = "Nitro Wheelz VAZ-2106 drift spec"
     (car_root as NitroLadaLowPoly).paint_variant = str(ProjectSettings.get_setting(
         "nitro/car_variant","red"))
+    car_root.scale = Vector3.ONE*RACE_CAR_SCALE
     add_child(car_root)
     _make_tyre_smoke()
 
@@ -346,9 +350,9 @@ func _record_marks(dt: float) -> void:
     if not model.is_drifting() or offroad:
         had_skid = false
         return
-    var p: Vector2 = model.position-model.forward()*1.22
-    var left_p: Vector2 = p-model.right()*0.72
-    var right_p: Vector2 = p+model.right()*0.72
+    var p: Vector2 = model.position-model.forward()*1.22*RACE_CAR_SCALE
+    var left_p: Vector2 = p-model.right()*0.80*RACE_CAR_SCALE
+    var right_p: Vector2 = p+model.right()*0.80*RACE_CAR_SCALE
     if had_skid:
         skid_segments.append(PackedVector2Array([last_left,left_p]))
         skid_segments.append(PackedVector2Array([last_right,right_p]))

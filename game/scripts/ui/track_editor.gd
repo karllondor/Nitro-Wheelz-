@@ -17,6 +17,21 @@ var message_label: Label
 var ready_to_play: bool = false
 var last_length: float = 0.0
 var zoom_level: float = 1.0
+# View panning (metres) on top of the auto-fit centre, so zoomed-in edges
+# of the circuit can be reached and edited.
+var pan_offset: Vector2 = Vector2.ZERO
+var base_mid: Vector2 = Vector2.ZERO
+var base_ppm: float = 1.0
+var base_span: Vector2 = Vector2(300,300)
+var pan_pointer: int = -999
+var pan_last: Vector2 = Vector2.ZERO
+var touches: Dictionary = {}
+var pinch_active: bool = false
+var pinch_start_dist: float = 1.0
+var pinch_start_zoom: float = 1.0
+var pinch_anchor: Vector2 = Vector2.ZERO
+const ZOOM_MIN: float = 0.5
+const ZOOM_MAX: float = 6.0
 var add_mode: bool = false
 var invalid_nodes: Dictionary = {}
 var dialog_overlay: ColorRect
@@ -66,14 +81,40 @@ func _fit_view() -> void:
         smallest = Vector2(minf(smallest.x,p.x),minf(smallest.y,p.y))
         largest = Vector2(maxf(largest.x,p.x),maxf(largest.y,p.y))
     if (data.get("control_points",[]) as Array).is_empty():
-        world_mid = Vector2.ZERO
-        pixels_per_metre = minf(canvas.size.x,canvas.size.y)/310.0*zoom_level
+        base_mid = Vector2.ZERO
+        base_span = Vector2(310,310)
+        base_ppm = minf(canvas.size.x,canvas.size.y)/310.0
     else:
-        world_mid = (smallest+largest)*0.5
-        var span: Vector2 = largest-smallest
-        pixels_per_metre = minf(canvas.size.x*0.84/maxf(span.x,1.0),
-            canvas.size.y*0.84/maxf(span.y,1.0))*zoom_level
+        base_mid = (smallest+largest)*0.5
+        base_span = (largest-smallest).max(Vector2(60,60))
+        base_ppm = minf(canvas.size.x*0.84/maxf(base_span.x,1.0),
+            canvas.size.y*0.84/maxf(base_span.y,1.0))
+    _apply_view()
+
+func _apply_view() -> void:
+    var limit: Vector2 = base_span*0.5+Vector2(80,80)
+    pan_offset = pan_offset.clamp(-limit,limit)
+    world_mid = base_mid+pan_offset
+    pixels_per_metre = base_ppm*zoom_level
     queue_redraw()
+
+## Zoom keeping the world point under `screen_pos` fixed (pinch / wheel).
+func _zoom_at(screen_pos: Vector2, new_zoom: float) -> void:
+    var anchor: Vector2 = _world_point(screen_pos)
+    zoom_level = clampf(new_zoom,ZOOM_MIN,ZOOM_MAX)
+    var ppm: float = base_ppm*zoom_level
+    pan_offset = anchor-(screen_pos-canvas.get_center())/ppm-base_mid
+    _apply_view()
+
+## Move the view by a screen-space drag delta.
+func _pan_by(screen_delta: Vector2) -> void:
+    pan_offset -= screen_delta/maxf(pixels_per_metre,0.0001)
+    _apply_view()
+
+func _fit_all() -> void:
+    zoom_level = 1.0
+    pan_offset = Vector2.ZERO
+    _fit_view()
 
 func _screen_point(p: Vector2) -> Vector2:
     return canvas.get_center()+(p-world_mid)*pixels_per_metre
@@ -106,7 +147,7 @@ func _make_ui() -> void:
     title.add_theme_color_override("font_color",STYLE.WHITE)
     add_child(title)
     var instructions := Label.new()
-    instructions.text = "DRAG nodes • ADD NODE then tap canvas • ORANGE = selected / RED = invalid"
+    instructions.text = "DRAG nodes • DRAG empty map / 2 FINGERS = move & pinch zoom • ADD NODE then tap • ORANGE selected / RED invalid"
     instructions.position = Vector2(s.x*0.05,s.y*0.090)
     instructions.size = Vector2(s.x*0.9,s.y*0.042)
     instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -119,6 +160,7 @@ func _make_ui() -> void:
     message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     message_label.add_theme_font_size_override("font_size",int(16.0*scale))
     add_child(message_label)
+    _button("FIT",0.832,0.486,0.112,0.042,Callable(self,"_fit_all"))
     _button("ZOOM +",0.832,0.534,0.112,0.042,func(): _zoom(1.25))
     _button("ZOOM -",0.832,0.582,0.112,0.042,func(): _zoom(0.8))
     _button("ADD NODE",0.05,0.746,0.28,0.065,Callable(self,"_add_point"))
@@ -236,8 +278,8 @@ func _choose_blank() -> void:
 
 
 func _zoom(multiplier: float) -> void:
-    zoom_level = clampf(zoom_level*multiplier,0.50,4.0)
-    _fit_view()
+    # Buttons zoom around the canvas centre, keeping the current pan.
+    _zoom_at(canvas.get_center(),zoom_level*multiplier)
 
 func _request_new() -> void:
     _show_dialog("start")
@@ -274,6 +316,7 @@ func _replace_new_track(points: Array,adding: bool) -> void:
     pointer = -999
     add_mode = adding
     zoom_level = 1.0
+    pan_offset = Vector2.ZERO
     ready_to_play = false
     invalid_nodes.clear()
     last_saved_path = ""
@@ -493,7 +536,7 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         return
     # Zoom buttons overlap the canvas; do not accidentally add road knots.
     var size: Vector2 = get_viewport_rect().size
-    if pos.x > size.x*0.81 and pos.y > size.y*0.52 and pos.y < size.y*0.65:
+    if pos.x > size.x*0.81 and pos.y > size.y*0.475 and pos.y < size.y*0.65:
         return
     var radius: float = maxf(17.0,get_viewport_rect().size.x*0.031)
     var closest: float = radius
@@ -520,9 +563,17 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
     selected = found
     pointer = pointer_index if found >= 0 else -999
     drag_recorded = false
+    if found < 0:
+        # Empty canvas: one-finger drag pans the zoomed view.
+        pan_pointer = pointer_index
+        pan_last = pos
     queue_redraw()
 
 func _drag_touch(pos: Vector2,pointer_index: int) -> void:
+    if pan_pointer == pointer_index and pointer == -999:
+        _pan_by(pos-pan_last)
+        pan_last = pos
+        return
     if pointer != pointer_index or selected < 0:
         return
     var world: Vector2 = _world_point(pos)
@@ -535,6 +586,8 @@ func _drag_touch(pos: Vector2,pointer_index: int) -> void:
     _invalidate()
 
 func _release_touch(pointer_index: int) -> void:
+    if pan_pointer == pointer_index:
+        pan_pointer = -999
     if pointer == pointer_index:
         pointer = -999
         drag_recorded = false
@@ -549,26 +602,68 @@ func _input(event: InputEvent) -> void:
         return
     if event is InputEventScreenTouch:
         if event.pressed:
-            _start_touch(event.position,event.index)
+            touches[event.index] = event.position
+            if touches.size() == 2:
+                _begin_pinch()
+            elif not pinch_active:
+                _start_touch(event.position,event.index)
         else:
+            touches.erase(event.index)
+            if pinch_active and touches.size() < 2:
+                pinch_active = false
+                pan_pointer = -999
             _release_touch(event.index)
     elif event is InputEventScreenDrag:
-        _drag_touch(event.position,event.index)
-    elif event is InputEventMouseButton:
+        touches[event.index] = event.position
+        if pinch_active and touches.size() >= 2:
+            _update_pinch()
+        else:
+            _drag_touch(event.position,event.index)
+    elif event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
         if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-            _zoom(1.2)
+            _zoom_at(event.position,zoom_level*1.2)
             return
         if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-            _zoom(1.0/1.2)
+            _zoom_at(event.position,zoom_level/1.2)
+            return
+        if event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
+            pan_pointer = -3 if event.pressed else -999
+            pan_last = event.position
             return
         if event.button_index == MOUSE_BUTTON_LEFT:
             if event.pressed:
                 _start_touch(event.position,-2)
             else:
                 _release_touch(-2)
-    elif event is InputEventMouseMotion:
-        if pointer == -2:
+    elif event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
+        if pan_pointer == -3:
+            _pan_by(event.position-pan_last)
+            pan_last = event.position
+        elif pointer == -2 or pan_pointer == -2:
             _drag_touch(event.position,-2)
+
+func _begin_pinch() -> void:
+    # Two fingers: cancel any knot drag and pinch-zoom/pan the view.
+    pinch_active = true
+    pointer = -999
+    pan_pointer = -999
+    drag_recorded = false
+    var pts: Array = touches.values()
+    var a: Vector2 = pts[0]
+    var b: Vector2 = pts[1]
+    pinch_start_dist = maxf(a.distance_to(b),1.0)
+    pinch_start_zoom = zoom_level
+    pinch_anchor = _world_point((a+b)*0.5)
+
+func _update_pinch() -> void:
+    var pts: Array = touches.values()
+    var a: Vector2 = pts[0]
+    var b: Vector2 = pts[1]
+    var mid: Vector2 = (a+b)*0.5
+    zoom_level = clampf(pinch_start_zoom*a.distance_to(b)/pinch_start_dist,ZOOM_MIN,ZOOM_MAX)
+    var ppm: float = base_ppm*zoom_level
+    pan_offset = pinch_anchor-(mid-canvas.get_center())/ppm-base_mid
+    _apply_view()
 
 func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.015,0.012,0.026),true)

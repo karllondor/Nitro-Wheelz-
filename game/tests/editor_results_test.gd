@@ -66,6 +66,29 @@ func _run() -> void:
     if float(editor.get("pixels_per_metre")) <= before_zoom:
         _fail("Zoom+ did not increase editable view scale")
         return
+    # Panning: zoomed edges must be reachable (v0.1.13 owner request).
+    var canvas_rect: Rect2 = editor.get("canvas")
+    var mid_before: Vector2 = editor.get("world_mid")
+    editor.call("_pan_by",Vector2(-120,0))
+    if (Vector2(editor.get("world_mid"))-mid_before).x <= 0.0:
+        _fail("Dragging the empty map left must move the view right")
+        return
+    var probe: Vector2 = canvas_rect.position+canvas_rect.size*Vector2(0.2,0.3)
+    var world_under: Vector2 = editor.call("_world_point",probe)
+    editor.call("_zoom_at",probe,float(editor.get("zoom_level"))*2.0)
+    if Vector2(editor.call("_screen_point",world_under)).distance_to(probe) > 0.5:
+        _fail("Pinch/wheel zoom must keep the point under the fingers fixed")
+        return
+    var knot: Vector2 = editor.call("_node_position",0)
+    editor.call("_zoom_at",editor.call("_screen_point",knot),6.0)
+    editor.call("_pan_by",canvas_rect.get_center()-Vector2(editor.call("_screen_point",knot)))
+    if not canvas_rect.has_point(editor.call("_screen_point",knot)):
+        _fail("A knot at the edge must be reachable at maximum zoom")
+        return
+    editor.call("_fit_all")
+    if absf(float(editor.get("zoom_level"))-1.0) > 0.001 or Vector2(editor.get("pan_offset")) != Vector2.ZERO:
+        _fail("FIT must restore the whole-track view")
+        return
     # Duplicate a knot: validator should flag specific offending nodes red.
     data["control_points"][3] = data["control_points"][2].duplicate()
     editor.set("data",data)
@@ -129,7 +152,7 @@ func _run() -> void:
     if ranked.size()!=2 or float(ranked[0]["seconds"]) >= float(ranked[1]["seconds"]):
         _fail("Local leaderboard sorting incorrect")
         return
-    print("PASS: drag/add/delete/UNDO, circle/blank, zoom, red invalid knots, readable dialogs, named save, local records")
+    print("PASS: drag/add/delete/UNDO, circle/blank, zoom + pan/pinch/FIT, red invalid knots, readable dialogs, named save, local records")
     print("NOT RUN: real phone touch interaction, full 3-lap UI screenshot and online leaderboard")
     quit(0)
 

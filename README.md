@@ -86,6 +86,7 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - BUILD TRACK • 3D: tap-to-build circuit builder with live road/kerb/scenery preview, GENERATE, SAVE and DRIVE (validated by Track DNA).
 - Drift scoring with chains: kerb clips, left/right transitions, wall/spin loses the chain; TOTAL vs SCORE xN like the reference HUD.
 - Procedural inline-six engine sound (works without the recorded OGG pack).
+- Track editor: pan, pinch zoom and FIT. Cars restyled to the owner's sheets (faceted red drift spec, smooth pearl white). Sky with clouds and drifting cloud shadows; camera further out with a 15% larger race car.
 - Handset rendering, frame rate and feel: NOT RUN.
 
 ## v0.1.12 — Car dimensions, garage and sound-import workflow
