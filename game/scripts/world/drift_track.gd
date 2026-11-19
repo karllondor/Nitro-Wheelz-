@@ -9,6 +9,8 @@ const TRACK_DATA: String = "res://tracks/shin_kawa_v2.json"
 var track_data_path: String = TRACK_DATA
 var display_name: String = "Shin-Kawa Drift Park"
 const DNA = preload("res://scripts/world/track_dna.gd")
+const ASPHALT = preload("res://assets/surfaces/asphalt.webp")
+const SAND = preload("res://assets/surfaces/sand.webp")
 const HALF_ROAD_WIDTH: float = 12.0  # legacy test compatibility, local widths vary
 const CAR_WALL_CLEARANCE: float = 1.18
 const WALL_HEIGHT: float = 1.30
@@ -145,13 +147,18 @@ func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
         var q: Vector3 = Vector3(b[i].x,height,b[i].y)
         var r: Vector3 = Vector3(a[next_i].x,height,a[next_i].y)
         var u: Vector3 = Vector3(b[next_i].x,height,b[next_i].y)
-        _add_tri(st,p,r,q,tint)
-        _add_tri(st,q,r,u,tint)
+        var colour: Color = Color.WHITE if label in ["Single continuous driving surface","Compacted shoulder"] else tint
+        _add_tri(st,p,r,q,colour)
+        _add_tri(st,q,r,u,colour)
     var arr: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    if label == "Single continuous driving surface":
+        mat.albedo_texture = ASPHALT
+    elif label == "Compacted shoulder":
+        mat.albedo_texture = SAND
     arr.surface_set_material(0,mat)
     var mesh := MeshInstance3D.new()
     mesh.name = label
@@ -163,6 +170,8 @@ func _add_tri(st: SurfaceTool,a: Vector3,b: Vector3,c: Vector3,
     for p in [a,b,c]:
         st.set_color(tint)
         st.set_normal(Vector3.UP)
+        # World-space UVs make adjacent procedural segments seamlessly tile.
+        st.set_uv(Vector2(p.x,p.z)/7.0)
         st.add_vertex(p)
         # Optional collision vertices are returned by explicit wall helper.
 
@@ -251,7 +260,10 @@ func _build_environment() -> void:
     plane.mesh = ground
     plane.position.y = -0.08
     var m := StandardMaterial3D.new()
-    m.albedo_color = Color(0.31,0.27,0.22)
+    m.albedo_color = Color(1.0,1.0,1.0)
+    m.albedo_texture = SAND
+    m.uv1_scale = Vector3(650.0/7.0,650.0/7.0,1.0)
+    m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     plane.material_override = m
     add_child(plane)
     var sun := DirectionalLight3D.new()
