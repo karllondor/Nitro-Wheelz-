@@ -32,6 +32,8 @@ func _ready() -> void:
         player.name = "SFX_"+name
         # All clips share the same front-of-car mixing position (2D)
         # on mobile; dedicated volume based on physics, not screen camera.
+        if name in ["tyre_rolling","tyre_drift","wind_speed","gravel_roll"] and stream is AudioStreamOggVorbis:
+            (stream as AudioStreamOggVorbis).loop = true
         player.stream = stream
         player.volume_db = -45.0
         player.bus = "Master"
@@ -41,10 +43,8 @@ func _ready() -> void:
     for continuous in ["tyre_rolling","tyre_drift","wind_speed","gravel_roll"]:
         if voices.has(continuous):
             var player: AudioStreamPlayer = voices[continuous]
-            var duplicated: AudioStream = player.stream.duplicate()
-            if duplicated is AudioStreamOggVorbis:
-                (duplicated as AudioStreamOggVorbis).loop = true
-            player.stream = duplicated
+            # Use the imported ResourceLoader cached stream, not a duplicate.
+            # Duplicated Vorbis audio retained four resources at SceneTree exit.
             player.play()
 
 func _exit_tree() -> void:
