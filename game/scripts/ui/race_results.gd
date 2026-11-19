@@ -199,15 +199,26 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     canvas.draw.connect(_draw_board)
     add_child(canvas)
     var lay: Dictionary = layout(s)
-    _action("RESTART",Rect2(lay["restart"]),replay,float(lay["u"]),true)
+    var on_edit: Callable = stats.get("on_edit",Callable())
+    if on_edit.is_valid():
+        # Player track: RESTART | EDIT TRACK | GARAGE / MENU (editor loop).
+        var rr: Rect2 = lay["restart"]
+        var gap: float = rr.size.x*0.035
+        var w1: float = rr.size.x*0.60
+        _action("RESTART",Rect2(rr.position,Vector2(w1,rr.size.y)),replay,float(lay["u"]),true)
+        _action("EDIT TRACK",Rect2(rr.position+Vector2(w1+gap,0.0),Vector2(rr.size.x-w1-gap,rr.size.y)),
+            on_edit,float(lay["u"]),false,0.68)
+    else:
+        _action("RESTART",Rect2(lay["restart"]),replay,float(lay["u"]),true)
     _action("GARAGE / MENU",Rect2(lay["menu"]),garage,float(lay["u"]),false)
 
-func _action(label: String,rect: Rect2,callback: Callable,u: float,primary: bool) -> void:
+func _action(label: String,rect: Rect2,callback: Callable,u: float,primary: bool,font_scale: float = 1.0) -> void:
     var button := Button.new()
     button.text = label
+    button.name = label
     button.position = rect.position
     button.size = rect.size
-    button.add_theme_font_size_override("font_size",int(26.0*u))
+    button.add_theme_font_size_override("font_size",int(26.0*u*font_scale))
     STYLE.style_button(button,u,primary)
     button.pressed.connect(callback)
     add_child(button)

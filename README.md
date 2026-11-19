@@ -80,7 +80,9 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 ## v0.1.21 — Recorded SFX removed, more realistic engine
 - At the owner's request all recorded sound effects are gone; the car sound is the procedural synth again (engine, tyre squeal, wall scrape, impacts), as before v0.1.19.
 - The engine synth is now a small physical model: exhaust pipe waveguides (per-bank headers + tail pipe), every combustion slightly different, crank-speed wander, turbulent jet noise at the pipe exit, valvetrain tick, overrun misfires, stereo early reflections. RYU-32 V8: two exhaust banks with a longer run on one side = cross-plane burble. Physics unchanged (bit-identical).
-- Background music unchanged.
+- Background music unchanged (default level lowered under the engine). The recordings are archived in `archive/recorded_sfx/`, outside the game export.
+- Track editor draws the real road, finds every problem, AUTO-SMOOTH repairs locally with a size limit; finger-friendly nodes; DRIVE separates CIRCUITS from MY TRACKS (with EDIT); EDIT TRACK from the results of your own track.
+- No rev flares when braking or lifting, seamless pause, car choice remembered after restart, bigger HUD labels.
 
 ## v0.1.20 — Audio hotfix + background music
 - Recorded effects cut to their real event, played once per event with cooldowns, priorities and groups; per-car engine effects; synth-only comparison mode; audio debug overlay. Audit: docs/audio/SFX_AUDIT.md.

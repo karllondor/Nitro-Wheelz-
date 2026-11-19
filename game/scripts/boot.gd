@@ -110,20 +110,90 @@ func _main_page() -> void:
         page.remove_child(quit)
         row.add_child(quit)
 
+## DRIVE: built-in CIRCUITS first, then MY TRACKS (every track the player
+## saved from the editor or the 3D builder, newest first, each with its best
+## score and an EDIT button) - clearly separated, scrolls when long.
 func _drive_page() -> void:
     _title("CHOOSE A TRACK")
+    var list: VBoxContainer = _scroll_list()
+    _section(list,"CIRCUITS")
     for t in TRACKS:
         var best: int = _best(str(t[2]))
         var label: String = str(t[0])+("\nBEST %s PTS" % RESULTS.points(best) if best > 0 else "\nNO RUN YET")
         var b: Button = _big(label,_race.bind(str(t[1])))
         b.name = "Track "+str(t[2])
-    var mine: String = _last_custom_track()
-    if not mine.is_empty():
-        var checked: Dictionary = DNA.read_track(mine)
-        if bool(checked.get("ok",false)):
-            _big("MY TRACK • "+str(checked.get("track_name","CUSTOM")).to_upper(),_race.bind(mine)).name = "Track custom"
-    _big("RANDOM TRACK",_random_track).name = "Track random"
+        _move(b,list)
+    var mine: Array[Dictionary] = saved_tracks()
+    _section(list,"MY TRACKS" if not mine.is_empty() else "MY TRACKS • none yet: TRACK BUILDER")
+    for t in mine:
+        var row := HBoxContainer.new()
+        row.name = "My track "+str(t["id"])
+        row.add_theme_constant_override("separation",int(10*ui_unit))
+        list.add_child(row)
+        var best2: int = _best(str(t["id"]))
+        var label2: String = "★ %s • %d m\n%s" % [str(t["name"]).to_upper(),int(t["length"]),
+            "BEST %s PTS" % RESULTS.points(best2) if best2 > 0 else "NO RUN YET"]
+        var drive: Button = _big(label2,_race.bind(str(t["path"])))
+        drive.name = "Track custom"
+        drive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        # Player tracks are framed in the accent colour (built-ins neutral).
+        STYLE.style_button(drive,ui_unit,true)
+        _move(drive,row)
+        var edit_b: Button = _small("EDIT",_edit_track.bind(str(t["path"])))
+        edit_b.name = "Edit "+str(t["id"])
+        edit_b.custom_minimum_size = Vector2(120.0,86.0)*ui_unit
+        _move(edit_b,row)
+    _section(list,"QUICK")
+    _move(_big("RANDOM TRACK",_random_track),list).name = "Track random"
     _small("◀  BACK",func(): show_page("main"))
+
+## Every valid player track on this device: [{path, id, name, length, time}].
+static func saved_tracks() -> Array[Dictionary]:
+    var out: Array[Dictionary] = []
+    for f in DirAccess.get_files_at("user://"):
+        if not (f.begins_with("nitro_track_") and f.ends_with(".json")):
+            continue
+        var path: String = "user://"+f
+        var c: Dictionary = DNA.read_track(path)
+        if not bool(c.get("ok",false)):
+            continue
+        out.append({"path":path,"id":str(c["track_id"]),"name":str(c["track_name"]),
+            "length":float(c["length_metres"]),"time":FileAccess.get_modified_time(path)})
+    out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["time"]) > int(b["time"]))
+    return out
+
+func _edit_track(path: String) -> void:
+    var f: FileAccess = FileAccess.open(LAST_SAVED,FileAccess.WRITE)
+    if f != null:
+        f.store_string(path)
+        f.close()
+    _go("res://scenes/track_editor.tscn")
+
+func _scroll_list() -> VBoxContainer:
+    var scroll := ScrollContainer.new()
+    scroll.name = "Track list"
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.custom_minimum_size.y = get_viewport_rect().size.y*0.56
+    page.add_child(scroll)
+    var list := VBoxContainer.new()
+    list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    list.add_theme_constant_override("separation",int(12*ui_unit))
+    scroll.add_child(list)
+    return list
+
+func _section(parent: Node, txt: String) -> void:
+    var l := Label.new()
+    l.name = "Section "+txt
+    l.text = txt
+    l.add_theme_font_override("font",STYLE.BOLD)
+    l.add_theme_font_size_override("font_size",int(17*ui_unit))
+    l.add_theme_color_override("font_color",STYLE.PINK_SOFT if txt.begins_with("MY") else STYLE.MUTED)
+    parent.add_child(l)
+
+func _move(node: Control, parent: Node) -> Control:
+    node.get_parent().remove_child(node)
+    parent.add_child(node)
+    return node
 
 func _build_page() -> void:
     _title("TRACK BUILDER")
@@ -223,12 +293,6 @@ func _best(track_id: String) -> int:
     for run in RESULTS.track_runs(track_id):
         best = maxi(best,int((run as Dictionary).get("score",0)))
     return best
-
-func _last_custom_track() -> String:
-    if not FileAccess.file_exists(LAST_SAVED):
-        return ""
-    var path: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
-    return path if path.begins_with("user://") and FileAccess.file_exists(path) else ""
 
 func _race(track_path: String) -> void:
     ProjectSettings.set_setting("nitro/selected_track",track_path)

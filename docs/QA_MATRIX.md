@@ -24,7 +24,15 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 ## v0.1.21 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|
-| tools/run_godot_checks.sh (import + 20 Godot tests; sfx_mixer_test removed with the recordings) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| tools/run_godot_checks.sh (import + 23 Godot tests incl. new audio_regression, editor_geometry, hud_layout) | Linux container, Godot 4.7.2 headless | PASS | local run after the owner brief; CI on push |
+| No recorded SFX inside the game; originals archived outside the export; one synth player per race | Linux container | PASS | audio_regression_test |
+| Both engines: idle, accel + shifts, drift, lift, braking to stop, wall impact; no rev flares braking (+0 vs speed map +4305 / +4023 rpm) | Linux container | PASS | audio_regression_test |
+| Restart clears transients, pause keeps race + sound state, no carry-over between cars, car choice survives restart | Linux container | PASS | audio_regression_test |
+| Music vs engine in game | Xvfb render | music ~-26 LUFS at default; engine idle ~-25, driving -16..-18 LUFS | ebur128 on Movie Maker recordings |
+| Editor: complex shapes, 2 hairpins = 2 reports, close sections, figure-eight refused, stacked knots, SAVE AS exact, race road == preview, touch | Linux container | PASS | editor_geometry_test |
+| HUD on 11 screens (16:9-21:9 phones, 360x640, tablets, landscape): no overlaps, minimap size, text >= 2.0-2.2% of short side | Linux container | PASS (was 1.6% for BANKED SCORE) | hud_layout_test |
+| Same camera for Lada and RYU-32, car in view in both cameras | Linux container | PASS | dynamic_camera_test |
+| Android APK / Web build | GitHub Actions | see CI run for the pushed commit | android-debug.yml / web-preview.yml |
 | Physics golden trace bit-identical | Linux container | PASS | car_profiles_test |
 | Lada JSON == synth defaults (new fingerprint, re-recorded once) | Linux container | PASS | car_profiles_test |
 | Realism checks vs feature-off controls (cycle change, V8 burble, overrun misfires, idle tick, stereo) | Linux container | PASS (0.93/0.24, 2.49/0.76, 38/0, x2.96, 0.977) | engine_audio_test |

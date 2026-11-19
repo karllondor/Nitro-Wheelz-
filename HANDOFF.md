@@ -94,6 +94,17 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - tests/audio_drive_render.gd: synth-only, music muted for the recording, prints engine state.
 - OPEN: owner listening test on Android for both cars; DEVELOPER > AUDIO BENCHMARK on the phone (container: 35-39 ms per audio second, was ~25).
 
+## OWNER BRIEF v0.1.21 (P0 audio cleanup, P1 editor / HUD / garage, P2 track selection)
+- archive/recorded_sfx/ (17 OGG + 17 WAV + manifest + catalogue, outside game/). tests/audio_regression_test.gd.
+- engine_synth.gd: _drive_rpm() (no downshift off the throttle, clutch-in idle near a stop), reset_state(), SQUEAL_GAIN. drive_audio.gd: pause_audio(), reset() -> reset_state(), _exit_tree(). race.gd: pause uses pause_audio; CARS.selected(); results on_edit for user:// tracks.
+- car_catalog.gd: selected() / select() (garage + race share it; survives restarts). garage.gd uses them.
+- hud_style.gd: MUSIC_DEFAULT 0.45 + one-time migration (audio/mix_rev), gauge position on wide portraits / landscape. race_hud.gd: text_sizes() shared by drawing and tests.
+- track_dna.gd: sample_curve() (shared by compile and the editor preview), diagnose() (all problems with exact stretches), repair() (AUTO-SMOOTH core). track_editor.gd: real-road preview, problems list, repair-based AUTO-SMOOTH, hit_radius()/node_radius(), grab offset, pinch -> pan, verified full-precision save.
+- boot.gd: DRIVE sections CIRCUITS / MY TRACKS (saved_tracks(), EDIT) / QUICK. race_results.gd: optional EDIT TRACK.
+- New tests: audio_regression_test, editor_geometry_test, hud_layout_test; dynamic_camera_test drives both cars; main_menu_test checks the sections.
+- Per-car rankings (reviewed only): runs are keyed by track id in user://nitro_local_runs.json; store the car variant in each run and filter by it in RESULTS.track_runs()/sorted_local(), keeping old runs as "any car".
+- Known limits: validate + diagnose on finger release is ~0.2 s for a 28-node track in the container (more on a phone); a figure-eight must be fixed by hand; landscape HUD is for desktop.
+
 ## NEXT ACTION
 1. Owner installs the v0.1.21 TEST APK and listens to both cars (idle, launch through the gears, lift-off, limiter, drift); DEVELOPER > AUDIO BENCHMARK on the phone; tuning knobs per car are in game/cars/*.json "engine". Earlier: v0.1.20 TEST APK (audio hotfix; superseded); earlier: v0.1.19 debug APK (drive Lada vs RYU-32 on the same track, DEVELOPER > AUDIO BENCHMARK on phone and Web); earlier: v0.1.18 debug APK (new menu, volumes, editor AUTO-SMOOTH, RYU-32 coupe); earlier: v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.

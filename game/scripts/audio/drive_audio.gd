@@ -12,6 +12,7 @@ var synth: NitroEngineSynth
 var synth_player: AudioStreamPlayer
 var synth_playback: AudioStreamGeneratorPlayback
 var synth_muted: bool = false
+var audio_paused: bool = false
 
 func _ready() -> void:
     synth = SYNTH.new()
@@ -26,6 +27,13 @@ func _ready() -> void:
     synth_player.play()
     synth_playback = synth_player.get_stream_playback() as AudioStreamGeneratorPlayback
 
+func _exit_tree() -> void:
+    # Release the generator playback with the node (no leak at shutdown).
+    synth_playback = null
+    if synth_player != null:
+        synth_player.stop()
+        synth_player.stream = null
+
 func _process(_delta: float) -> void:
     if synth == null:
         return
@@ -33,7 +41,7 @@ func _process(_delta: float) -> void:
     synth.engine_gain = STYLE.vol_engine
     synth.tyre_gain = STYLE.vol_tyres
     synth.fx_gain = STYLE.vol_fx
-    if synth_playback == null or synth_muted:
+    if synth_playback == null or synth_muted or audio_paused:
         return
     var frames: int = synth_playback.get_frames_available()
     if frames > 0:
@@ -43,8 +51,9 @@ func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
         handbrake: float,_offroad: bool,dt: float) -> void:
     if dt <= 0.0 or synth == null:
         return
-    if synth_muted and synth_player != null:
+    if (synth_muted or audio_paused) and synth_player != null:
         synth_muted = false
+        audio_paused = false
         synth_player.stream_paused = false
     var slip: float = clampf((absf(drift_angle_deg)-8.0)/30.0,0.0,1.0)
     if handbrake > 0.45 and speed_kmh > 10.0:
@@ -61,16 +70,21 @@ func wall_contact(slide_mps: float) -> void:
     if synth != null:
         synth.scrape_target = clampf((slide_mps-1.0)/22.0,0.0,1.0) if slide_mps > 1.0 else 0.0
 
+## Pause menu: freeze the sound exactly where it is (engine state, revs,
+## pipe ringing all kept) and continue seamlessly on resume.
+func pause_audio(on: bool) -> void:
+    audio_paused = on
+    if synth_player != null:
+        synth_player.stream_paused = on or synth_muted
+
+## Restart: back to a quiet idle with no transient carried over.
 func reset() -> void:
     synth_muted = false
+    audio_paused = false
     if synth_player != null:
         synth_player.stream_paused = false
     if synth != null:
-        synth.rpm = synth.idle_rpm
-        synth.load = 0.0
-        synth.squeal = 0.0
-        synth.scrape = 0.0
-        synth.scrape_target = 0.0
+        synth.reset_state()
 
 func silence() -> void:
     synth_muted = true
@@ -95,5 +109,5 @@ func debug_lines() -> PackedStringArray:
         synth.shifts,synth.limiter_hits])
     out.append("TYRES squeal %.2f   WALL scrape %.2f" % [synth.squeal,synth.scrape])
     out.append("MIX engine %d%%  tyres %d%%  effects %d%%%s" % [int(synth.engine_gain*100.0),
-        int(synth.tyre_gain*100.0),int(synth.fx_gain*100.0),"  (MUTED)" if synth_muted else ""])
+        int(synth.tyre_gain*100.0),int(synth.fx_gain*100.0),"  (MUTED)" if synth_muted else ("  (PAUSED)" if audio_paused else "")])
     return out

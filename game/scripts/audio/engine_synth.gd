@@ -49,6 +49,7 @@ const PIPE_BUF: int = 512        # max pipe round trip ~5.5 m
 const ROOM_BUF: int = 1024
 const MECH_GAIN: float = 0.3
 const JET_GAIN: float = 2.2
+const SQUEAL_GAIN: float = 0.41
 # Early reflections (samples at 22.05 kHz) per channel: ~6.5 / 10.6 ms left,
 # ~8.4 / 13.1 ms right.
 const ROOM_L: Vector2i = Vector2i(143,233)
@@ -307,14 +308,57 @@ static func rpm_for(speed_kmh: float, gas: float, slip: float) -> float:
     base += clampf(slip,0.0,1.0)*gas*1600.0
     return clampf(base,IDLE_RPM,LIMIT_RPM)
 
+## Gearbox + revs for the current driving state. On the throttle it is the
+## plain speed map above (upshift cut, kick-down on the gas, wheelspin revs).
+## Off the throttle (lift, braking) the gearbox does not drop gears: the
+## engine winds down in the gear it is in and, near a stop, the clutch is in
+## and it idles - no artificial rev flares while slowing down (v0.1.21).
+func _drive_rpm(speed_kmh: float, gas: float, slip: float) -> float:
+    var natural: int = gear_of(speed_kmh)
+    if natural > gear:
+        if gas > 0.3:
+            # Upshift: brief ignition cut while the clutch is in.
+            _cut_timer = maxf(_cut_timer,0.11)
+            shifts += 1
+        gear = natural
+    elif natural < gear and (gas > 0.3 or speed_kmh < 12.0):
+        gear = natural
+    if gas <= 0.3 and gear > natural:
+        # Lugging below this gear's range: revs fall with road speed.
+        var low: float = gear_top[gear-2]
+        return clampf(shift_floor_rpm*speed_kmh/maxf(low,1.0),idle_rpm,limit_rpm)
+    if gas <= 0.3 and speed_kmh < 12.0:
+        # Rolling to a stop off the throttle: clutch in, engine idles.
+        return clampf(idle_rpm+gas*2200.0,idle_rpm,limit_rpm)
+    return rpm_of(speed_kmh,gas,slip)
+
+## Clear every transient (crackle window, cut, pops, impact, pipe ringing)
+## so a restarted race starts from a quiet idle - nothing carries over.
+func reset_state() -> void:
+    rpm = idle_rpm
+    target_rpm = idle_rpm
+    load = 0.0
+    gear = 1
+    squeal = 0.0
+    scrape = 0.0
+    scrape_target = 0.0
+    afterfire = 0.0
+    _cut_timer = 0.0
+    _prev_gas = 0.0
+    _pop = 0.0
+    _thump = 0.0
+    _imp_t = 1.0
+    _e0 = 0.0
+    _e1 = 0.0
+    _a0 = 0.0
+    _a1 = 0.0
+    _mech = 0.0
+    shifts = 0
+    limiter_hits = 0
+    misfires = 0
+
 func set_state(speed_kmh: float, gas: float, slip: float, dt: float) -> void:
-    var new_gear: int = gear_of(speed_kmh)
-    if new_gear > gear and gas > 0.3:
-        # Upshift: brief ignition cut while the clutch is in.
-        _cut_timer = maxf(_cut_timer,0.11)
-        shifts += 1
-    gear = new_gear
-    target_rpm = rpm_of(speed_kmh,gas,slip)
+    target_rpm = _drive_rpm(speed_kmh,gas,slip)
     _cut_timer = maxf(0.0,_cut_timer-dt)
     if _cut_timer > 0.0:
         rpm = maxf(idle_rpm,rpm-2600.0*dt)
@@ -431,7 +475,9 @@ func render(frames: int) -> PackedVector2Array:
     var tr: float = tail_reflect
     var two_banks: bool = _banks > 1
     var room_g: float = room
-    var sq_amp: float = master*squeal
+    # Tyres: same level for every car (not scaled by engine loudness), kept
+    # under the engine (v0.1.21: -2.5 dB, "no exaggerated tyre noise").
+    var sq_amp: float = SQUEAL_GAIN*squeal
     # Squeal pitch wanders (random walk) and rises a little with slip.
     for k in range(3):
         _sq_drift[k] = clampf(_sq_drift[k]*0.94+_rng.randf_range(-0.035,0.035),-0.12,0.12)

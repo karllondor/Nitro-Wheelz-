@@ -81,7 +81,7 @@ func _ready() -> void:
         return
     model = DRIVE.new()
     # Per-car handling from its profile (Lada = baseline, unchanged).
-    model.apply_profile(CARS.handling(str(ProjectSettings.get_setting("nitro/car_variant","red"))))
+    model.apply_profile(CARS.handling(CARS.selected()))
     model.reset(track.start_position(),track.start_heading())
     _make_car()
     sfx = AUDIO.new()
@@ -89,7 +89,7 @@ func _ready() -> void:
     add_child(sfx)
     # Engine sound follows the car's profile (Lada I4 / RYU-32 V8).
     if sfx.synth != null:
-        var car_variant: String = str(ProjectSettings.get_setting("nitro/car_variant","red"))
+        var car_variant: String = CARS.selected()
         sfx.synth.apply_profile(CARS.engine(car_variant))
     # DEVELOPER audio diagnostics overlay (off by default, not part of the HUD).
     if load("res://scripts/ui/audio_debug_overlay.gd").enabled():
@@ -108,7 +108,7 @@ func _ready() -> void:
 
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
-    var variant: String = CARS.valid(str(ProjectSettings.get_setting("nitro/car_variant","red")))
+    var variant: String = CARS.selected()
     car_root = CARS.make(variant)
     car_root.name = "Nitro Wheelz "+str(CARS.info(variant)["name"])
     car_root.scale = Vector3.ONE*RACE_CAR_SCALE
@@ -335,7 +335,19 @@ func _show_results() -> void:
         Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
         {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
         "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
-        "laps":lap_splits.duplicate(true),"length_m":track.length_metres})
+        "laps":lap_splits.duplicate(true),"length_m":track.length_metres,
+        "on_edit":_edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable()})
+
+func _player_track_path() -> String:
+    return str(ProjectSettings.get_setting("nitro/selected_track",""))
+
+## Results of a player track -> straight back into the editor with it.
+func _edit_this_track() -> void:
+    var f: FileAccess = FileAccess.open("user://nitro_editor_last_path.txt",FileAccess.WRITE)
+    if f != null:
+        f.store_string(_player_track_path())
+        f.close()
+    get_tree().change_scene_to_file("res://scenes/track_editor.tscn")
 
 func _wall_feedback(impact_speed: float) -> void:
     if collision_cooldown > 0.0:
@@ -563,9 +575,10 @@ func _toggle_pause() -> void:
     if finished:
         return
     paused = not paused
+    if sfx != null:
+        # Freeze and continue the sound exactly where it was (no reset).
+        sfx.pause_audio(paused)
     if paused:
-        if sfx != null:
-            sfx.silence()
         if touch != null:
             touch.release_all()
             touch.visible = false

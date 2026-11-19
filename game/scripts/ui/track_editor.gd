@@ -49,6 +49,9 @@ var zoom_strip: Rect2 = Rect2()
 ## failing arc itself can be drawn in red (not just its nodes).
 var compiled_samples: Array = []
 var problem_ranges: Array[Vector2i] = []
+var problems: Array[Dictionary] = []     # DNA.diagnose(): every problem, exact stretches
+var preview: Dictionary = {}             # DNA.sample_curve() of the current knots
+var grab_offset: Vector2 = Vector2.ZERO  # finger -> node offset while dragging
 var smooth_button: Button
 const HELP_LINES: Array[String] = [
     "DRAG a node to reshape the road",
@@ -486,12 +489,21 @@ func _persist_track(title: String) -> bool:
     if file == null:
         _status("FAILED • Device storage unavailable",false)
         return false
-    file.store_string(JSON.stringify(data,"  "))
+    # Full float precision: the saved file is exactly the validated track.
+    file.store_string(JSON.stringify(data,"  ",false,true))
     file.close()
     var compiled: Dictionary = DNA.read_track(path)
     if not bool(compiled.get("ok",false)):
         _status("FAILED • Saved file did not pass validator",false)
         return false
+    if compiled["centerline"] != DNA.compile(data)["centerline"]:
+        _status("FAILED • Saved geometry differs from the editor",false)
+        return false
+    # Keep editing exactly what the file holds (what the race will load).
+    var reread: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+    if reread is Dictionary:
+        data["control_points"] = reread["control_points"]
+        _refresh_preview()
     var recent: FileAccess = FileAccess.open(LAST_SAVED,FileAccess.WRITE)
     if recent != null:
         recent.store_string(path)
@@ -519,7 +531,31 @@ func _status(txt: String,valid: bool) -> void:
     message_label.text = txt
     message_label.add_theme_color_override("font_color",Color(0.55,0.95,0.77) if valid else Color(1.0,0.43,0.50))
 
+## The road exactly as the race will build it: same spline, width, edges
+## (= barrier lines) and start line (knot 0, driving towards knot 1).
+func _refresh_preview() -> void:
+    preview = {}
+    var n: int = _point_count()
+    if n < 8:
+        return
+    var pts: Array[Vector2] = []
+    var widths := PackedFloat32Array()
+    for i in range(n):
+        pts.append(_node_position(i))
+        widths.append(float(data.get("width_m",25.0)))
+    preview = DNA.sample_curve(pts,widths)
+
+## Node size and finger hit area scale with the screen (phones: ~9 mm).
+func node_radius() -> float:
+    var v: Vector2 = get_viewport_rect().size
+    return clampf(minf(v.x,v.y)*0.017,10.0,22.0)
+
+func hit_radius() -> float:
+    var v: Vector2 = get_viewport_rect().size
+    return maxf(node_radius()*2.6,minf(v.x,v.y)*0.06)
+
 func _invalidate() -> void:
+    _refresh_preview()
     ready_to_play = false
     _status("CHANGED • Validate before driving",false)
     _redraw()
@@ -529,21 +565,54 @@ func _validate() -> void:
     ready_to_play = bool(result.get("ok",false))
     invalid_nodes.clear()
     problem_ranges.clear()
+    problems.clear()
     compiled_samples = result.get("centerline",[])
+    _refresh_preview()
     if ready_to_play:
         last_length = float(result["length_metres"])
         _status("VALID • %.0f m / %.1f m width • closed loop" % [last_length,float(data["width_m"])],true)
     else:
         var errors: PackedStringArray = result.get("errors",PackedStringArray())
-        for error in errors:
-            _flag_problem_nodes(str(error))
-            _flag_problem_samples(str(error))
+        if result.has("centerline"):
+            # Every problem with its exact stretch, not just the first one.
+            problems = DNA.diagnose(result)
+            for prob in problems:
+                for k in prob["knots"]:
+                    invalid_nodes[int(k)] = true
+                var m: int = compiled_samples.size()
+                if str(prob["kind"]) == "tight":
+                    var a: int = int(prob["from"])
+                    var b: int = int(prob["to"])
+                    problem_ranges.append(Vector2i(a-1,a+posmod(b-a,m)+1))
+                else:
+                    var ra: Vector2i = prob["a"]
+                    var rb: Vector2i = prob["b"]
+                    problem_ranges.append(Vector2i(ra.x-1,ra.y+2))
+                    problem_ranges.append(Vector2i(rb.x-1,rb.y+2))
+        if problems.is_empty():
+            for error in errors:
+                _flag_problem_nodes(str(error))
+                _flag_problem_samples(str(error))
         var fixable: bool = not invalid_nodes.is_empty()
-        _status(friendly_error(str(errors[0]) if not errors.is_empty() else "")+
-            ("  •  TAP AUTO-SMOOTH" if fixable else ""),false)
+        var head: String = friendly_problem(problems[0]) if not problems.is_empty() else \
+            friendly_error(str(errors[0]) if not errors.is_empty() else "")
+        if problems.size() > 1:
+            head = "%d PROBLEMS • %s" % [problems.size(),head]
+        _status(head+("  •  TAP AUTO-SMOOTH" if fixable else ""),false)
     if smooth_button != null:
         STYLE.style_button(smooth_button,clampf(get_viewport_rect().size.x/700.0,0.85,1.8),not ready_to_play)
     _redraw()
+
+## Player-facing wording for one diagnosed problem.
+static func friendly_problem(prob: Dictionary) -> String:
+    match str(prob.get("kind","")):
+        "tight":
+            return "CORNER TOO TIGHT (%.0f m, needs %.0f m)" % [float(prob["radius"]),float(prob["need"])]
+        "close":
+            return "ROADS TOO CLOSE (%.0f m gap, needs %.0f m)" % [float(prob["gap"]),float(prob["need"])]
+        "cross":
+            return "INNER WALL FOLDS IN A TIGHT CORNER" if bool(prob["local"]) else "TRACK CROSSES ITSELF"
+    return "INVALID"
 
 ## Short player-facing wording for validator messages (full text stays in
 ## the validator for tests/logs).
@@ -576,9 +645,10 @@ func _flag_problem_samples(message: String) -> void:
             var c: int = int(txt)
             problem_ranges.append(Vector2i(c-DNA.SUBDIVISIONS/2,c+DNA.SUBDIVISIONS/2))
 
-## Relax the knots around every reported problem (each moves 35% towards
-## the midpoint of its neighbours) until the circuit validates. Reverts and
-## says so if it cannot be fixed this way. One UNDO step.
+## AUTO-SMOOTH: NitroTrackDNA.repair() fixes the reported problems with
+## small local moves (tight corners relax, too-close stretches are pushed
+## apart), never moving a node more than a set share of the track size, and
+## never redesigning a real crossing. One UNDO step; says how much it moved.
 func _auto_smooth() -> void:
     _validate()
     if ready_to_play:
@@ -587,43 +657,15 @@ func _auto_smooth() -> void:
     if _point_count() < 8:
         _status("PLACE AT LEAST 8 NODES FIRST",false)
         return
+    var fix: Dictionary = DNA.repair(data)
+    if not bool(fix.get("ok",false)):
+        _status("CAN'T FIX AUTOMATICALLY • "+str(fix.get("reason","drag the red nodes apart")),false)
+        return
     _save_undo_snapshot()
-    var original: Array = (data["control_points"] as Array).duplicate(true)
-    var moved: Dictionary = {}
-    var passes: int = 0
-    for _it in range(60):
-        var result: Dictionary = DNA.compile(data)
-        if bool(result.get("ok",false)):
-            break
-        invalid_nodes.clear()
-        for e in result.get("errors",PackedStringArray()):
-            _flag_problem_nodes(str(e))
-        if invalid_nodes.is_empty():
-            break
-        var pts: Array = data["control_points"]
-        var n: int = pts.size()
-        var targets: Dictionary = {}
-        for k in invalid_nodes.keys():
-            for d in [-1,0,1]:
-                targets[posmod(int(k)+d,n)] = true
-        var next: Array = pts.duplicate(true)
-        for k in targets.keys():
-            var a := Vector2(float(pts[posmod(k-1,n)][0]),float(pts[posmod(k-1,n)][1]))
-            var b := Vector2(float(pts[k][0]),float(pts[k][1]))
-            var c := Vector2(float(pts[(k+1)%n][0]),float(pts[(k+1)%n][1]))
-            var p: Vector2 = b.lerp((a+c)*0.5,0.35)
-            next[k] = [snappedf(p.x,0.01),snappedf(p.y,0.01)]
-            moved[k] = true
-        data["control_points"] = next
-        passes += 1
+    data["control_points"] = fix["points"]
     _validate()
-    if ready_to_play:
-        _status("SMOOTHED %d NODES IN %d PASSES • VALID • %.0f m" % [moved.size(),passes,last_length],true)
-    else:
-        data["control_points"] = original
-        undo_stack.pop_back()
-        _validate()
-        _status("CAN'T FIX AUTOMATICALLY • drag the red nodes apart",false)
+    _status("FIXED • moved %d nodes, max %.1f m • VALID • %.0f m" % [
+        (fix["moved"] as Dictionary).size(),float(fix["max_move"]),last_length],true)
 
 func _flag_ring_sample(sample_index: int) -> void:
     if _point_count() == 0:
@@ -740,11 +782,15 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
     # Zoom buttons float over the canvas; do not accidentally add road knots.
     if zoom_strip.has_point(pos):
         return
-    var radius: float = maxf(17.0,get_viewport_rect().size.x*0.031)
+    # Generous finger target; the node already selected wins ties so a
+    # second touch keeps editing the same node.
+    var radius: float = hit_radius()
     var closest: float = radius
     var found: int = -1
     for i in range(_point_count()):
         var d: float = pos.distance_to(_screen_point(_node_position(i)))
+        if i == selected:
+            d *= 0.75
         if d < closest:
             closest = d
             found = i
@@ -765,6 +811,8 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
     selected = found
     pointer = pointer_index if found >= 0 else -999
     drag_recorded = false
+    # Keep the finger-to-node offset: the node does not jump under the finger.
+    grab_offset = _screen_point(_node_position(found))-pos if found >= 0 else Vector2.ZERO
     if found < 0:
         # Empty canvas: one-finger drag pans the zoomed view.
         pan_pointer = pointer_index
@@ -778,7 +826,7 @@ func _drag_touch(pos: Vector2,pointer_index: int) -> void:
         return
     if pointer != pointer_index or selected < 0:
         return
-    var world: Vector2 = _world_point(pos)
+    var world: Vector2 = _world_point(pos+grab_offset)
     if not drag_recorded and world.distance_to(_node_position(selected)) > 0.05:
         _save_undo_snapshot()
         drag_recorded = true
@@ -793,6 +841,7 @@ func _release_touch(pointer_index: int) -> void:
     if pointer == pointer_index:
         pointer = -999
         drag_recorded = false
+        grab_offset = Vector2.ZERO
         _validate()
 
 func _input(event: InputEvent) -> void:
@@ -814,6 +863,11 @@ func _input(event: InputEvent) -> void:
             if pinch_active and touches.size() < 2:
                 pinch_active = false
                 pan_pointer = -999
+                if touches.size() == 1:
+                    # One finger stays down after a pinch: keep panning
+                    # with it (no jump, no accidental node grab).
+                    pan_pointer = int(touches.keys()[0])
+                    pan_last = touches.values()[0]
             _release_touch(event.index)
     elif event is InputEventScreenDrag:
         touches[event.index] = event.position
@@ -899,32 +953,76 @@ func _draw_map() -> void:
         var line := PackedVector2Array()
         for idx in range(n):
             line.append(_screen_point(_node_position(idx))+o)
-        if n >= 8:
-            line.append(line[0])
-        if n >= 2:
-            var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
+        var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
+        if not preview.is_empty():
+            # The real road: asphalt between the edges, edge lines where
+            # the barriers stand, thin centre line.
+            var cl: Array = preview["centerline"]
+            var le: Array = preview["left_edge"]
+            var re: Array = preview["right_edge"]
+            var m: int = cl.size()
+            var lpts := PackedVector2Array()
+            var rpts := PackedVector2Array()
+            var cpts := PackedVector2Array()
+            for k in range(m+1):
+                lpts.append(_screen_point(Vector2(le[k%m]))+o)
+                rpts.append(_screen_point(Vector2(re[k%m]))+o)
+                cpts.append(_screen_point(Vector2(cl[k%m]))+o)
+            var asphalt := PackedColorArray([Color(0.20,0.22,0.27,0.90)])
+            for k in range(m):
+                # Two triangles per slice: no triangulation, so a folded
+                # (invalid) corner still draws, showing the fold.
+                v.draw_primitive(PackedVector2Array([lpts[k],lpts[k+1],rpts[k+1]]),asphalt,PackedVector2Array())
+                v.draw_primitive(PackedVector2Array([lpts[k],rpts[k+1],rpts[k]]),asphalt,PackedVector2Array())
+            v.draw_polyline(lpts,Color(0.86,0.86,0.92,0.85),2.0,true)
+            v.draw_polyline(rpts,Color(0.86,0.86,0.92,0.85),2.0,true)
+            v.draw_polyline(cpts,Color(1,1,1,0.22),1.0,true)
+            # Start / finish across the road at knot 0, arrow = driving direction.
+            v.draw_line(lpts[0],rpts[0],Color(1,1,1,0.95),maxf(3.0,0.9*pixels_per_metre))
+            var dir: Vector2 = (cpts[2]-cpts[0]).normalized()
+            var tip: Vector2 = cpts[0]+dir*maxf(26.0,road_px*0.6)
+            var side: Vector2 = Vector2(-dir.y,dir.x)*9.0
+            v.draw_line(cpts[0],tip,Color(0.19,0.85,0.44,0.95),3.0,true)
+            v.draw_primitive(PackedVector2Array([tip+dir*10.0,tip+side,tip-side]),PackedColorArray([Color(0.19,0.85,0.44,0.95)]),PackedVector2Array())
+        elif n >= 2:
             v.draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
             v.draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
-        # Failing spline section in red (from the validator's samples).
+        # Failing stretches in red, exactly where the validator measured them.
         if not problem_ranges.is_empty() and compiled_samples.size() > 4:
-            var m: int = compiled_samples.size()
+            var m2: int = compiled_samples.size()
             for rng in problem_ranges:
                 var arc := PackedVector2Array()
                 for k in range(rng.x,rng.y+1):
-                    arc.append(_screen_point(Vector2(compiled_samples[posmod(k,m)]))+o)
+                    arc.append(_screen_point(Vector2(compiled_samples[posmod(k,m2)]))+o)
                 if arc.size() > 1:
-                    var road_px2: float = float(data.get("width_m",25.0))*pixels_per_metre
-                    v.draw_polyline(arc,Color(1.0,0.15,0.20,0.35),road_px2,true)
+                    v.draw_polyline(arc,Color(1.0,0.15,0.20,0.35),road_px,true)
                     v.draw_polyline(arc,Color(1.0,0.25,0.30,0.95),4.0,true)
-        # The first node also represents start/finish.
-        v.draw_arc(line[0],15.0,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
+        for prob in problems:
+            if str(prob["kind"]) == "close":
+                # The missing gap between the two stretches.
+                var pa: Vector2 = _screen_point(Vector2(prob["at_a"]))+o
+                var pb: Vector2 = _screen_point(Vector2(prob["at_b"]))+o
+                v.draw_dashed_line(pa,pb,Color(1.0,0.35,0.35,0.95),3.0,8.0)
+                v.draw_circle(pa,5.0,Color(1.0,0.35,0.35))
+                v.draw_circle(pb,5.0,Color(1.0,0.35,0.35))
+            elif str(prob["kind"]) == "cross":
+                var c: Vector2 = _screen_point(Vector2(prob["at"]))+o
+                v.draw_line(c-Vector2(9,9),c+Vector2(9,9),Color(1.0,0.3,0.3),4.0)
+                v.draw_line(c-Vector2(9,-9),c+Vector2(9,-9),Color(1.0,0.3,0.3),4.0)
+        var r: float = node_radius()
+        if preview.is_empty():
+            # Still placing the first nodes: start marker on node 0.
+            v.draw_arc(line[0],r*1.5,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
         for idx in range(n):
             var point: Vector2 = line[idx]
             # Selection wins orange; invalid knots otherwise red; neutral white.
             var tint: Color = Color(1.0,0.56,0.09) if idx == selected else (
                 Color(1.0,0.12,0.17) if invalid_nodes.has(idx) else Color(0.94,0.94,0.96))
-            v.draw_circle(point,10.0,tint)
-            v.draw_circle(point,4.0,Color(0.035,0.041,0.050))
+            if idx == selected and pointer != -999:
+                # Being dragged: a ring larger than the finger shows the node.
+                v.draw_arc(point,r*2.4,0.0,TAU,40,Color(1.0,0.56,0.09,0.9),3.0,true)
+            v.draw_circle(point,r,tint)
+            v.draw_circle(point,r*0.4,Color(0.035,0.041,0.050))
     # Validation frame: green = drivable, red = needs fixing.
     # Calm thin green when drivable; red with a soft glow when it needs work.
     var inset := Rect2(Vector2(2,2),canvas.size-Vector2(4,4))

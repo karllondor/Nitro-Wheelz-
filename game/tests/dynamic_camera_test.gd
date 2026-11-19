@@ -56,9 +56,53 @@ func _run() -> void:
     if chase.fov < 75.0 or chase.fov > 84.0:
         _fail("Chase FOV outside intended playtest bounds")
         return
-    print("PASS: dynamic Camera3D zoom, acceleration/braking smoothing, true-velocity lookahead and drone-follow orientation")
-    print("NOT RUN: real handset visibility, chase occlusion by decorative scenery")
     race.queue_free()
+    await process_frame
+    # v0.1.21: the same camera for both car profiles. Drive each car the same
+    # way; the camera settings at a given speed are identical and the car
+    # stays in the playable part of the screen in both views.
+    var sizes: Array = []
+    for variant in ["red","blue"]:
+        load("res://scripts/vehicles/car_catalog.gd").select(variant)
+        var r: Node3D = scene.instantiate()
+        root.add_child(r)
+        await process_frame
+        var view: Vector2 = r.get_viewport().get_visible_rect().size
+        var m: Dictionary = load("res://scripts/ui/hud_style.gd").metrics(view)
+        var play := Rect2(0.0,Rect2(m["header"]).end.y,view.x,view.y*0.80-Rect2(m["header"]).end.y)
+        Input.action_press("throttle",1.0)
+        for i in range(150):
+            await physics_frame
+            if i == 90:
+                Input.action_press("steer_right",0.6)
+        for cam_mode in [0,1]:
+            if int(r.get("camera_mode")) != cam_mode:
+                r.call("_toggle_camera")
+            r.call("_update_camera",1.0/60.0)
+            var cam: Camera3D = r.get("overhead") if cam_mode == 0 else r.get("chase")
+            var car_pos: Vector3 = (r.get("car_root") as Node3D).global_position
+            if cam.is_position_behind(car_pos) or not play.has_point(cam.unproject_position(car_pos)):
+                Input.action_release("throttle")
+                Input.action_release("steer_right")
+                _fail("%s car leaves the playable view in camera %d (%s)" % [variant,cam_mode,str(cam.unproject_position(car_pos))])
+                return
+        Input.action_release("throttle")
+        Input.action_release("steer_right")
+        var rm: NitroDriveModel = r.get("model")
+        rm.velocity = Vector2(0,-25.0)
+        if int(r.get("camera_mode")) != 0:
+            r.call("_toggle_camera")
+        for i in range(120):
+            r.call("_update_camera",1.0/60.0)
+        sizes.append([float((r.get("overhead") as Camera3D).size),float(r._zoom_factor_for_speed(90.0))])
+        r.queue_free()
+        await process_frame
+    load("res://scripts/vehicles/car_catalog.gd").select("red")
+    if absf(float(sizes[0][0])-float(sizes[1][0])) > 0.01 or sizes[0][1] != sizes[1][1]:
+        _fail("Camera differs between car profiles at the same speed: "+str(sizes))
+        return
+    print("PASS: dynamic Camera3D zoom, acceleration/braking smoothing, true-velocity lookahead and drone-follow orientation, same camera for Lada and RYU-32 with the car in view")
+    print("NOT RUN: real handset visibility, chase occlusion by decorative scenery")
     quit(0)
 
 func _fail(msg: String) -> void:

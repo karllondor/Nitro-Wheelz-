@@ -18,13 +18,14 @@ const GOLDEN: Array = [
     [-15.2620496750, -169.4567108154, -0.3805087614, -11.3311462402, -18.9184436798, 0.7214128310, -9.1178304206],
     [-24.4271316528, -206.6949768066, 0.9084195005, -3.2366302013, -3.9655067921, 0.4509071842, 0.0000000000],
     [-30.6949100494, -198.8077239990, 0.1333527556, -1.1301419735, 8.4245347977, -0.9318056245, 0.0000000000]]
-# Golden engine-sound fingerprint of the Lada synth. Re-recorded ONCE in
-# v0.1.21 for the owner-requested realistic engine model (exhaust pipe
-# waveguides, cycle-to-cycle variation, jet noise, valvetrain tick, stereo
-# early reflections); was [18.488243210,250355.707250950,132487] from v0.1.19
-# to v0.1.20. It still proves that the Lada JSON profile and the synth
-# defaults give the identical sound, and that nothing else changes it.
-const AUDIO_GOLDEN: Array = [18.2039764386529,307040.131113273,132487]
+# Golden engine-sound fingerprint of the Lada synth. Re-recorded in v0.1.21
+# for the owner-requested realistic engine model (exhaust pipe waveguides,
+# cycle-to-cycle variation, jet noise, valvetrain tick, stereo early
+# reflections) and the v0.1.21 brief (tyre squeal -2.5 dB, same level for
+# every car); was [18.488243210,250355.707250950,132487] from v0.1.19 to
+# v0.1.20. It still proves that the Lada JSON profile and the synth defaults
+# give the identical sound, and that nothing else changes it.
+const AUDIO_GOLDEN: Array = [15.5482024286764,304260.430897637,132487]
 
 func _initialize() -> void:
     call_deferred("_run")

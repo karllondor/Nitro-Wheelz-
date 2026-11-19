@@ -18,7 +18,11 @@ static var sound_on: bool = true
 static var vol_engine: float = 1.0
 static var vol_tyres: float = 1.0
 static var vol_fx: float = 1.0
-static var vol_music: float = 0.6
+## Music default sits under the engine: at 0.45 "Night Drift" plays at about
+## -26 LUFS in the game, ~1 dB under an idling engine and ~9 dB under the
+## car while driving (measured v0.1.21). No ducking: the music just plays.
+const MUSIC_DEFAULT: float = 0.45
+static var vol_music: float = MUSIC_DEFAULT
 static var settings_loaded: bool = false
 const ACCENTS: Dictionary = {
     "pink":Color(1.0,0.16,0.56),"violet":Color(0.64,0.34,1.0),"cyan":Color(0.10,0.80,1.0),
@@ -56,7 +60,11 @@ static func load_settings() -> void:
         vol_engine = clampf(float(cfg.get_value("audio","engine",1.0)),0.0,1.0)
         vol_tyres = clampf(float(cfg.get_value("audio","tyres",1.0)),0.0,1.0)
         vol_fx = clampf(float(cfg.get_value("audio","effects",1.0)),0.0,1.0)
-        vol_music = clampf(float(cfg.get_value("audio","music",0.6)),0.0,1.0)
+        vol_music = clampf(float(cfg.get_value("audio","music",MUSIC_DEFAULT)),0.0,1.0)
+        # v0.1.20 saved its 0.6 default with every settings change; move an
+        # untouched old default to the new mix level once.
+        if int(cfg.get_value("audio","mix_rev",0)) < 1 and absf(vol_music-0.6) < 0.001:
+            vol_music = MUSIC_DEFAULT
     else:
         set_accent("pink")
         set_sound(true)
@@ -75,6 +83,7 @@ static func save_settings() -> void:
     cfg.set_value("audio","tyres",vol_tyres)
     cfg.set_value("audio","effects",vol_fx)
     cfg.set_value("audio","music",vol_music)
+    cfg.set_value("audio","mix_rev",1)
     cfg.save(SETTINGS_PATH)
 
 ## Layout shared by HUD drawing and touch hit-testing so visuals and
@@ -103,7 +112,10 @@ static func metrics(s: Vector2) -> Dictionary:
         var chase := Rect2(name.position.x,name.end.y+hh*0.03,name.size.x,hh*0.28)
         var buttons_y: float = header.end.y+w*0.014
         var gauge_r: float = w*0.135
-        var gauge_c := Vector2(mx+gauge_r+w*0.012,s.y*0.585)
+        # Wide portraits (tablets, 3:4): lift the speedometer + drift-angle
+        # box so they stay clear of the steering joystick (top at
+        # 0.853 h - 0.175 w). Phones (16:9 and taller) are unchanged.
+        var gauge_c := Vector2(mx+gauge_r+w*0.012,minf(s.y*0.585,s.y*0.853-w*0.418))
         return {
             "portrait":true,"header":header,"dead":dead,"map":map,"lap":lap,
             "total_label":total_label,"total":total,"name":name,"chase":chase,
@@ -127,8 +139,10 @@ static func metrics(s: Vector2) -> Dictionary:
     var total_label_l := Rect2(total_l.position.x,hy_l+hh_l*0.05,total_l.size.x,hh_l*0.24)
     var name_l := Rect2(map_l.end.x+s.x*0.012,hy_l+hh_l*0.31,total_l.position.x-map_l.end.x-s.x*0.024,hh_l*0.16)
     var chase_l := Rect2(name_l.position.x,name_l.end.y+hh_l*0.03,name_l.size.x,hh_l*0.28)
-    var gr: float = h*0.15
-    var gc := Vector2(m+gr+h*0.02,h*0.53)
+    # Landscape (desktop / touch laptops): speedometer slightly smaller and
+    # higher so it and the drift-angle box clear the joystick (top 0.633 h).
+    var gr: float = h*0.13
+    var gc := Vector2(m+gr+h*0.02,h*0.40)
     return {
         "portrait":false,"header":header_l,"dead":Rect2(),"map":map_l,"lap":lap_l,
         "total_label":total_label_l,"total":total_l,"name":name_l,"chase":chase_l,

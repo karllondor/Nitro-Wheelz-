@@ -27,13 +27,8 @@ func _ready() -> void:
     var sc: float = clampf(s.x/700.0,0.85,1.7)
     ui_unit = sc
     theme = STYLE.screen_theme(sc)
-    active_variant = str(ProjectSettings.get_setting("nitro/car_variant","red"))
-    # Persist garage paint across app restarts; do not reset to red.
-    var garage_cfg := ConfigFile.new()
-    if garage_cfg.load("user://nitro_garage.cfg") == OK:
-        active_variant = str(garage_cfg.get_value("garage","paint",active_variant))
-    active_variant = CARS.valid(active_variant)
-    ProjectSettings.set_setting("nitro/car_variant",active_variant)
+    # Same source as the race: this session's choice, else the saved one.
+    active_variant = CARS.selected()
     var back := ColorRect.new()
     back.color = Color(0.018,0.016,0.026)
     back.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -241,12 +236,7 @@ func _spawn_car() -> void:
 func _choose(chosen: String) -> void:
     if chosen == active_variant:
         return
-    active_variant = CARS.valid(chosen)
-    chosen = active_variant
-    ProjectSettings.set_setting("nitro/car_variant",chosen)
-    var garage_cfg := ConfigFile.new()
-    garage_cfg.set_value("garage","paint",chosen)
-    garage_cfg.save("user://nitro_garage.cfg")
+    active_variant = CARS.select(chosen)
     _spawn_car()
     _apply_studio()
     _set_status()

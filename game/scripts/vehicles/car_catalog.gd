@@ -70,3 +70,28 @@ static func make(variant: String) -> Node3D:
     var lada: NitroLadaLowPoly = LADA.new()
     lada.paint_variant = v
     return lada
+
+const GARAGE_PATH: String = "user://nitro_garage.cfg"
+
+## The car the player drives: this session's garage choice, else the one
+## saved by the garage (survives app restarts even when the player goes
+## straight to DRIVE without opening the garage), else the red Lada.
+static func selected() -> String:
+    if ProjectSettings.has_setting("nitro/car_variant"):
+        return valid(str(ProjectSettings.get_setting("nitro/car_variant")))
+    var chosen: String = "red"
+    var cfg := ConfigFile.new()
+    if cfg.load(GARAGE_PATH) == OK:
+        chosen = str(cfg.get_value("garage","paint","red"))
+    chosen = valid(chosen)
+    ProjectSettings.set_setting("nitro/car_variant",chosen)
+    return chosen
+
+## Garage choice: used by the next race and saved for the next app start.
+static func select(variant: String) -> String:
+    var chosen: String = valid(variant)
+    ProjectSettings.set_setting("nitro/car_variant",chosen)
+    var cfg := ConfigFile.new()
+    cfg.set_value("garage","paint",chosen)
+    cfg.save(GARAGE_PATH)
+    return chosen

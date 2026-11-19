@@ -1,4 +1,24 @@
-## [0.1.21] — Recorded SFX removed, realistic engine synth  — TEST BUILD, sound not yet approved
+## [0.1.21] — Audio cleanup, editor polish, HUD/garage fixes, realistic engine synth  — TEST BUILD, sound not yet approved
+Owner brief v0.1.21 (P0 audio, P1 editor / HUD / garage, P2 track selection) on top of the first v0.1.21 push.
+- **P0 audio, brief follow-up:**
+  - original 17 OGG + 17 WAV masters + manifest + catalogue **archived** in `archive/recorded_sfx/` (outside `game/`, so never imported or exported); nothing recorded inside the game except the music; new `audio_regression_test.gd` fails if a recorded clip reappears or a race holds any audio player besides the synth;
+  - **no rev flares while slowing down:** off the throttle the gearbox no longer drops gears (the engine winds down in gear, clutch in near a stop). Braking 120 -> 0 km/h: max rev rise +0 rpm (was up to +4300 rpm with the old speed map; in-game at 26 km/h braking 2300 rpm instead of 5182). On the throttle (drifts, kick-down) unchanged;
+  - tyre squeal -2.5 dB and the same level for both cars (was scaled by engine loudness, V8 squeal was 3 dB under its engine);
+  - music default 0.6 -> 0.45 (about -26 LUFS in game: ~1 dB under an idling engine, ~9 dB under the car driving; was louder than the idle). Still no ducking or adaptation; untouched old 0.6 settings move once;
+  - pause freezes the sound exactly (no reset to idle, no rev jump on resume); restart clears every transient (crackle window, ignition cut, pops, impact, counters);
+  - the player's car choice now survives an app restart even when going straight to DRIVE (it was only read when the garage was opened, so the race fell back to the red Lada);
+  - generator playback released on exit (fewer leak warnings in headless tests).
+- **P1 track editor:**
+  - the editor draws the **real road** the race builds (same spline, width, edge lines where the barriers stand, start/finish line at node 0 with a direction arrow) instead of straight lines between nodes;
+  - **every** problem is found (the validator stopped at the first): exact stretch of each too-tight corner, both stretches of too-close roads with the gap drawn and measured, crossings marked; status says "2 PROBLEMS • CORNER TOO TIGHT (11 m, needs 16 m)";
+  - **AUTO-SMOOTH improved, not duplicated** (`NitroTrackDNA.repair`): tight corners relax only the knots that shape them, too-close roads are pushed apart, stacked knots separated; knots elsewhere keep their exact coordinates; no node moves more than 18% of the track size (else it says so); a real figure-eight is reported, never "fixed"; reports how many nodes moved and how far;
+  - touch: finger-sized targets (6% of the short side), bigger nodes, dragged nodes keep the finger offset (no jump), a ring around the node being dragged, the finger left after a pinch keeps panning;
+  - SAVE AS writes full float precision, re-reads the file and verifies the compiled road equals the editor's; the editor then keeps editing exactly what the file holds;
+  - new `editor_geometry_test.gd`: complex shapes, two hairpins (two separate reports), close sections, figure-eight, stacked knots, closed-loop integrity, SAVE AS, race road == editor preview (edges, width, start), touch.
+- **P1 HUD / camera / garage:** small HUD labels grew ~35-45% (BANKED SCORE, COMBO, PTS TO BANK, track name: from ~1.1 mm to ~1.6 mm on a phone); speedometer no longer overlaps the joystick on 3:4 tablets and in landscape (phones unchanged); new `hud_layout_test.gd` (11 screens, overlaps + minimum text sizes); camera test drives both cars: same zoom at the same speed, car in view in both cameras; garage preview == race model (same factory) checked per variant.
+- **P2 track selection / flow:** DRIVE lists built-in CIRCUITS, then MY TRACKS (every saved editor / builder track, newest first, accent-framed, length, best score, EDIT button), then QUICK (random); scrolls when long. Results of a player track offer EDIT TRACK (editor -> race -> results -> editor). Local leaderboards and three-lap stats unchanged. Per-car rankings: reviewed, not implemented (runs are stored per track; adding the car id to each run record is the way, see HANDOFF).
+
+First v0.1.21 push:
 - **Recorded sound effects removed (owner's decision):** the 17 OGG clips, the 13 processed cuts, `sfx_spec.json`, `manifest.json`, the WAV masters (`audio_masters/`), `tools/build_sfx.py`, `docs/audio/SFX_CATALOG.md`, `sfx_mixer_test.gd`, the car profiles' `sfx` blocks and the DEVELOPER "AUDIO: SYNTH ONLY / SYNTH + RECORDED FX" switch. Car sound = the synth alone again (engine, tyre squeal, wall scrape, impacts), like before v0.1.19; the v0.1.20 road-noise layer is gone too. They remain in git history. `drive_audio.gd` is back to a thin synth driver; AUDIO DEBUG OVERLAY now shows the synth state.
 - **Engine synth rebuilt for realism** (`engine_synth.gd`, still per-sample GDScript, no samples):
   - exhaust acoustics as waveguides: a header pipe per bank (quarter-wave modes) and a tail pipe (half-wave modes), with lossy reflections, so the timbre sweeps with rpm like a real exhaust;
@@ -9,7 +29,7 @@
   - Per-car keys in the profile `engine` block: `bank`, `header_m`, `bank_lag_m`, `tail_m`, `header_reflect`, `tail_reflect`, `pipe_damp_hz`, `jet`, `jitter_idle`, `jitter_high`, `wander`, `misfire`, `mech`, `mech_hz`, `room` (docs/CAR_PROFILES.md). RYU loudness 1.3 -> 1.2 to keep the old Lada/RYU level gap.
 - **Physics, camera, scoring and HUD unchanged:** the golden physics trace is still bit-identical. The Lada engine-sound fingerprint was re-recorded once for the new model (documented in car_profiles_test.gd) and still proves Lada JSON == synth defaults.
 - **Tests:** engine_audio_test gained five realism checks, each against the same synth with that feature switched off (cycle change 0.93 vs frozen 0.24, V8 burble 2.49 vs even banks 0.76, 38 coast misfires / 0 at full load, idle tick x2.96, L/R 0.977). garage_audio_test checks that no recorded SFX ship; main_menu_test that the audio-mode switch is gone.
-- **CPU:** 35-39 ms per second of audio in the container (was ~25 ms; ~4% of one core). Android / Web: NOT RUN — use DEVELOPER > AUDIO BENCHMARK.
+- **CPU:** 36-40 ms per second of audio in the container (was ~25 ms; ~4% of one core). Editor: preview spline 0.3 ms per drag step; validate + diagnose on release 90 + 84 ms for a 28-node circuit. Android / Web: NOT RUN — use DEVELOPER > AUDIO BENCHMARK.
 - **Not approved yet:** owner listening on Android, both cars. Before/after engine demos and in-game Movie Maker recordings (music muted) were produced for listening.
 - Android versionCode 21 / versionName 0.1.21.
 

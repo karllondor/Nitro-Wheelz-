@@ -26,12 +26,32 @@ func _run() -> void:
     if menu.find_child("Diagnostics",true,false) != null:
         _fail("Developer tools must not be on the main page")
         return
+    # A player track saved on the device (as the editor writes it).
+    var qa: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tracks/benchmark_oval.json"))
+    qa["id"] = "custom_qa_menu_track"
+    qa["name"] = "QA Menu Track"
+    var qf: FileAccess = FileAccess.open("user://nitro_track_qa_menu_track.json",FileAccess.WRITE)
+    qf.store_string(JSON.stringify(qa,"  ",false,true))
+    qf.close()
     menu.call("show_page","drive")
     await process_frame
     for id in ["shin_kawa_v2","shin_kawa_full_circuit","benchmark_oval","benchmark_sweepers","random"]:
         if menu.find_child("Track "+id,true,false) == null:
             _fail("DRIVE page missing track: "+id)
             return
+    # Built-in circuits and the player's own tracks are separate sections.
+    var circuits: Node = menu.find_child("Section CIRCUITS",true,false)
+    var mine: Node = menu.find_child("Section MY TRACKS",true,false)
+    var row: Node = menu.find_child("My track custom_qa_menu_track",true,false)
+    if circuits == null or mine == null or row == null or row.find_child("Edit custom_qa_menu_track",true,false) == null:
+        _fail("DRIVE must list saved tracks under MY TRACKS with an EDIT button")
+        return
+    if not (circuits.get_index() < menu.find_child("Track benchmark_oval",true,false).get_index() \
+            and menu.find_child("Track benchmark_sweepers",true,false).get_index() < mine.get_index() \
+            and mine.get_index() < row.get_index()):
+        _fail("Saved tracks must come after the built-in circuits, in their own section")
+        return
+    DirAccess.remove_absolute(ProjectSettings.globalize_path("user://nitro_track_qa_menu_track.json"))
     menu.call("show_page","build")
     await process_frame
     for n in ["Builder 3D","Editor nodes","Generate"]:
