@@ -74,7 +74,9 @@ func _ready() -> void:
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
     car_root = LADA.new()
-    car_root.name = "NITRO WHEELZ Lada-inspired four-door"
+    car_root.name = "Nitro Wheelz VAZ-2106 drift spec"
+    (car_root as NitroLadaLowPoly).paint_variant = str(ProjectSettings.get_setting(
+        "nitro/car_variant","red"))
     add_child(car_root)
 
 func _make_cameras() -> void:
