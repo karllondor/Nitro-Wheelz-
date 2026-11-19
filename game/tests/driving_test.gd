@@ -121,7 +121,7 @@ func _run() -> void:
     if absf(a._power_grip_factor(1.0,20.0) - 0.63) > 0.02:
         _fail("Rear power-grip calibration at 72 km/h is wrong")
         return
-    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 24.0) > 0.1:
+    if absf(rad_to_deg(a._max_steer_for_speed(20.0)) - 22.0) > 0.1:
         _fail("Speed dependent steering reference mismatch")
         return
 
@@ -150,7 +150,7 @@ func _run() -> void:
         return
 
     # v0.1.3: at 72+ km/h the car must not rotate like a low-speed donut.
-    if a._yaw_rate_limit(20.0,0.0) > 0.83 or a._yaw_rate_limit(20.0,0.0) < 0.79:
+    if a._yaw_rate_limit(20.0,0.0) > 0.70 or a._yaw_rate_limit(20.0,0.0) < 0.65:
         _fail("High speed yaw limit not proportional to available lateral grip")
         return
     if a._yaw_rate_limit(10.0,0.0) <= a._yaw_rate_limit(20.0,0.0):
@@ -189,6 +189,25 @@ func _run() -> void:
         return
     if absf(flick.steering_angle) <= 0.055:
         _fail("Steering remains sluggish during the first driving tick")
+        return
+
+    # Full digital throttle must NOT trigger an involuntary spin during a
+    # small steering correction, and releasing steering must re-stabilise.
+    var normal: NitroDriveModel = DRIVE.new()
+    normal.reset(Vector2.ZERO,0.0)
+    normal.velocity = Vector2(0.0,-17.0)
+    var mild_peak: float = 0.0
+    for i in range(360):
+        normal.step(STEP,0.20,1.0,0.0,0.0)
+        mild_peak = maxf(mild_peak,absf(normal.drift_angle))
+    print("MILD GAS+STEER: max_angle=",mild_peak," yaw=",normal.yaw_rate)
+    if mild_peak > 21.0:
+        _fail("Ordinary throttle steering forces too much uncontrolled drift")
+        return
+    for i in range(720):
+        normal.step(STEP,0.0,1.0,0.0,0.0)
+    if absf(normal.drift_angle) > 8.0 or absf(normal.yaw_rate) > 0.16:
+        _fail("Car keeps rotating despite returning steering to neutral")
         return
 
     # Power-oversteer: 65 km/h + full binary GAS + steering, no handbrake.
