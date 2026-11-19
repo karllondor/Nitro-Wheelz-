@@ -106,6 +106,22 @@ static func set_help_hidden(hidden: bool) -> void:
     cfg.set_value("editor","hide_help",hidden)
     cfg.save(STYLE.SETTINGS_PATH)
 
+## Clearly visible tick box (the default theme icon is near-invisible on
+## the dark modal).
+static func _tick_icon(checked: bool, sc: float) -> ImageTexture:
+    var n: int = maxi(18,int(30.0*sc))
+    var img := Image.create(n,n,false,Image.FORMAT_RGBA8)
+    img.fill(Color(0,0,0,0))
+    var border: int = maxi(2,int(3.0*sc))
+    for y in range(n):
+        for x in range(n):
+            var edge: bool = x < border or y < border or x >= n-border or y >= n-border
+            if edge:
+                img.set_pixel(x,y,Color(0.95,0.95,1.0))
+            elif checked and x >= border*2 and y >= border*2 and x < n-border*2 and y < n-border*2:
+                img.set_pixel(x,y,STYLE.PINK)
+    return ImageTexture.create_from_image(img)
+
 func _close_help() -> void:
     if help_check != null and help_check.button_pressed:
         set_help_hidden(true)
@@ -292,7 +308,11 @@ func _show_dialog(kind: String) -> void:
     add_child(dialog_overlay)
     var panel := PanelContainer.new()
     panel.position = Vector2(s.x*0.065,s.y*0.13)
-    panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else (0.40 if kind=="help" else 0.21)))
+    panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else 0.21))
+    if kind=="help":
+        # Fit the content height so the popup has no empty tail.
+        panel.position.y = s.y*0.20
+        panel.size.y = 0.0
     panel.custom_minimum_size = panel.size
     panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
     dialog_overlay.add_child(panel)
@@ -312,7 +332,7 @@ func _show_dialog(kind: String) -> void:
     hint.text = "Give your circuit a name" if kind=="save" else (
         "\n".join(HELP_LINES) if kind=="help" else "Unsaved edits will be replaced")
     hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    hint.add_theme_font_size_override("font_size",int((17.0 if kind=="help" else 16.0)*sc))
+    hint.add_theme_font_size_override("font_size",int((20.0 if kind=="help" else 16.0)*sc))
     hint.add_theme_color_override("font_color",Color(0.86,0.84,0.92))
     if kind=="help":
         hint.add_theme_constant_override("line_spacing",int(6.0*sc))
@@ -321,7 +341,11 @@ func _show_dialog(kind: String) -> void:
         help_check = CheckBox.new()
         help_check.name = "Do not show again"
         help_check.text = "Don't show again"
-        help_check.add_theme_font_size_override("font_size",int(18.0*sc))
+        help_check.add_theme_font_size_override("font_size",int(20.0*sc))
+        help_check.custom_minimum_size.y = 48.0*sc
+        help_check.add_theme_icon_override("unchecked",_tick_icon(false,sc))
+        help_check.add_theme_icon_override("checked",_tick_icon(true,sc))
+        help_check.add_theme_constant_override("h_separation",int(12.0*sc))
         stack.add_child(help_check)
     if kind=="save":
         name_input = LineEdit.new()
