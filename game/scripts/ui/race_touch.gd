@@ -150,22 +150,20 @@ func _draw() -> void:
     _pedal(Rect2(geo["gas"]),"GAS",throttle>0.0)
     _button(Rect2(geo["pause"]),"Ⅱ",false,false,true)
     _button(Rect2(geo["camera"]),"CAM",false,false,true)
-    if overlay_visible:
-        _button(Rect2(geo["restart"]),"RESTART",false)
-        _button(Rect2(geo["menu"]),"GARAGE / MENU",false)
+    # PAUSE and FINISH have exclusive modal menus in their own CanvasLayers.
 
 func _button(rect: Rect2, label: String, pushed: bool,
         highlight: bool=false, small: bool=false) -> void:
     var scale: float = _ui_scale()
     var style := StyleBoxFlat.new()
     style.bg_color = Color(0.25,0.07,0.18,0.80) if pushed else Color(0.020,0.025,0.035,0.76)
-    style.border_color = Color(1.0,0.12,0.56,0.87) if pushed else Color(0.83,0.84,0.89,0.63)
+    style.border_color = Color(0.57,0.30,0.98,0.87) if pushed else Color(0.83,0.84,0.89,0.63)
     style.set_border_width_all(int(maxf(1.8,1.8*scale)))
     style.set_corner_radius_all(int(minf(rect.size.y*0.28,16.0*scale)))
     draw_style_box(style,rect)
     var font: Font = get_theme_default_font()
     var font_size: int = int((17.0 if small else 27.0)*scale)
-    var col: Color = Color(1.0,0.17,0.57) if highlight else Color(1,1,1)
+    var col: Color = Color(0.71,0.55,1.0) if highlight else Color(1,1,1)
     var baseline: float = rect.position.y+rect.size.y*0.5+font.get_ascent(font_size)*0.37
     draw_string(font,Vector2(rect.position.x,baseline),label,
         HORIZONTAL_ALIGNMENT_CENTER,rect.size.x,font_size,col)
@@ -177,7 +175,7 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
     var y: float = rect.position.y
     var w: float = rect.size.x
     var h: float = rect.size.y
-    var pink := Color(1.0,0.035,0.49,0.95)
+    var pink := Color(0.57,0.30,0.98,0.95)
     var cx: float = x+w*0.50
     var bottom: float = y+h*0.77
     var shaft_bottom := Vector2(cx,bottom)
@@ -252,4 +250,4 @@ func _pedal(rect: Rect2, label: String, pressed: bool) -> void:
             draw_circle(centre,w*0.101,Color(0.93,0.94,0.95,0.80))
             draw_circle(centre,w*0.083,Color(0.028,0.031,0.040,1.0))
     draw_line(Vector2(x+w*0.12,y+h*0.97),Vector2(x+w*0.86,y+h*0.97),
-        Color(1.0,0.035,0.49,0.94) if pressed else Color(0.43,0.45,0.50,0.7),2.4*scale,true)
+        Color(0.57,0.30,0.98,0.94) if pressed else Color(0.43,0.45,0.50,0.7),2.4*scale,true)
