@@ -1,3 +1,12 @@
+
+## [0.1.12] — Car remake / garage / conditional user audio
+- Redesigned Lada 2106 drift spec to real 4.166m overall length and 2.424m wheelbase; corrected the driving model's axle separation and shortened cabin to increase hood/boot lengths. Added sloped front/rear windshields and refined wheel arches.
+- Red engine-exposed spec and pearl-white closed-hood spec via 3D garage preview, persistent selection until app is restarted.
+- 17-slot physics-reactive sound event mixer implemented. Source videos extracted to 17 independent WAV and OGG tracks; binary files are distributed separately in conversation ZIP, **not yet inside the GitHub APK**. SFX controller safely handles absent clips.
+- Android versionCode=12, versionName=0.1.12, distinct export artifact names.
+- Added garage/audio regression suite; physical handset controls and recorded-audio playback require confirmation.
+- Model: GPT-6. Reference dimensions cross-checked against VAZ-2106 workshop specs (4166mm / 2424mm).
+
 ## [0.1.11] — Brand, one modal per action, Undo, asphalt/sand textures
 - Logo vector trace from user image (white NITRO, purple WHEELZ, yellow crown) at top of menu and editor; dark/purple/gold themed controls.
 - New exclusive PAUSE CanvasLayer with RESUME, RESTART, GARAGE; old HUD/touch overlapping PAUSED/RESTART popups removed. FINISHED stays separate.
