@@ -193,20 +193,20 @@ func _run() -> void:
 
     # Full digital throttle must NOT trigger an involuntary spin during a
     # small steering correction, and releasing steering must re-stabilise.
-    var normal: NitroDriveModel = DRIVE.new()
-    normal.reset(Vector2.ZERO,0.0)
-    normal.velocity = Vector2(0.0,-17.0)
+    var mild_car: NitroDriveModel = DRIVE.new()
+    mild_car.reset(Vector2.ZERO,0.0)
+    mild_car.velocity = Vector2(0.0,-17.0)
     var mild_peak: float = 0.0
     for i in range(360):
-        normal.step(STEP,0.20,1.0,0.0,0.0)
-        mild_peak = maxf(mild_peak,absf(normal.drift_angle))
-    print("MILD GAS+STEER: max_angle=",mild_peak," yaw=",normal.yaw_rate)
+        mild_car.step(STEP,0.20,1.0,0.0,0.0)
+        mild_peak = maxf(mild_peak,absf(mild_car.drift_angle))
+    print("MILD GAS+STEER: max_angle=",mild_peak," yaw=",mild_car.yaw_rate)
     if mild_peak > 21.0:
         _fail("Ordinary throttle steering forces too much uncontrolled drift")
         return
     for i in range(720):
-        normal.step(STEP,0.0,1.0,0.0,0.0)
-    if absf(normal.drift_angle) > 8.0 or absf(normal.yaw_rate) > 0.16:
+        mild_car.step(STEP,0.0,1.0,0.0,0.0)
+    if absf(mild_car.drift_angle) > 8.0 or absf(mild_car.yaw_rate) > 0.16:
         _fail("Car keeps rotating despite returning steering to neutral")
         return
 
