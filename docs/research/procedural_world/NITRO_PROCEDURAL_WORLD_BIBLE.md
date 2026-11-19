@@ -3,6 +3,9 @@
 
 > **Read before altering Track Builder.** This document translates the ideas explained in Game Dev Buddies' [How One Guy FIXED Procedural Generation](https://www.youtube.com/watch?v=Y19Mw5YsgjI) (2026-01-08) into a **Nitro Wheelz-specific** Godot plan. It is not copied source code and it does not claim to reproduce Townscaper. The author of the techniques discussed is **Oskar Stålberg** (Townscaper / Bad North). Video chapter boundaries are verified against the video description. We could not directly download/check pixel-accurate YouTube stills in this review; use the timestamp links to inspect original frames. The SVG images below are **new explanatory diagrams, not screenshots**.
 
+
+> **NEW: 20 actual frames extracted from the owner's four uploaded video recordings are now stored in the repo:** [Annotated video-frame index (with original images)](video_frames/README.md). These are distinct from the four original SVG diagrams below. Frame times refer to the uploaded clips, not the full YouTube timeline.
+
 ## 0. Critical guardrails — do not break the driving game
 
 1. **Track DNA remains authoritative** for the exact road centreline, width, curb/barrier positions, wall collision and race progress. Never replace the spline/geometry of the driving surface with scenery tiles. Track preview and gameplay must use identical sampled road geometry.
