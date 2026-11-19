@@ -46,6 +46,7 @@ func _ready() -> void:
     _button(menu,"SHIN-KAWA • FULL CIRCUIT","res://scenes/race.tscn",
         scale_factor,"res://tracks/shin_kawa_full_circuit.json")
 
+    _button(menu,"GARAGE • RED / WHITE LADA","res://scenes/garage.tscn",scale_factor)
     _button(menu,"EDIT TRACK • BETA","res://scenes/track_editor.tscn",scale_factor)
 
     # Generator BETA: generates a valid variant but does NOT permit editing.
