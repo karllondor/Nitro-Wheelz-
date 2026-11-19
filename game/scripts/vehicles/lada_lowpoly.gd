@@ -91,6 +91,33 @@ func _cylinder(label: String, pos: Vector3, radius: float,
         parent.add_child(part)
     return part
 
+func _sloped_windscreen(label: String,front: bool) -> void:
+    # Six points, two facets with gently angled glass in side/top views.
+    var z_top: float = -0.83 if front else 0.86
+    var z_bottom: float = -1.04 if front else 1.07
+    var edge_top: float = 0.76
+    var edge_bottom: float = 0.78
+    var y_top: float = 1.522
+    var y_bottom: float = 1.015
+    var points := [
+        Vector3(-edge_top,y_top,z_top),Vector3(edge_top,y_top,z_top),
+        Vector3(-edge_bottom,y_bottom,z_bottom),Vector3(edge_bottom,y_bottom,z_bottom)
+    ]
+    var surfaces := SurfaceTool.new()
+    surfaces.begin(Mesh.PRIMITIVE_TRIANGLES)
+    for index in [0,2,1,1,2,3]:
+        surfaces.set_color(Color.WHITE)
+        surfaces.set_uv(Vector2(0.0,0.0))
+        surfaces.add_vertex(points[index])
+    surfaces.generate_normals()
+    var mesh := MeshInstance3D.new()
+    mesh.name = label
+    mesh.mesh = surfaces.commit()
+    var glass := _material(GLASS,0.18)
+    glass.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mesh.material_override = glass
+    add_child(mesh)
+
 func _make_body() -> void:
     # Fixed true 4.166 m silhouette. Roof is shorter so bonnet and boot
     # read as proper 2106 overhangs rather than a tiny toy with no trunk.
@@ -149,10 +176,8 @@ func _make_cabin() -> void:
         Vector3(1.71,0.54,1.92),RED)
     _cube("Flat squared metal roof",Vector3(0,1.545,0.025),
         Vector3(1.75,0.125,1.91),BRIGHT_RED)
-    _cube("Black windshield",Vector3(0,1.25,-0.967),
-        Vector3(1.57,0.51,0.040),GLASS)
-    _cube("Black rear window",Vector3(0,1.25,1.022),
-        Vector3(1.56,0.49,0.038),GLASS)
+    _sloped_windscreen("Sloped low-poly front windshield",true)
+    _sloped_windscreen("Sloped low-poly rear windshield",false)
     for side in [-1.0,1.0]:
         for at_z in [-0.49,0.49]:
             _cube("Dark side windows",Vector3(side*0.874,1.25,at_z),
