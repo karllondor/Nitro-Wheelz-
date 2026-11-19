@@ -1,7 +1,7 @@
 name: Native desktop builds (Linux and Windows)
 on:
   push:
-    branches: [main, "agent/nitro-v0.1.10-balanced-driving-creator"]
+    branches: [main, "agent/nitro-v0.1.11-logo-pauses-undo-textures"]
   pull_request:
 permissions:
   contents: read
@@ -33,17 +33,17 @@ jobs:
           python3 tools/check_project.py
           mkdir -p builds/desktop
           "$GODOT_BIN" --headless --editor --path game --import
-          "$GODOT_BIN" --headless --path game --export-release "Linux x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.10_Linux.x86_64"
-          "$GODOT_BIN" --headless --path game --export-release "Windows x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.10_Windows.exe"
-          test -s builds/desktop/Nitro-Wheelz_v0.1.10_Linux.x86_64
-          test -s builds/desktop/Nitro-Wheelz_v0.1.10_Windows.exe
-          chmod +x builds/desktop/Nitro-Wheelz_v0.1.10_Linux.x86_64
+          "$GODOT_BIN" --headless --path game --export-release "Linux x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.11_Linux.x86_64"
+          "$GODOT_BIN" --headless --path game --export-release "Windows x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.11_Windows.exe"
+          test -s builds/desktop/Nitro-Wheelz_v0.1.11_Linux.x86_64
+          test -s builds/desktop/Nitro-Wheelz_v0.1.11_Windows.exe
+          chmod +x builds/desktop/Nitro-Wheelz_v0.1.11_Linux.x86_64
           file builds/desktop/*
           sha256sum builds/desktop/* > builds/desktop/SHA256SUMS.txt
           echo "BUILT: native desktop executables not interactively playtested."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.10_Desktop_Linux_Windows
+          name: Nitro-Wheelz_v0.1.11_Desktop_Linux_Windows
           path: builds/desktop/*
           if-no-files-found: error
           retention-days: 30
