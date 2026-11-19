@@ -1,17 +1,22 @@
-# Nitro Wheelz — v0.1.6 Track DNA P0 + dynamic camera P1
+# Nitro Wheelz — v0.1.7 BENCHMARK/HUD BRANCH (not released)
 
 Model: GPT-6. Date: 2026-11-18.
-Branch: agent/nitro-v0.1.6-dynamic-camera.
-Previous P0 merged main commit b5c513f159c480897d1a07f018d2c8cd31815663.
+Branch: agent/nitro-v0.1.7-benchmarks-hud.
+Main remains on v0.1.6 (018efa1af388496fb7ba0a0f15c0c82f27138d0f).
 
-P0: validated deterministic Shin-Kawa v2 spline JSON and matching road/barrier geometry. Godot, Foundation, Web and Android CI passed before merge.
+Completed:
+- Added independently authored Oval and Sweepers-style geometry datasets without altering Shin-Kawa.
+- Both circuits compile as closed collision-safe Track DNA loops and pass centred wall-penetration checks.
+- UI prototype follows approved graphic layout; usable touch hitboxes correspond to visual controls.
+- Tightened both camera presentations for stronger perceived speed. Preserve existing physical model and velocity-based lead.
+- New game test registered in tools/run_godot_checks.sh.
+- Version labelled v0.1.7 in Godot, project.json, VERSION, and export artifact names.
 
-P1 changes:
-- Zoom equivalents: speed 0–20: 1.15; 50: 1.00; 90: 0.82; 120+: 0.72. Camera3D orthographic size is base_size divided by equivalent Camera2D zoom.
-- Physics velocity-based 0.45 s lookahead, clamp 19 m, damp camera positional/zoom transitions.
-- Fixed world top-down orientation and elevated chase with greater pitch, raycast wall obstruction in _physics_process ONLY.
-- Added numerical camera regression.
-- Added Linux and Windows native desktop export and separate GitHub workflow.
+Evidence:
+- Branch pre-release commit 55815feed76ef46c9ff743312cb2a647e3983e7c, Godot https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44360209917 PASS and Foundation https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44360209889 PASS.
+- Android/Web/Windows/Linux for v0.1.7: NOT RUN at creation of this note; obtain artifacts from pull-request workflows and confirm PASS.
+- HUMAN Android three-lap driving, actual touch visuals, speed perception, frame rate, camera drift feel, P3 scoring zones and P4 secure checkpoint progression: NOT RUN / NOT IMPLEMENTED.
+- DRIFTIT benchmarks share public track dimensions/intent only, not copied control points. Do not compare absolute lap times as matched scientific conditions.
 
-Remaining brief work: P2 responsive physics mobile test, P3 drift line/zone/angle/combo scoring, P4 checkpoints/score progression, P5 new approved UI, P6 effects and P7 human-driven three laps. None implemented/tested by this phase. Android / PC gameplay, frame rates, wall-side camera visuals and phone Xbox testing NOT RUN.
-Verified CI and build checks: see docs/QA_REPORT_v0.1.6.md (exact run IDs, hashes and NOT RUN gates).
+Next: create review PR and export candidate APK; inspect mobile portrait visual; collect four short recordings (Oval/Sweepers in Nitro and DRIFTIT, first top-down), then follow-camera tests, tune physics separately.
+

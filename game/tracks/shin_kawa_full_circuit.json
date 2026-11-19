@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "id": "shin_kawa_full_circuit",
+  "name": "SHIN-KAWA FULL CIRCUIT",
+  "generator_version": 1,
+  "seed": 180818,
+  "closed": true,
+  "width_m": 25,
+  "start_index": 0,
+  "theme": "japan_drift",
+  "control_points": [
+    [
+      -91.25,
+      73
+    ],
+    [
+      -91.25,
+      -47.45
+    ],
+    [
+      -83.95,
+      -160.6
+    ],
+    [
+      -47.45,
+      -233.6
+    ],
+    [
+      43.8,
+      -270.1
+    ],
+    [
+      149.65,
+      -255.5
+    ],
+    [
+      226.3,
+      -208.05
+    ],
+    [
+      259.15,
+      -142.35
+    ],
+    [
+      240.9,
+      -87.6
+    ],
+    [
+      186.15,
+      -73
+    ],
+    [
+      135.05,
+      -54.75
+    ],
+    [
+      127.75,
+      -3.65
+    ],
+    [
+      189.8,
+      21.9
+    ],
+    [
+      233.6,
+      69.35
+    ],
+    [
+      240.9,
+      135.05
+    ],
+    [
+      189.8,
+      178.85
+    ],
+    [
+      105.85,
+      182.5
+    ],
+    [
+      51.1,
+      149.65
+    ],
+    [
+      25.55,
+      175.2
+    ],
+    [
+      58.4,
+      233.6
+    ],
+    [
+      138.7,
+      255.5
+    ],
+    [
+      189.8,
+      284.7
+    ],
+    [
+      178.85,
+      339.45
+    ],
+    [
+      98.55,
+      357.7
+    ],
+    [
+      7.3,
+      350.4
+    ],
+    [
+      -58.4,
+      317.55
+    ],
+    [
+      -94.9,
+      259.15
+    ],
+    [
+      -109.5,
+      171.55
+    ]
+  ],
+  "description": "Original reference-inspired looping circuit, long northbound straight, outer sweepers and nested S transitions; 3 laps. Independently authored control points; not a traced source track. Geometry and collisions compiled by Nitro Track DNA."
+}

@@ -1,8 +1,8 @@
 {
   "name": "Nitro Wheelz",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "git_sha": "unbuilt",
   "built_utc": null,
   "dirty": null,
-  "platform_status": "not-tested"
+  "platform_status": "ci-pending-not-physically-tested"
 }
