@@ -21,6 +21,19 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.21 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 20 Godot tests; sfx_mixer_test removed with the recordings) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Physics golden trace bit-identical | Linux container | PASS | car_profiles_test |
+| Lada JSON == synth defaults (new fingerprint, re-recorded once) | Linux container | PASS | car_profiles_test |
+| Realism checks vs feature-off controls (cycle change, V8 burble, overrun misfires, idle tick, stereo) | Linux container | PASS (0.93/0.24, 2.49/0.76, 38/0, x2.96, 0.977) | engine_audio_test |
+| Spectral balance vs the owner's real limiter recording (octave bands re max, limiter segment) | Linux container | 1k/2k/4k: before -10.6/-24.6/-30.9 dB, after -7.8/-13.3/-15.9, recording -5.1/-11.3/-15.7 | offline analysis |
+| Synth CPU per second of audio | Linux container | 35-39 ms (was ~25) | benchmark() |
+| Engine demos before/after + in-game Movie Maker recordings (music muted), both cars | Xvfb + llvmpipe | RECORDED, in-game -17.9 (Lada) / -16.5 (RYU) LUFS, NOT LISTENED BY A HUMAN | tests/audio_drive_render.gd |
+| **Listening test on Android, both cars** | Physical Android | **NOT RUN — required before sound approval** | owner |
+| Synth CPU on Android / Web | Physical devices | NOT RUN | DEVELOPER > AUDIO BENCHMARK |
+
 ## v0.1.20 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

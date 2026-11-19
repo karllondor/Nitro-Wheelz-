@@ -85,14 +85,12 @@ func _ready() -> void:
     model.reset(track.start_position(),track.start_heading())
     _make_car()
     sfx = AUDIO.new()
-    sfx.name = "Layered WAN SFX"
+    sfx.name = "Car audio"
     add_child(sfx)
     # Engine sound follows the car's profile (Lada I4 / RYU-32 V8).
     if sfx.synth != null:
         var car_variant: String = str(ProjectSettings.get_setting("nitro/car_variant","red"))
         sfx.synth.apply_profile(CARS.engine(car_variant))
-        # Engine-specific recorded effects (Lada turbo vs RYU-32 V8, no turbo).
-        sfx.apply_car_sfx(CARS.profile(car_variant).get("sfx",{}),sfx.synth.turbo)
     # DEVELOPER audio diagnostics overlay (off by default, not part of the HUD).
     if load("res://scripts/ui/audio_debug_overlay.gd").enabled():
         var dbg_layer := CanvasLayer.new()
@@ -302,8 +300,6 @@ func _physics_process(delta: float) -> void:
             slide = (model.velocity-n_wall*model.velocity.dot(n_wall)).length()
         sfx.wall_contact(slide)
         sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
-        if absf(float(info["distance"])-float(info["width"])) < 0.75:
-            sfx.kerb_event(model.speed_kmh())
 
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)

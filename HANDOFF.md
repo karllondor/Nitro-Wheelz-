@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.20 audio hotfix + background music (test build, audio not approved)
+# Nitro Wheelz — v0.1.21 synth-only car audio + realistic engine synth (test build, sound not approved)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -84,7 +84,17 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - Music: autoload Music (scripts/audio/music_player.gd), assets/music/night_drift.ogg from tools/compose_music.py; STYLE.vol_music + MUSIC slider.
 - OPEN: owner listening test on Android for both cars (both audio modes) before approving the audio.
 
+## SYNTH-ONLY AUDIO + REALISTIC ENGINE (v0.1.21)
+- Owner: "the recorded SFX are hopeless, remove them all, it was much better before; just make the engine sound more real, less synthetic".
+- Removed: game/assets/audio/ (17 OGG, processed/, sfx_spec.json, manifest.json, README), audio_masters/, tools/build_sfx.py, docs/audio/SFX_CATALOG.md, tests/sfx_mixer_test.gd, profile "sfx" blocks + engine "turbo" flag, DEVELOPER audio-mode switch, kerb_event, road-noise layer. docs/audio/SFX_AUDIT.md kept as history.
+- drive_audio.gd: thin synth driver (drive_tick, wall_event, wall_contact, reset, silence, debug_lines). audio_debug_overlay.gd shows synth state.
+- engine_synth.gd: render loop rewritten with hot state in locals (delay-line arrays are detached from the members while rendering to avoid copy-on-write); _fire() returns the pulse strength and sets bank / tick / next firing. New profile keys documented in docs/CAR_PROFILES.md. Constants MECH_GAIN / JET_GAIN set the new layers.
+- car_profiles_test.gd: AUDIO_GOLDEN re-recorded once (reason in the file); physics GOLDEN untouched and passing.
+- engine_audio_test.gd: realism checks with in-test negative controls.
+- tests/audio_drive_render.gd: synth-only, music muted for the recording, prints engine state.
+- OPEN: owner listening test on Android for both cars; DEVELOPER > AUDIO BENCHMARK on the phone (container: 35-39 ms per audio second, was ~25).
+
 ## NEXT ACTION
-1. Owner installs the v0.1.20 TEST APK and does the listening test on both cars (DEVELOPER > AUDIO mode switch + AUDIO DEBUG OVERLAY); earlier: v0.1.19 debug APK (drive Lada vs RYU-32 on the same track, DEVELOPER > AUDIO BENCHMARK on phone and Web); earlier: v0.1.18 debug APK (new menu, volumes, editor AUTO-SMOOTH, RYU-32 coupe); earlier: v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.21 TEST APK and listens to both cars (idle, launch through the gears, lift-off, limiter, drift); DEVELOPER > AUDIO BENCHMARK on the phone; tuning knobs per car are in game/cars/*.json "engine". Earlier: v0.1.20 TEST APK (audio hotfix; superseded); earlier: v0.1.19 debug APK (drive Lada vs RYU-32 on the same track, DEVELOPER > AUDIO BENCHMARK on phone and Web); earlier: v0.1.18 debug APK (new menu, volumes, editor AUTO-SMOOTH, RYU-32 coupe); earlier: v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

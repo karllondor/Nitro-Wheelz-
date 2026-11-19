@@ -24,7 +24,10 @@
     "boom_hz": 105, "boom_bw": 95, "pipe_hz": 320, "pipe_bw": 120,
     "rasp_hz": 820, "rasp_bw": 300, "intake_hz": 610, "intake_bw": 220,
     "boom_gain": 1.0, "intake_gain": 1.0, "uneven_idle": 0.24, "uneven_high": 0.06,
-    "turbo": true, "loudness": 1.0
-  },
-  "sfx": {"turbo_clips": true, "exhaust_pitch": 1.0}
+    "loudness": 1.0,
+    "bank": [0, 0, 0, 0],
+    "header_m": [0.95], "tail_m": 3.0, "header_reflect": -0.32, "tail_reflect": 0.34,
+    "pipe_damp_hz": 1000, "jet": 1.0, "jitter_idle": 0.016, "jitter_high": 0.005, "wander": 0.010,
+    "misfire": 0.10, "mech": 1.0, "mech_hz": 2900, "room": 0.20
+  }
 }

@@ -3,22 +3,22 @@ extends SceneTree
 ## real race scene so the game's own audio mix can be recorded with Godot's
 ## Movie Maker for listening tests:
 ##   xvfb-run godot --path game --write-movie out.avi --fixed-fps 60 \
-##     --resolution 360x800 --script res://tests/audio_drive_render.gd -- red recorded
-## Args: car variant (red|white|blue), audio mode (recorded|synth).
-## Prints every mixer decision with its time so the recording can be checked.
+##     --resolution 360x800 --script res://tests/audio_drive_render.gd -- red
+## Args: car variant (red|white|blue).
+## Prints the driving / engine state twice a second so the recording can be
+## lined up with what the car was doing.
 var race: Node3D
 var t: float = 0.0
 var seen: int = 0
 var variant: String = "red"
-var mode: String = "recorded"
 
 func _initialize() -> void:
     var args: PackedStringArray = OS.get_cmdline_user_args()
     if args.size() > 0:
         variant = args[0]
-    if args.size() > 1:
-        mode = args[1]
-    load("res://scripts/audio/drive_audio.gd").set_audio_mode(mode)
+    # Car sound only: the background music is muted for the recording
+    # (not saved to the player's settings).
+    load("res://scripts/ui/hud_style.gd").vol_music = 0.0
     ProjectSettings.set_setting("nitro/car_variant",variant)
     ProjectSettings.set_setting("nitro/selected_track","res://tracks/benchmark_oval.json")
     race = (load("res://scenes/race.tscn") as PackedScene).instantiate()
@@ -40,7 +40,7 @@ func _inputs(steer: float, gas: float, brake: float, hb: float) -> void:
 
 func _process(delta: float) -> bool:
     t += delta
-    # Same script for every car / mode. Steering follows the track line
+    # Same script for every car. Steering follows the track line
     # (look-ahead autopilot); throttle, handbrake and lifts are scripted.
     var st: float = _autopilot()
     if t < 2.0: _inputs(0.0,0.0,0.0,0.0)           # idle
@@ -86,24 +86,20 @@ func _collect() -> void:
     var sfx = race.get("sfx")
     if sfx == null:
         return
-    var n: int = sfx.log.size()
-    # The mixer keeps a short ring log; print entries not printed yet.
-    var printed: int = 0
-    for e in sfx.log:
-        var key: String = "%.4f%s%s" % [float(e["t"]),str(e["clip"]),str(e["action"])]
-        if not _done.has(key):
-            _done[key] = true
-            print("EVENT %6.2f %-5s %-20s %s" % [float(e["t"]),str(e["action"]),str(e["clip"]),str(e["reason"])])
-            printed += 1
     var model = race.get("model")
     if int(t*2.0) != _last_half:
         _last_half = int(t*2.0)
-        print("STATE %5.1fs %5.1f km/h drift %5.1f deg rpm %5d" % [t,model.speed_kmh(),model.drift_angle,int(sfx.synth.rpm)])
-
-var _done: Dictionary = {}
+        print("STATE %5.1fs %5.1f km/h drift %5.1f deg rpm %5d gear %d squeal %.2f misfires %d" % [t,model.speed_kmh(),
+            model.drift_angle,int(sfx.synth.rpm),sfx.synth.gear,sfx.synth.squeal,sfx.synth.misfires])
 var _last_half: int = -1
 
 func _dump() -> void:
     var sfx = race.get("sfx")
-    print("PLAYS ",JSON.stringify(sfx.play_count))
+    print("ENGINE ",sfx.synth.layout," shifts ",sfx.synth.shifts," limiter hits ",sfx.synth.limiter_hits)
     print("WALL HITS ",race.get("wall_collision_count"))
+    # Release the playing streams so the tool exits without leak reports.
+    var music: Node = root.get_node_or_null("Music")
+    for player in [music,sfx.synth_player]:
+        if player is AudioStreamPlayer:
+            (player as AudioStreamPlayer).stop()
+            (player as AudioStreamPlayer).stream = null

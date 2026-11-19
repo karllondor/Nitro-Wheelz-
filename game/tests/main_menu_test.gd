@@ -55,8 +55,11 @@ func _run() -> void:
     if menu.find_child("Diagnostics",true,false) == null:
         _fail("Controller diagnostics must live under DEVELOPER")
         return
-    if menu.find_child("Audio mode",true,false) == null or menu.find_child("Audio debug",true,false) == null:
-        _fail("DEVELOPER needs the audio mode switch and the audio debug overlay switch")
+    if menu.find_child("Audio debug",true,false) == null:
+        _fail("DEVELOPER needs the audio debug overlay switch")
+        return
+    if menu.find_child("Audio mode",true,false) != null:
+        _fail("The recorded-SFX audio mode switch was removed with the recordings")
         return
     if menu.find_child("Baseline physics",true,false) == null or menu.find_child("Audio benchmark",true,false) == null:
         _fail("DEVELOPER needs the baseline-physics switch and the audio benchmark")

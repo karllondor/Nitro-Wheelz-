@@ -1,14 +1,14 @@
-# Car profiles (v0.1.19)
+# Car profiles (v0.1.19, engine keys v0.1.21)
 
 Every car points at one profile file in `game/cars/`. A profile has two blocks:
 
 - `handling`: numbers for the shared drive model (`scripts/driving/drive_model.gd`). Any key from `NitroDriveModel.TUNABLE` may be set; missing keys keep the baseline. No driving code changes per car.
-- `engine`: the procedural engine sound (`scripts/audio/engine_synth.gd`): layout, cylinders, firing pattern, revs, gearing, exhaust/intake resonances, loudness and whether recorded turbo clips may play.
+- `engine`: the procedural engine sound (`scripts/audio/engine_synth.gd`): layout, cylinders, firing pattern, revs, gearing, exhaust geometry, resonances, combustion variability, mechanical noise and loudness (no recorded sound effects since v0.1.21).
 
 Paint variants of one car share one profile (Lada red + white -> `lada_baseline.json`). Profiles are plain JSON inside the export (`include_filter="*.json"`), a few hundred bytes each.
 
 ## Rules
-- `lada_baseline.json` is the benchmark. Its values equal the v0.1.12+ tune and `car_profiles_test.gd` proves the physics trace and engine-sound fingerprint are bit-identical to the pre-profile code. Do not edit it to tune other cars.
+- `lada_baseline.json` is the benchmark. Its handling values equal the v0.1.12+ tune and `car_profiles_test.gd` proves the physics trace is bit-identical to the pre-profile code and that its engine block equals the synth defaults (engine-sound fingerprint, re-recorded once for the v0.1.21 engine model). Do not edit it to tune other cars.
 - DEVELOPER > BASELINE PHYSICS FOR ALL CARS puts every car back on the Lada physics (sound and looks stay per car).
 - DEVELOPER > AUDIO BENCHMARK reports the synth CPU cost per engine on the device it runs on (use it on Android and Web).
 
@@ -45,4 +45,21 @@ Measured on identical scripted tests (`car_profiles_test.gd`, printed every run)
 | corner exit, speed gained in 2 s | +6.9 km/h | +20.6 km/h |
 | lift-off: time to < 5 deg / speed lost | 1.30 s / 30.7 km/h | 1.29 s / 35.8 km/h |
 
-Sound: V8 firing 4x per crank turn with a cross-plane bank pattern (burble), 760 rpm idle, 7000 rpm limiter, deeper exhaust resonances, louder ITB intake, no turbo clips.
+Sound: V8 firing 4x per crank turn, two exhaust banks in the 1UZ firing order with a longer run from one bank (cross-plane burble), 760 rpm idle, 7000 rpm limiter, deeper exhaust resonances, louder ITB intake, quieter valvetrain than the Lada's chain-driven four.
+
+## Engine keys (v0.1.21 sound model; Lada value / RYU-32 value)
+| key | Lada | RYU-32 | effect |
+|---|---|---|---|
+| bank | [0,0,0,0] | [0,1,1,0,1,0,0,1] | exhaust bank of each firing slot (in firing order) |
+| header_m | [0.95] | [0.62, 0.80] | header length per bank (m) -> header pipe modes |
+| bank_lag_m | 0 | 0.5 | extra pipe run of bank 1 to the collector (m): uneven pulse arrival = burble |
+| tail_m | 3.0 | 3.6 | collector to tail-pipe exit (m) -> tail pipe modes |
+| header_reflect / tail_reflect | -0.32 / 0.34 | -0.34 / 0.32 | loop gain of the pipe reflections (strength of the pipe colour) |
+| pipe_damp_hz | 1000 | 900 | loss per round trip (lower = darker pipe ring) |
+| jet | 1.0 | 0.6 | turbulent jet noise at the pipe exit (the "rasp" under load) |
+| jitter_idle / jitter_high | 0.016 / 0.005 | 0.010 / 0.004 | combustion timing scatter (fraction of a firing interval) |
+| wander | 0.010 | 0.007 | crank speed wander at idle |
+| misfire | 0.10 | 0.08 | lean-misfire probability on a closed throttle (decel burble) |
+| mech / mech_hz | 1.0 / 2900 | 0.45 / 3400 | valvetrain / timing-chain tick level and pitch |
+| room | 0.20 | 0.20 | stereo early reflections |
+| loudness | 1.0 | 1.2 | overall level |

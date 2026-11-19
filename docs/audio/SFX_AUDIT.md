@@ -1,5 +1,7 @@
 # SFX audit — the 17 recorded clips (v0.1.20)
 
+> **v0.1.21: historical.** The owner rejected the recorded clips; all of them, the processed cuts, the WAV masters and the build tool were removed from the repository (they remain in git history). The car sound is the procedural synth only. This audit is kept as the record of why.
+
 Measured on 2026-11-19 with ffmpeg (EBU R128 loudness) and librosa (spectrograms, onset and band-energy timelines) on `game/assets/audio/*.ogg` and the matching `audio_masters/*.wav`. No one listened to these in this container; the content column is read from spectrograms and band energy. **Owner listening on Android is still required before the audio is approved.**
 
 All 17 files: mono, 22,050 Hz, 4–7 s, loud masters (−6.5 to −11 LUFS for most). Many decode above full scale (clipped samples: `engine_limiter` 798, `exhaust_single` 319, `exhaust_pops` 311, `turbo_bov` 307, `wind_speed` 58, `tyre_handbrake` 57).

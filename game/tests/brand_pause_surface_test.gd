@@ -94,10 +94,6 @@ func _run() -> void:
     if vcfg.load(STYLE.SETTINGS_PATH) != OK or absf(float(vcfg.get_value("audio","engine",-1.0))-0.25) > 0.001:
         _fail("Volumes were not persisted")
         return
-    if load("res://scripts/audio/drive_audio.gd").clip_group("tyre_drift") != "tyres" \
-            or load("res://scripts/audio/drive_audio.gd").clip_group("barrier_hit") != "fx":
-        _fail("Recorded clips must follow their volume group")
-        return
     STYLE.vol_engine = engine_before
     STYLE.vol_tyres = tyres_before
     STYLE.vol_fx = fx_before

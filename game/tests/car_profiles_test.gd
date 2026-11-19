@@ -18,8 +18,13 @@ const GOLDEN: Array = [
     [-15.2620496750, -169.4567108154, -0.3805087614, -11.3311462402, -18.9184436798, 0.7214128310, -9.1178304206],
     [-24.4271316528, -206.6949768066, 0.9084195005, -3.2366302013, -3.9655067921, 0.4509071842, 0.0000000000],
     [-30.6949100494, -198.8077239990, 0.1333527556, -1.1301419735, 8.4245347977, -0.9318056245, 0.0000000000]]
-# Golden engine-sound fingerprint of the pre-profile Lada synth.
-const AUDIO_GOLDEN: Array = [18.488243210,250355.707250950,132487]
+# Golden engine-sound fingerprint of the Lada synth. Re-recorded ONCE in
+# v0.1.21 for the owner-requested realistic engine model (exhaust pipe
+# waveguides, cycle-to-cycle variation, jet noise, valvetrain tick, stereo
+# early reflections); was [18.488243210,250355.707250950,132487] from v0.1.19
+# to v0.1.20. It still proves that the Lada JSON profile and the synth
+# defaults give the identical sound, and that nothing else changes it.
+const AUDIO_GOLDEN: Array = [18.2039764386529,307040.131113273,132487]
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -207,8 +212,8 @@ func _run() -> void:
         pass
     var v8 = SYNTH.new()
     v8.apply_profile(CARS.engine("blue"))
-    if v8.cylinders != 8 or v8.turbo or not v8.layout.begins_with("V8"):
-        _fail("RYU-32 must be a naturally aspirated V8")
+    if v8.cylinders != 8 or not v8.layout.begins_with("V8") or v8._banks != 2:
+        _fail("RYU-32 must be a V8 with two exhaust banks")
         return
     v8.rpm = 3000.0
     v8.load = 1.0
@@ -257,7 +262,7 @@ func _check(lm: Dictionary, rm: Dictionary) -> void:
     if not _same(_trace(fm),GOLDEN):
         _fail("Baseline-physics switch must give every car the Lada physics")
         return
-    print("PASS: Lada baseline physics + engine sound bit-identical, RYU-32 V8 profile loads, measured character differs as intended, baseline switch")
+    print("PASS: Lada baseline physics bit-identical, Lada engine sound = synth defaults (v0.1.21 fingerprint), RYU-32 V8 profile loads with two exhaust banks, measured character differs as intended, baseline switch")
     print("NOT RUN: human feel on a phone, synth CPU on Android / Web (use DEVELOPER > AUDIO BENCHMARK)")
     quit(0)
 

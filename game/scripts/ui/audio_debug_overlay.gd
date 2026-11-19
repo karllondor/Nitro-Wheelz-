@@ -1,7 +1,7 @@
 extends Control
 class_name NitroAudioDebugOverlay
-## DEVELOPER > AUDIO DEBUG OVERLAY: lists the engine state, active loops and
-## one-shots and the last mixer decisions (PLAY / BLOCK / STOP + reason).
+## DEVELOPER > AUDIO DEBUG OVERLAY: live state of the sound synth (engine
+## layout, rpm, gear, load, misfires, squeal, scrape, player mix).
 ## Off by default; never part of the player HUD.
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const SETTINGS_PATH: String = "user://nitro_settings.cfg"
@@ -38,14 +38,6 @@ func _draw() -> void:
     draw_rect(box,Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.8),false,2.0)
     for i in range(lines.size()):
         var line: String = lines[i]
-        var col: Color = Color(0.85,0.87,0.92)
-        if line.contains(" PLAY "):
-            col = Color(0.45,1.0,0.6)
-        elif line.contains(" BLOCK ") or line.contains(" SKIP "):
-            col = Color(1.0,0.75,0.35)
-        elif line.contains(" STOP "):
-            col = Color(1.0,0.45,0.45)
-        elif line.begins_with("LOOP") or line.begins_with("ONE"):
-            col = STYLE.PINK_SOFT
+        var col: Color = STYLE.PINK_SOFT if i == 0 else Color(0.85,0.87,0.92)
         draw_string(STYLE.SEMI,Vector2(box.position.x+8.0,box.position.y+lh*(float(i)+1.0)),line,
             HORIZONTAL_ALIGNMENT_LEFT,box.size.x-16.0,size,col)
