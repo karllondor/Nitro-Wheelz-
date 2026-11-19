@@ -222,12 +222,16 @@ func _show_dialog(kind: String) -> void:
         name_input.grab_focus()
     else:
         _modal_button(row,"CANCEL",Callable(self,"_close_dialog"),sc)
-        _modal_button(row,"CIRCLE",func():
-            _close_dialog()
-            _start_new_circle(),sc)
-        _modal_button(row,"BLANK",func():
-            _close_dialog()
-            _start_new_blank(),sc)
+        _modal_button(row,"CIRCLE",Callable(self,"_choose_circle"),sc)
+        _modal_button(row,"BLANK",Callable(self,"_choose_blank"),sc)
+
+func _choose_circle() -> void:
+    _close_dialog()
+    _start_new_circle()
+
+func _choose_blank() -> void:
+    _close_dialog()
+    _start_new_blank()
 
 
 func _zoom(multiplier: float) -> void:
