@@ -4,6 +4,7 @@ extends Control
 const DNA = preload("res://scripts/world/track_dna.gd")
 const SOURCE: String = "res://tracks/shin_kawa_full_circuit.json"
 const CUSTOM: String = "user://nitro_custom_track.json"
+const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 
 var data: Dictionary = {}
 var selected: int = -1
@@ -26,12 +27,26 @@ var last_saved_name: String = ""
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_PASS
-    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM if FileAccess.file_exists(CUSTOM) else SOURCE))
+    var chosen: String = SOURCE
+    if FileAccess.file_exists(LAST_SAVED):
+        var candidate: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
+        if candidate.begins_with("user://nitro_track_") and FileAccess.file_exists(candidate):
+            var checked: Dictionary = DNA.read_track(candidate)
+            if bool(checked.get("ok",false)):
+                chosen = candidate
+    elif FileAccess.file_exists(CUSTOM):
+        chosen = CUSTOM
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(chosen))
     if not (raw is Dictionary):
         raw = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
+        chosen = SOURCE
     data = raw
-    data["id"] = "player_custom_track"
-    data["name"] = "MY CUSTOM CIRCUIT"
+    if chosen == SOURCE:
+        data["id"] = "player_custom_track"
+        data["name"] = "MY CUSTOM CIRCUIT"
+    else:
+        last_saved_path = chosen
+        last_saved_name = str(data.get("name","MY CUSTOM CIRCUIT"))
     data["closed"] = true
     data.erase("widths_m")
     data["width_m"] = clampf(float(data.get("width_m",25.0)),18.0,28.0)
@@ -117,6 +132,9 @@ func _make_ui() -> void:
     name_input = LineEdit.new()
     name_input.placeholder_text = "e.g. Welsh Mountain Drift"
     name_input.max_length = 42
+    name_input.position = Vector2(22,76)
+    name_input.size = Vector2(475,44)
+    name_input.custom_minimum_size = Vector2(350,44)
     name_dialog.add_child(name_input)
     name_dialog.confirmed.connect(_confirm_save)
     add_child(name_dialog)
@@ -142,7 +160,7 @@ func _start_new_circle() -> void:
 
 func _start_new_blank() -> void:
     _replace_new_track([],true)
-    _status("BLANK • Tap ADD NODE, then tap map to place at least 8 points",false)
+    _status("BLANK • Tap the map to place 8+ control points",false)
 
 func _replace_new_track(points: Array,adding: bool) -> void:
     data = {
@@ -222,6 +240,10 @@ func _persist_track(title: String) -> bool:
     if not bool(compiled.get("ok",false)):
         _status("FAILED • Saved file did not pass validator",false)
         return false
+    var recent: FileAccess = FileAccess.open(LAST_SAVED,FileAccess.WRITE)
+    if recent != null:
+        recent.store_string(path)
+        recent.close()
     last_saved_path = path
     last_saved_name = title
     _status("SAVED • "+title+" • %.0f m" % last_length,true)
@@ -371,6 +393,10 @@ func _node_position(i: int) -> Vector2:
 func _start_touch(pos: Vector2,pointer_index: int) -> void:
     if not canvas.has_point(pos) or pointer != -999:
         return
+    # Zoom buttons overlap the canvas; do not accidentally add road knots.
+    var size: Vector2 = get_viewport_rect().size
+    if pos.x > size.x*0.81 and pos.y > size.y*0.52 and pos.y < size.y*0.65:
+        return
     var radius: float = maxf(17.0,get_viewport_rect().size.x*0.031)
     var closest: float = radius
     var found: int = -1
@@ -389,6 +415,8 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         _validate()
         if points.size() < 8:
             _status("%d/8 NODES • Continue placing nodes to close the loop" % points.size(),false)
+        elif ready_to_play:
+            add_mode = false
         return
     selected = found
     pointer = pointer_index if found >= 0 else -999
