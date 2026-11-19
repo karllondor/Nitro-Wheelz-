@@ -20,3 +20,12 @@ PASS only when actually executed. BUILT does not mean played or installed.
 | FPS and thermals | Physical devices | NOT RUN | Profile after first playtest |
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
+
+## v0.1.13 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/check_project.py | Linux container | PASS | local run |
+| tools/run_godot_checks.sh (import + 13 Godot tests incl. new visual_identity_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI run pending on push |
+| visual_identity_test negative control (tree clearance gate disabled -> FAIL) | Linux container | PASS | local run |
+| Rendered stills race/garage/menu/editor | Xvfb + Mesa llvmpipe, GL Compatibility, 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd (stills not committed) |
+| Android look, frame rate, touch, smoke/scenery cost | Physical Android | NOT RUN | install CI APK v0.1.13 |

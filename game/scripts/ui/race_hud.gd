@@ -1,7 +1,13 @@
 extends Control
 class_name NitroRaceHUD
-## P5 visual prototype from the approved Nitro Wheelz reference. All score
-## readouts use the real race model; stars are outlined until progression P4.
+## Driving HUD drawn to the approved Nitro Wheelz gameplay reference:
+## header (minimap / track + lap / clock + lap-progress bar), three score
+## tiles (total, active drift + combo, chasing time + stars), drift angle
+## and speed. All numbers are live race data; stars are the projected
+## result tiers used by the finish screen (not fabricated progression).
+
+const STYLE = preload("res://scripts/ui/hud_style.gd")
+const RESULTS = preload("res://scripts/ui/race_results.gd")
 
 var race_time: float = 0.0
 var lap: int = 1
@@ -17,15 +23,14 @@ var paused: bool = false
 var finished: bool = false
 var road_status: String = "ON TRACK"
 var track_name: String = "SHIN-KAWA"
+var track_id: String = ""
 var track_points: PackedVector2Array = PackedVector2Array()
 var car_world_position: Vector2 = Vector2.ZERO
 var track_progress: float = 0.0
 var target_time: float = 0.0
 
-const WHITE := Color(0.98,0.98,1.0)
-const MUTED := Color(0.78,0.79,0.83)
-const PINK := Color(0.57,0.30,0.98)
-const GOLD := Color(1.0,0.77,0.24)
+var _outline_cache: PackedVector2Array = PackedVector2Array()
+var _outline_rect: Rect2 = Rect2()
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -33,122 +38,155 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     queue_redraw()
 
-func _scale() -> float:
-    var s: Vector2 = get_viewport_rect().size
-    return clampf((s.x if s.y>s.x else s.y)/700.0,0.78,2.1)
+func overall_progress() -> float:
+    return clampf((float(lap-1)+track_progress)/float(maxi(lap_limit,1)),0.0,1.0)
 
-func _panel(rect: Rect2,rounding: float=18.0) -> void:
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.018,0.023,0.033,0.85)
-    style.border_color = Color(0.73,0.76,0.80,0.56)
-    style.set_border_width_all(int(maxf(1.0,1.4*_scale())))
-    style.set_corner_radius_all(int(rounding*_scale()))
-    draw_style_box(style,rect)
-    draw_line(Vector2(rect.end.x-rect.size.x*0.13,rect.end.y-2.0),
-        Vector2(rect.end.x-rect.size.x*0.02,rect.end.y-2.0),
-        PINK,2.3*_scale(),true)
+func projected_time() -> float:
+    var progress: float = overall_progress()
+    if progress < 0.06 or race_time <= 0.0:
+        return 0.0
+    return race_time/progress
 
-func _label(rect: Rect2,txt: String,y: float,size: int,
-        col: Color=WHITE,align: HorizontalAlignment=HORIZONTAL_ALIGNMENT_LEFT) -> void:
-    var f: Font = get_theme_default_font()
-    var pt: int = int(size*_scale())
-    var px: float = rect.position.x+12.0*_scale()
-    var extent: float = rect.size.x-24.0*_scale()
-    var baseline: float = rect.position.y+rect.size.y*y+f.get_ascent(pt)*0.25
-    draw_string(f,Vector2(px,baseline),txt,align,extent,pt,col)
-
-func _minimap(rect: Rect2) -> void:
-    if track_points.size()<8:
-        return
-    var smallest := Vector2(INF,INF)
-    var largest := Vector2(-INF,-INF)
-    for p in track_points:
-        smallest.x = minf(smallest.x,p.x)
-        smallest.y = minf(smallest.y,p.y)
-        largest.x = maxf(largest.x,p.x)
-        largest.y = maxf(largest.y,p.y)
-    var box: Vector2 = largest-smallest
-    var sf: float = minf(rect.size.x*0.76/maxf(box.x,0.01),
-        rect.size.y*0.70/maxf(box.y,0.01))
-    var mid: Vector2 = (smallest+largest)*0.5
-    var outline := PackedVector2Array()
-    var step: int = maxi(1,int(track_points.size()/80))
-    for i in range(0,track_points.size(),step):
-        outline.append(rect.get_center()+(track_points[i]-mid)*sf)
-    outline.append(outline[0])
-    draw_polyline(outline,WHITE,2.5*_scale(),true)
-    # White transverse stripe is the start/finish. A red dot tracks the CAR.
-    var start_tangent: Vector2 = (track_points[1]-track_points[track_points.size()-1]).normalized()
-    var crossing: Vector2 = Vector2(-start_tangent.y,start_tangent.x)
-    var start_dot: Vector2 = rect.get_center()+(track_points[0]-mid)*sf
-    var half_stripe: float = clampf(12.5*sf,5.0*_scale(),12.0*_scale())
-    draw_line(start_dot-crossing*half_stripe,start_dot+crossing*half_stripe,
-        WHITE,3.3*_scale(),true)
-    var player_dot: Vector2 = rect.get_center()+(car_world_position-mid)*sf
-    draw_circle(player_dot,4.2*_scale(),Color(0.03,0.03,0.035))
-    draw_circle(player_dot,3.2*_scale(),Color(1.0,0.095,0.15))
-    draw_arc(player_dot,4.0*_scale(),0.0,TAU,24,WHITE,0.8*_scale(),true)
+## Stars the current pace would earn, and the time to chase for the next one.
+func chase_state() -> Dictionary:
+    if target_time <= 0.0:
+        return {"stars":0,"chase":0.0}
+    var tiers: Array[float] = [target_time,target_time*0.82,target_time*0.68]
+    if track_id == "benchmark_oval":
+        tiers = [75.0,51.0,47.31]
+    var projected: float = projected_time()
+    var stars: int = 0
+    if projected > 0.0:
+        stars = RESULTS.star_count(track_id,projected,target_time)
+    var chase: float = tiers[mini(stars,2)]
+    return {"stars":stars,"chase":chase}
 
 func _draw() -> void:
     var s: Vector2 = get_viewport_rect().size
-    var portrait: bool = s.y>s.x
-    var mx: float = s.x*(0.022 if portrait else 0.016)
-    var top: float = s.y*0.016
-    var header_height: float = s.y*(0.080 if portrait else 0.160)
-    var header := Rect2(mx,top,s.x-2.0*mx,header_height)
-    _panel(header,20.0)
-    var map_area := Rect2(mx+6.0*_scale(),top+4.0*_scale(),
-        header.size.x*0.22,header_height-8.0*_scale())
-    _minimap(map_area)
-    draw_line(Vector2(header.position.x+header.size.x*0.255,top+header_height*0.19),
-        Vector2(header.position.x+header.size.x*0.255,top+header_height*0.81),
-        MUTED,1.2*_scale(),true)
-    var centre := Rect2(header.position.x+header.size.x*0.276,top,
-        header.size.x*0.31,header_height)
-    _label(centre,track_name.to_upper(),0.33,27,WHITE)
-    _label(centre,"LAP %d/%d" % [lap,lap_limit],0.72,18,MUTED)
-    draw_line(Vector2(header.position.x+header.size.x*0.610,top+header_height*0.17),
-        Vector2(header.position.x+header.size.x*0.610,top+header_height*0.81),
-        MUTED,1.2*_scale(),true)
-    var clock := Rect2(header.position.x+header.size.x*0.642,top,
-        header.size.x*0.338,header_height)
-    _label(clock,_time_string(race_time),0.41,36,WHITE,HORIZONTAL_ALIGNMENT_CENTER)
-    var bar_top := clock.position.y+clock.size.y*0.77
-    draw_line(Vector2(clock.position.x+clock.size.x*0.12,bar_top),
-        Vector2(clock.end.x-clock.size.x*0.12,bar_top),
-        PINK,5.0*_scale(),true)
+    var m: Dictionary = STYLE.metrics(s)
+    var u: float = float(m["unit"])
+    _draw_header(Rect2(m["header"]),u)
+    _draw_total(Rect2(m["total"]),u)
+    _draw_score(Rect2(m["score"]),u)
+    _draw_chase(Rect2(m["chase"]),u)
+    _draw_angle(Rect2(m["angle"]),u)
+    _draw_speed(Rect2(m["speed"]),u)
 
-    var stats_y: float = s.y*(0.109 if portrait else 0.192)
-    var stats_h: float = s.y*(0.083 if portrait else 0.149)
-    var gap: float = s.x*0.012
-    var score_w: float = (s.x-2.0*mx-2.0*gap)*0.300
-    var active_w: float = (s.x-2.0*mx-2.0*gap)*0.260
-    var time_w: float = (s.x-2.0*mx-2.0*gap)-score_w-active_w
-    var total_rect := Rect2(mx,stats_y,score_w,stats_h)
-    var active_rect := Rect2(total_rect.end.x+gap,stats_y,active_w,stats_h)
-    var chase_rect := Rect2(active_rect.end.x+gap,stats_y,time_w,stats_h)
-    _panel(total_rect);_panel(active_rect);_panel(chase_rect)
-    _label(total_rect,"TOTAL SCORE",0.22,14,MUTED)
-    _label(total_rect,_score_string(score),0.64,32,WHITE,HORIZONTAL_ALIGNMENT_CENTER)
-    _label(active_rect,"SCORE",0.22,14,MUTED)
-    _label(active_rect,_score_string(drift_score),0.57,29,WHITE,HORIZONTAL_ALIGNMENT_CENTER)
-    _label(active_rect,"x%.1f" % combo,0.85,17,PINK,HORIZONTAL_ALIGNMENT_RIGHT)
-    _label(chase_rect,"CHASING TIME",0.22,14,MUTED)
-    _label(chase_rect,"☆ ☆ ☆",0.67,29,GOLD)
-    _label(chase_rect,_time_string(target_time) if target_time>0.0 else "--:--",
-        0.67,17,MUTED,HORIZONTAL_ALIGNMENT_RIGHT)
+func _draw_header(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u,18.0,0.0,true,1.0)
+    var map_rect := Rect2(r.position.x+r.size.x*0.025,r.position.y+r.size.y*0.12,
+        r.size.x*0.20,r.size.y*0.76)
+    _minimap(map_rect,u)
+    STYLE.separator(self,r.position.x+r.size.x*0.255,r.position.y+r.size.y*0.2,
+        r.position.y+r.size.y*0.8,u)
+    var tx: float = r.position.x+r.size.x*0.30
+    var title_size: float = r.size.y*0.30
+    STYLE.text(self,Vector2(tx,r.position.y+r.size.y*0.46),track_name.to_upper(),
+        title_size,STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.32)
+    STYLE.text(self,Vector2(tx-r.size.y*0.03,r.position.y+r.size.y*0.80),
+        "LAP %d/%d" % [lap,lap_limit],r.size.y*0.22,STYLE.MUTED,
+        HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+    STYLE.separator(self,r.position.x+r.size.x*0.625,r.position.y+r.size.y*0.2,
+        r.position.y+r.size.y*0.8,u)
+    var clock := Rect2(r.position.x+r.size.x*0.655,r.position.y,r.size.x*0.32,r.size.y)
+    STYLE.text(self,Vector2(clock.position.x,clock.position.y+clock.size.y*0.58),
+        STYLE.time_string(race_time),r.size.y*0.44,STYLE.WHITE,
+        HORIZONTAL_ALIGNMENT_CENTER,clock.size.x)
+    # Lap progress bar (live), pink neon like the reference.
+    var y: float = clock.position.y+clock.size.y*0.79
+    var x0: float = clock.position.x+clock.size.x*0.06
+    var x1: float = clock.end.x-clock.size.x*0.04
+    var thickness: float = r.size.y*0.075
+    draw_line(Vector2(x0,y),Vector2(x1,y),Color(0.16,0.16,0.20,0.95),thickness,true)
+    var fill: float = clampf(track_progress,0.0,1.0)
+    if fill > 0.002:
+        var pts := PackedVector2Array([Vector2(x0,y),Vector2(lerpf(x0,x1,fill),y)])
+        STYLE.glow_line(self,pts,STYLE.PINK,thickness*0.55,0.8)
 
-    var angle_box := Rect2(mx,s.y*(0.588 if portrait else 0.545),
-        s.x*(0.145 if portrait else 0.125),s.y*(0.047 if portrait else 0.095))
-    var speed_box := Rect2(mx,s.y*(0.649 if portrait else 0.645),
-        s.x*(0.335 if portrait else 0.210),s.y*(0.071 if portrait else 0.118))
-    _panel(angle_box,12.0);_panel(speed_box,14.0)
-    _label(angle_box,"%d°" % int(round(absf(drift_degrees))),0.52,24,WHITE,
-        HORIZONTAL_ALIGNMENT_CENTER)
-    _label(speed_box,("R " if reversing else "")+str(int(speed))+" KM/H",
-        0.55,31,WHITE,HORIZONTAL_ALIGNMENT_CENTER)
-    # Paused/finished overlays are now single independent CanvasLayers.
-    # Never render a duplicate dialog behind Restart/Garage buttons.
+func _minimap(rect: Rect2, u: float) -> void:
+    if track_points.size() < 8:
+        return
+    if _outline_rect != rect or _outline_cache.is_empty():
+        _outline_rect = rect
+        var lo := Vector2(INF,INF)
+        var hi := Vector2(-INF,-INF)
+        for p in track_points:
+            lo = Vector2(minf(lo.x,p.x),minf(lo.y,p.y))
+            hi = Vector2(maxf(hi.x,p.x),maxf(hi.y,p.y))
+        var box: Vector2 = hi-lo
+        var sf: float = minf(rect.size.x*0.86/maxf(box.x,0.01),rect.size.y*0.86/maxf(box.y,0.01))
+        var mid: Vector2 = (lo+hi)*0.5
+        _outline_cache = PackedVector2Array()
+        var step: int = maxi(1,int(track_points.size()/90))
+        for i in range(0,track_points.size(),step):
+            _outline_cache.append(rect.get_center()+(track_points[i]-mid)*sf)
+        _outline_cache.append(_outline_cache[0])
+        set_meta("map_scale",sf)
+        set_meta("map_mid",mid)
+    draw_polyline(_outline_cache,Color(1,1,1,0.12),7.0*u,true)
+    draw_polyline(_outline_cache,STYLE.WHITE,2.6*u,true)
+    var sf2: float = float(get_meta("map_scale",1.0))
+    var mid2: Vector2 = get_meta("map_mid",Vector2.ZERO)
+    var start_dot: Vector2 = rect.get_center()+(track_points[0]-mid2)*sf2
+    var tangent: Vector2 = (track_points[1]-track_points[track_points.size()-1]).normalized()
+    var across := Vector2(-tangent.y,tangent.x)*5.0*u
+    draw_line(start_dot-across,start_dot+across,STYLE.WHITE,3.0*u,true)
+    var dot: Vector2 = rect.get_center()+(car_world_position-mid2)*sf2
+    draw_circle(dot,7.5*u,Color(1.0,0.16,0.56,0.25))
+    draw_circle(dot,4.6*u,STYLE.PINK)
+    draw_arc(dot,4.6*u,0.0,TAU,20,STYLE.WHITE,1.2*u,true)
+
+func _label(r: Rect2, txt: String) -> void:
+    STYLE.text(self,Vector2(r.position.x+r.size.x*0.13,r.position.y+r.size.y*0.30),txt,
+        r.size.y*0.155,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+
+func _draw_total(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u)
+    _label(r,"TOTAL SCORE")
+    STYLE.text(self,Vector2(r.position.x,r.position.y+r.size.y*0.76),_score_string(score),
+        r.size.y*0.36,STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,r.size.x)
+
+func _draw_score(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u)
+    _label(r,"SCORE")
+    STYLE.text(self,Vector2(r.position.x,r.position.y+r.size.y*0.70),_score_string(drift_score),
+        r.size.y*0.34,STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,r.size.x)
+    STYLE.text(self,Vector2(r.position.x,r.position.y+r.size.y*0.90),"x%.1f" % combo,
+        r.size.y*0.15,STYLE.PINK,HORIZONTAL_ALIGNMENT_RIGHT,r.size.x*0.80,false)
+
+func _draw_chase(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u)
+    _label(r,"CHASING TIME")
+    var state: Dictionary = chase_state()
+    var stars: int = int(state["stars"])
+    var radius: float = r.size.y*0.17
+    var cy: float = r.position.y+r.size.y*0.63
+    for k in range(3):
+        var cx: float = r.position.x+r.size.x*0.17+float(k)*radius*2.35
+        STYLE.star(self,Vector2(cx,cy),radius,k < stars,u)
+    var chase_time: float = float(state["chase"])
+    STYLE.text(self,Vector2(r.position.x,cy+r.size.y*0.09),
+        STYLE.short_time(chase_time) if chase_time > 0.0 else "--:--",
+        r.size.y*0.19,STYLE.MUTED,HORIZONTAL_ALIGNMENT_RIGHT,r.size.x*0.90,false)
+
+func _draw_angle(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u,12.0)
+    STYLE.text(self,Vector2(r.position.x,r.position.y+r.size.y*0.72),
+        "%d°" % int(round(absf(drift_degrees))),r.size.y*0.52,STYLE.WHITE,
+        HORIZONTAL_ALIGNMENT_CENTER,r.size.x)
+
+func _draw_speed(r: Rect2, u: float) -> void:
+    STYLE.panel(self,r,u,14.0)
+    var number: String = ("R " if reversing else "")+str(int(speed))
+    var big: float = r.size.y*0.60
+    var small: float = r.size.y*0.25
+    var unit_txt: String = "KM/H"
+    var total_w: float = STYLE.text_width(number,big)+r.size.y*0.12+STYLE.text_width(unit_txt,small,false)
+    var x: float = r.get_center().x-total_w*0.5
+    var base: float = r.position.y+r.size.y*0.74
+    STYLE.text(self,Vector2(x,base),number,big,STYLE.WHITE)
+    STYLE.text(self,Vector2(x+STYLE.text_width(number,big)+r.size.y*0.12,base),unit_txt,
+        small,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
 
 func _score_string(value: int) -> String:
     var digits: String = str(value)
@@ -159,4 +197,4 @@ func _score_string(value: int) -> String:
     return digits+end
 
 func _time_string(seconds: float) -> String:
-    return "%02d:%05.2f" % [int(seconds/60.0),fmod(seconds,60.0)]
+    return STYLE.time_string(seconds)

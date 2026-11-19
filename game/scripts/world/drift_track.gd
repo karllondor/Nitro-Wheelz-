@@ -10,7 +10,28 @@ var track_data_path: String = TRACK_DATA
 var display_name: String = "Shin-Kawa Drift Park"
 const DNA = preload("res://scripts/world/track_dna.gd")
 const ASPHALT = preload("res://assets/surfaces/asphalt.webp")
-const SAND = preload("res://assets/surfaces/sand.webp")
+const GRASS = preload("res://assets/surfaces/grass_night.webp")
+const DIRT = preload("res://assets/surfaces/dirt_verge.webp")
+const FLOWERS = preload("res://assets/surfaces/flower_cluster.png")
+const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
+# Night drift-park palette (approved gameplay reference: dark asphalt,
+# blue/white kerbs, earth verge, olive grass, cherry blossom).
+const ASPHALT_TINT := Color(0.80,0.80,0.86)
+const LINE_COLOUR := Color(0.88,0.88,0.86)
+const KERB_BLUE := Color(0.10,0.33,0.80)
+const KERB_WHITE := Color(0.86,0.87,0.90)
+const KERB_BEVEL := Color(0.09,0.09,0.11)
+const BARRIER_FACE_A := Color(0.30,0.31,0.36)
+const BARRIER_FACE_B := Color(0.26,0.27,0.32)
+const BARRIER_TOP_A := Color(0.58,0.59,0.64)
+const BARRIER_TOP_B := Color(0.52,0.53,0.58)
+const KERB_INSET: float = 0.42       # outer gap between kerb and barrier
+const KERB_WIDTH: float = 1.25
+const KERB_BLOCK_M: float = 3.0
+const LINE_INSET: float = 1.97       # kerb + safety gap
+const LINE_WIDTH: float = 0.20
+const VERGE_WIDTH: float = 3.6
+const PROP_SEED: int = 7741
 const HALF_ROAD_WIDTH: float = 12.0  # legacy test compatibility, local widths vary
 const CAR_WALL_CLEARANCE: float = 1.18
 const WALL_HEIGHT: float = 1.30
@@ -61,15 +82,19 @@ func _apply_compiled(compiled: Dictionary) -> void:
     length_metres = float(compiled["length_metres"])
     track_id = str(compiled["track_id"])
     display_name = str(compiled["track_name"])
+    _build_clearance_grid()
     _build_environment()
-    _add_corridor("Compacted shoulder",_shift_edge(left_edge,-1.8),
-        _shift_edge(right_edge,1.8),0.018,Color(0.43,0.37,0.31))
+    # Layering outward from the racing surface (brief: surface -> painted
+    # line -> safety gap -> kerb -> outer gap -> barrier -> verge).
+    _add_corridor("Compacted shoulder",_shift_edge(left_edge,-VERGE_WIDTH),
+        _shift_edge(right_edge,VERGE_WIDTH),0.018,Color.WHITE,DIRT,6.0)
     _add_corridor("Single continuous driving surface",left_edge,right_edge,
-        0.05,Color(0.19,0.19,0.215))
-    _add_corridor("White edge left",_shift_edge(left_edge,0.49),
-        _shift_edge(left_edge,0.61),0.066,Color(0.87,0.87,0.85))
-    _add_corridor("White edge right",_shift_edge(right_edge,-0.61),
-        _shift_edge(right_edge,-0.49),0.066,Color(0.87,0.87,0.85))
+        0.05,ASPHALT_TINT,ASPHALT,7.0)
+    _build_kerbs()
+    _add_corridor("White edge left",_shift_edge(left_edge,LINE_INSET),
+        _shift_edge(left_edge,LINE_INSET+LINE_WIDTH),0.066,LINE_COLOUR)
+    _add_corridor("White edge right",_shift_edge(right_edge,-LINE_INSET-LINE_WIDTH),
+        _shift_edge(right_edge,-LINE_INSET),0.066,LINE_COLOUR)
     _build_start_line()
     _build_barriers()
     _build_track_props()
@@ -138,7 +163,7 @@ func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
         "impact_speed":outward_speed,"normal":outward}
 
 func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
-        height: float,tint: Color) -> void:
+        height: float,tint: Color,texture: Texture2D = null,tile_m: float = 7.0) -> void:
     var st := SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
     for i in range(centerline.size()):
@@ -147,18 +172,16 @@ func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
         var q: Vector3 = Vector3(b[i].x,height,b[i].y)
         var r: Vector3 = Vector3(a[next_i].x,height,a[next_i].y)
         var u: Vector3 = Vector3(b[next_i].x,height,b[next_i].y)
-        var colour: Color = Color.WHITE if label in ["Single continuous driving surface","Compacted shoulder"] else tint
-        _add_tri(st,p,r,q,colour)
-        _add_tri(st,q,r,u,colour)
+        _add_tri(st,p,r,q,tint,tile_m)
+        _add_tri(st,q,r,u,tint,tile_m)
     var arr: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    if label == "Single continuous driving surface":
-        mat.albedo_texture = ASPHALT
-    elif label == "Compacted shoulder":
-        mat.albedo_texture = SAND
+    if texture != null:
+        mat.albedo_texture = texture
+        mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     arr.surface_set_material(0,mat)
     var mesh := MeshInstance3D.new()
     mesh.name = label
@@ -166,14 +189,13 @@ func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
     add_child(mesh)
 
 func _add_tri(st: SurfaceTool,a: Vector3,b: Vector3,c: Vector3,
-        tint: Color,vertices: PackedVector3Array = PackedVector3Array()) -> void:
+        tint: Color,tile_m: float = 7.0) -> void:
     for p in [a,b,c]:
         st.set_color(tint)
         st.set_normal(Vector3.UP)
         # World-space UVs make adjacent procedural segments seamlessly tile.
-        st.set_uv(Vector2(p.x,p.z)/7.0)
+        st.set_uv(Vector2(p.x,p.z)/tile_m)
         st.add_vertex(p)
-        # Optional collision vertices are returned by explicit wall helper.
 
 func _wall_tri(st: SurfaceTool,vertices: PackedVector3Array,
         a: Vector3,b: Vector3,c: Vector3,tint: Color) -> void:
@@ -190,7 +212,11 @@ func _build_barriers() -> void:
     var count: int = centerline.size()
     for i in range(count):
         var next_i: int = (i+1)%count
-        var colour: Color = Color(0.90,0.92,0.91) if int(i/3)%2==0 else Color(0.14,0.42,0.69)
+        # Concrete barrier: darker inner face, lit top, subtle 3-sample
+        # panel rhythm as a speed reference. Geometry is unchanged.
+        var panel: bool = int(i/3)%2==0
+        var colour: Color = BARRIER_FACE_A if panel else BARRIER_FACE_B
+        var top_colour: Color = BARRIER_TOP_A if panel else BARRIER_TOP_B
         var n0: Vector2 = (right_edge[i]-left_edge[i]).normalized()
         var n1: Vector2 = (right_edge[next_i]-left_edge[next_i]).normalized()
         for side in [-1.0,1.0]:
@@ -208,8 +234,8 @@ func _build_barriers() -> void:
             var outside_b := Vector3(outer_q.x,WALL_HEIGHT,outer_q.y)
             _wall_tri(st,triangles,bottom_a,bottom_b,top_a,colour)
             _wall_tri(st,triangles,top_a,bottom_b,top_b,colour)
-            _wall_tri(st,triangles,top_a,top_b,outside_a,colour)
-            _wall_tri(st,triangles,outside_a,top_b,outside_b,colour)
+            _wall_tri(st,triangles,top_a,top_b,outside_a,top_colour)
+            _wall_tri(st,triangles,outside_a,top_b,outside_b,top_colour)
     var mesh: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
@@ -252,68 +278,338 @@ func _build_start_line() -> void:
             board.material_override = material
             add_child(board)
 
+
+# ------------------------------------------------------------ road clearance
+
+var _clearance_grid: Dictionary = {}
+## Scenery placement records (headless-testable; MultiMesh data is not
+## readable from the dummy renderer).
+var tree_positions: Array[Vector2] = []
+var flower_positions: Array[Vector2] = []
+const CLEARANCE_CELL_M: float = 24.0
+
+func _build_clearance_grid() -> void:
+    # Spatial hash of centreline segments: fast "how far from ANY road
+    # branch is this point" queries for scenery placement.
+    _clearance_grid.clear()
+    var n: int = centerline.size()
+    for i in range(n):
+        var a: Vector2 = centerline[i]
+        var b: Vector2 = centerline[(i+1)%n]
+        var lo := Vector2i(int(floor(minf(a.x,b.x)/CLEARANCE_CELL_M)),int(floor(minf(a.y,b.y)/CLEARANCE_CELL_M)))
+        var hi := Vector2i(int(floor(maxf(a.x,b.x)/CLEARANCE_CELL_M)),int(floor(maxf(a.y,b.y)/CLEARANCE_CELL_M)))
+        for cx in range(lo.x,hi.x+1):
+            for cy in range(lo.y,hi.y+1):
+                var key := Vector2i(cx,cy)
+                if not _clearance_grid.has(key):
+                    _clearance_grid[key] = PackedInt32Array()
+                var list: PackedInt32Array = _clearance_grid[key]
+                list.append(i)
+                _clearance_grid[key] = list
+
+func road_clearance(pos: Vector2, search_m: float = 60.0) -> float:
+    ## Distance from pos to the nearest road edge in metres (negative when
+    ## the point lies on the road). INF when no road is within search_m.
+    var best: float = INF
+    var n: int = centerline.size()
+    var reach: int = int(ceil(search_m/CLEARANCE_CELL_M))
+    var cell := Vector2i(int(floor(pos.x/CLEARANCE_CELL_M)),int(floor(pos.y/CLEARANCE_CELL_M)))
+    for dx in range(-reach,reach+1):
+        for dy in range(-reach,reach+1):
+            var key := cell+Vector2i(dx,dy)
+            if not _clearance_grid.has(key):
+                continue
+            for i in _clearance_grid[key]:
+                var a: Vector2 = centerline[i]
+                var b: Vector2 = centerline[(i+1)%n]
+                var ab: Vector2 = b-a
+                var t: float = clampf((pos-a).dot(ab)/maxf(ab.length_squared(),0.000001),0.0,1.0)
+                var d: float = pos.distance_to(a+ab*t)-lerpf(halfwidths[i],halfwidths[(i+1)%n],t)
+                best = minf(best,d)
+    return best
+
+# ------------------------------------------------------------------- kerbs
+
+func _build_kerbs() -> void:
+    # Flat raised blue/white rumble strips inside both edges. Block length is
+    # adjusted so an EVEN number of blocks spans the loop: the colour
+    # sequence stays continuous across every segment join and the start/end.
+    var n: int = centerline.size()
+    var blocks: int = maxi(2,int(round(length_metres/(KERB_BLOCK_M*2.0)))*2)
+    var block_len: float = length_metres/float(blocks)
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var top_y: float = 0.074
+    var low_y: float = 0.054
+    for side in [-1.0,1.0]:
+        var edge: Array[Vector2] = left_edge if side < 0.0 else right_edge
+        var inward: float = 1.0 if side < 0.0 else -1.0
+        var outer: Array[Vector2] = _shift_edge(edge,inward*KERB_INSET)
+        var inner: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET+KERB_WIDTH))
+        var lip: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET+KERB_WIDTH+0.16))
+        var back: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET-0.10))
+        for i in range(n):
+            var j: int = (i+1)%n
+            var s0: float = arc_lengths[i]
+            var s1: float = arc_lengths[j] if j != 0 else length_metres
+            var cuts: Array[float] = [0.0]
+            var k: int = int(floor(s0/block_len))+1
+            while float(k)*block_len < s1-0.0001:
+                cuts.append((float(k)*block_len-s0)/maxf(s1-s0,0.0001))
+                k += 1
+            cuts.append(1.0)
+            for c in range(cuts.size()-1):
+                var t0: float = cuts[c]
+                var t1: float = cuts[c+1]
+                var mid_s: float = s0+(s1-s0)*(t0+t1)*0.5
+                var colour: Color = KERB_BLUE if int(floor(mid_s/block_len))%2 == 0 else KERB_WHITE
+                var o0: Vector2 = outer[i].lerp(outer[j],t0)
+                var o1: Vector2 = outer[i].lerp(outer[j],t1)
+                var i0: Vector2 = inner[i].lerp(inner[j],t0)
+                var i1: Vector2 = inner[i].lerp(inner[j],t1)
+                _flat_quad(st,o0,o1,i0,i1,top_y,top_y,colour)
+                var l0: Vector2 = lip[i].lerp(lip[j],t0)
+                var l1: Vector2 = lip[i].lerp(lip[j],t1)
+                _flat_quad(st,i0,i1,l0,l1,top_y,low_y,colour.darkened(0.45))
+                var b0: Vector2 = back[i].lerp(back[j],t0)
+                var b1: Vector2 = back[i].lerp(back[j],t1)
+                _flat_quad(st,b0,b1,o0,o1,low_y,top_y,KERB_BEVEL)
+    var mesh: ArrayMesh = st.commit()
+    var mat := StandardMaterial3D.new()
+    mat.vertex_color_use_as_albedo = true
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mesh.surface_set_material(0,mat)
+    var node := MeshInstance3D.new()
+    node.name = "Blue white kerbs"
+    node.mesh = mesh
+    add_child(node)
+
+func _flat_quad(st: SurfaceTool,a0: Vector2,a1: Vector2,b0: Vector2,b1: Vector2,
+        ya: float,yb: float,colour: Color) -> void:
+    var p0 := Vector3(a0.x,ya,a0.y)
+    var p1 := Vector3(a1.x,ya,a1.y)
+    var q0 := Vector3(b0.x,yb,b0.y)
+    var q1 := Vector3(b1.x,yb,b1.y)
+    for p in [p0,p1,q0,q0,p1,q1]:
+        st.set_color(colour)
+        st.set_normal(Vector3.UP)
+        st.add_vertex(p)
+
+# ------------------------------------------------------------- environment
+
 func _build_environment() -> void:
     var plane := MeshInstance3D.new()
     plane.name = "Ground outside track"
     var ground := PlaneMesh.new()
-    ground.size = Vector2(650,650)
+    ground.size = Vector2(900,900)
     plane.mesh = ground
     plane.position.y = -0.08
     var m := StandardMaterial3D.new()
-    m.albedo_color = Color(1.0,1.0,1.0)
-    m.albedo_texture = SAND
-    m.uv1_scale = Vector3(650.0/7.0,650.0/7.0,1.0)
+    m.albedo_color = Color(0.92,0.95,0.92)
+    m.albedo_texture = GRASS
+    m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+    m.uv1_scale = Vector3(900.0/18.0,900.0/18.0,1.0)
     m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     plane.material_override = m
     add_child(plane)
-    var sun := DirectionalLight3D.new()
-    sun.rotation_degrees = Vector3(-58,-33,-12)
-    sun.light_color = Color(1.0,0.75,0.59)
-    sun.light_energy = 0.95
-    sun.shadow_enabled = false
-    add_child(sun)
+    # Cool moonlight key from the upper left + violet night ambient.
+    var moon := DirectionalLight3D.new()
+    moon.name = "Moonlight"
+    moon.rotation_degrees = Vector3(-62,-38,0)
+    moon.light_color = Color(0.86,0.87,1.0)
+    moon.light_energy = 1.05
+    moon.shadow_enabled = false
+    add_child(moon)
     var env := WorldEnvironment.new()
     var res := Environment.new()
     res.background_mode = Environment.BG_COLOR
-    res.background_color = Color(0.11,0.14,0.22)
+    res.background_color = Color(0.025,0.03,0.055)
     res.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    res.ambient_light_color = Color(0.62,0.7,0.78)
-    res.ambient_light_energy = 0.7
+    res.ambient_light_color = Color(0.52,0.48,0.66)
+    res.ambient_light_energy = 0.85
+    res.fog_enabled = false
     env.environment = res
     add_child(env)
 
+# ----------------------------------------------------------------- scenery
+
 func _build_track_props() -> void:
-    # Every prop is rejected if it would approach any other branch of road.
-    # The global query matters on U-turns and hairpins.
-    for i in range(0,centerline.size(),13):
-        var t: Vector2 = (centerline[(i+1)%centerline.size()]-
-            centerline[(i-1+centerline.size())%centerline.size()]).normalized()
-        var n: Vector2 = Vector2(-t.y,t.x)
-        var offset: float = halfwidths[i]+19.0
-        var pos: Vector2 = centerline[i]+n*offset*(1.0 if (i/13)%2==0 else -1.0)
-        var check: Dictionary = sample_info(pos)
-        if float(check["distance"]) < float(check["width"])+6.0:
+    # Deterministic per-track scenery: voxel cherry-blossom trees, dark
+    # pines, soft tree shadows and pink flower clusters on the verge.
+    # Every prop is rejected if it approaches ANY branch of road.
+    var rng := RandomNumberGenerator.new()
+    rng.seed = absi(hash(track_id))+PROP_SEED
+    var n: int = centerline.size()
+    var trees: Array[Dictionary] = []
+    var next_s: float = 0.0
+    for i in range(n):
+        if arc_lengths[i] < next_s:
             continue
-        var trunk := MeshInstance3D.new()
-        var stem := CylinderMesh.new()
-        stem.top_radius = 0.35
-        stem.bottom_radius = 0.45
-        stem.height = 3.8
-        trunk.mesh = stem
-        trunk.position = Vector3(pos.x,1.9,pos.y)
-        var bark := StandardMaterial3D.new()
-        bark.albedo_color = Color(0.20,0.16,0.15)
-        trunk.material_override = bark
-        add_child(trunk)
-        for tier in range(3):
-            var tree := MeshInstance3D.new()
-            var cone := CylinderMesh.new()
-            cone.top_radius = 0.05
-            cone.bottom_radius = 2.7-float(tier)*0.45
-            cone.height = 3.7
-            tree.mesh = cone
-            tree.position = Vector3(pos.x,3.5+float(tier)*1.8,pos.y)
-            var needles := StandardMaterial3D.new()
-            needles.albedo_color = Color(0.13,0.27,0.23) if tier%2==0 else Color(0.12,0.21,0.19)
-            tree.material_override = needles
-            add_child(tree)
+        next_s = arc_lengths[i]+rng.randf_range(7.0,13.0)
+        var tangent: Vector2 = (centerline[(i+1)%n]-centerline[(i-1+n)%n]).normalized()
+        var normal := Vector2(-tangent.y,tangent.x)
+        for side in [-1.0,1.0]:
+            for ring in range(2):
+                if rng.randf() < (0.30 if ring == 0 else 0.55):
+                    continue
+                var gap: float = rng.randf_range(5.5,13.0) if ring == 0 else rng.randf_range(16.0,34.0)
+                var pos: Vector2 = centerline[i]+normal*side*(halfwidths[i]+VERGE_WIDTH+gap)+tangent*rng.randf_range(-4.0,4.0)
+                var zone: float = sin(arc_lengths[i]*0.011+side*1.7)+rng.randf_range(-0.45,0.45)
+                var cherry: bool = zone > 0.05
+                var radius: float = rng.randf_range(2.3,3.3) if cherry else rng.randf_range(1.9,2.6)
+                if road_clearance(pos) < radius+3.2:
+                    continue
+                var crowded: bool = false
+                for other in trees:
+                    if Vector2(other["pos"]).distance_to(pos) < (float(other["radius"])+radius)*0.95:
+                        crowded = true
+                        break
+                if crowded:
+                    continue
+                trees.append({"pos":pos,"cherry":cherry,"radius":radius,
+                    "height":rng.randf_range(0.9,1.2),"seed":rng.randi()})
+    tree_positions.clear()
+    for tree in trees:
+        tree_positions.append(Vector2(tree["pos"]))
+    _build_trees(trees)
+    _build_verge_flowers(rng)
+
+func _multimesh(label: String,mesh: Mesh,material: Material,transforms: Array[Transform3D],
+        colours: Array[Color] = []) -> void:
+    if transforms.is_empty():
+        return
+    var mm := MultiMesh.new()
+    mm.transform_format = MultiMesh.TRANSFORM_3D
+    mm.use_colors = not colours.is_empty()
+    mm.mesh = mesh
+    mm.instance_count = transforms.size()
+    for k in range(transforms.size()):
+        mm.set_instance_transform(k,transforms[k])
+        if mm.use_colors:
+            mm.set_instance_color(k,colours[k])
+    var node := MultiMeshInstance3D.new()
+    node.name = label
+    node.multimesh = mm
+    node.material_override = material
+    node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(node)
+
+func _build_trees(trees: Array[Dictionary]) -> void:
+    var voxel_xf: Array[Transform3D] = []
+    var voxel_col: Array[Color] = []
+    var cone_xf: Array[Transform3D] = []
+    var cone_col: Array[Color] = []
+    var trunk_xf: Array[Transform3D] = []
+    var shadow_xf: Array[Transform3D] = []
+    var shadow_dir := Vector2(0.55,0.75)
+    for tree in trees:
+        var pos: Vector2 = tree["pos"]
+        var radius: float = tree["radius"]
+        var h: float = tree["height"]
+        var local := RandomNumberGenerator.new()
+        local.seed = int(tree["seed"])
+        var shadow_len: float = 2.6*h
+        var shadow_basis := Basis.from_scale(Vector3(radius*2.5,1.0,radius*2.9))
+        shadow_basis = Basis(Vector3.UP,local.randf_range(0.0,TAU))*shadow_basis
+        shadow_xf.append(Transform3D(shadow_basis,
+            Vector3(pos.x+shadow_dir.x*shadow_len,0.088,pos.y+shadow_dir.y*shadow_len)))
+        if bool(tree["cherry"]):
+            var trunk_h: float = 2.6*h
+            trunk_xf.append(Transform3D(Basis.from_scale(Vector3(0.42,trunk_h,0.42)),
+                Vector3(pos.x,trunk_h*0.5,pos.y)))
+            # Pixel/voxel blossom canopy (approved reference: pink "pixel"
+            # cherry trees). Voxels are snapped to a 0.62 m lattice.
+            var vs: float = 0.62
+            var centre := Vector3(pos.x,trunk_h+radius*0.55,pos.y)
+            var used: Dictionary = {}
+            for k in range(int(radius*22.0)):
+                var dir := Vector3(local.randf_range(-1,1),local.randf_range(-0.55,1),local.randf_range(-1,1))
+                if dir.length() > 1.0:
+                    continue
+                var p: Vector3 = centre+Vector3(dir.x*radius,dir.y*radius*0.72,dir.z*radius)
+                var snapped := Vector3i(int(round(p.x/vs)),int(round(p.y/vs)),int(round(p.z/vs)))
+                if used.has(snapped):
+                    continue
+                used[snapped] = true
+                var size: float = vs*local.randf_range(0.92,1.18)
+                voxel_xf.append(Transform3D(Basis.from_scale(Vector3.ONE*size),Vector3(snapped)*vs))
+                var height_t: float = clampf((p.y-centre.y)/radius*0.8+0.5,0.0,1.0)
+                var pink := Color(0.80,0.24,0.50).lerp(Color(1.0,0.60,0.82),height_t)
+                pink = pink.lerp(Color(1.0,0.86,0.93),local.randf()*0.22)
+                voxel_col.append(pink)
+        else:
+            var base_h: float = 0.6
+            for tier in range(3):
+                var s: float = (1.0-float(tier)*0.24)*radius
+                cone_xf.append(Transform3D(Basis.from_scale(Vector3(s,h*1.25,s)),
+                    Vector3(pos.x,base_h+1.7*h+float(tier)*1.55*h,pos.y)))
+                cone_col.append(Color(0.06,0.15,0.11).lerp(Color(0.12,0.24,0.16),float(tier)/2.0))
+            trunk_xf.append(Transform3D(Basis.from_scale(Vector3(0.38,base_h+1.2,0.38)),
+                Vector3(pos.x,(base_h+1.2)*0.5,pos.y)))
+    var foliage := StandardMaterial3D.new()
+    foliage.vertex_color_use_as_albedo = true
+    foliage.roughness = 0.9
+    var voxel := BoxMesh.new()
+    voxel.size = Vector3.ONE
+    _multimesh("Cherry blossom voxels",voxel,foliage,voxel_xf,voxel_col)
+    var cone := CylinderMesh.new()
+    cone.top_radius = 0.04
+    cone.bottom_radius = 1.0
+    cone.height = 2.6
+    cone.radial_segments = 7
+    cone.rings = 1
+    _multimesh("Night pines",cone,foliage,cone_xf,cone_col)
+    var bark := StandardMaterial3D.new()
+    bark.albedo_color = Color(0.20,0.13,0.11)
+    var trunk := BoxMesh.new()
+    trunk.size = Vector3.ONE
+    _multimesh("Tree trunks",trunk,bark,trunk_xf)
+    var shade := ShaderMaterial.new()
+    shade.shader = SHADOW_SHADER
+    shade.set_shader_parameter("core",Vector2(0.16,0.16))
+    shade.set_shader_parameter("softness",0.30)
+    shade.set_shader_parameter("corner",0.16)
+    shade.set_shader_parameter("opacity",0.50)
+    var quad := PlaneMesh.new()
+    quad.size = Vector2.ONE
+    _multimesh("Soft tree shadows",quad,shade,shadow_xf)
+
+func _build_verge_flowers(rng: RandomNumberGenerator) -> void:
+    var n: int = centerline.size()
+    var xf: Array[Transform3D] = []
+    var cols: Array[Color] = []
+    flower_positions.clear()
+    for side in [-1.0,1.0]:
+        var edge: Array[Vector2] = left_edge if side < 0.0 else right_edge
+        var next_s: float = 0.0
+        for i in range(n):
+            if arc_lengths[i] < next_s:
+                continue
+            next_s = arc_lengths[i]+rng.randf_range(0.8,2.2)
+            if rng.randf() < 0.25:
+                continue
+            var j: int = (i+1)%n
+            var t: float = rng.randf()
+            var e: Vector2 = edge[i].lerp(edge[j],t)
+            var inward: Vector2 = (right_edge[i]-left_edge[i]).normalized()
+            var out_dir: Vector2 = -inward if side < 0.0 else inward
+            var dist: float = rng.randf_range(VERGE_WIDTH*0.55,VERGE_WIDTH+3.0)
+            var pos: Vector2 = e+out_dir*dist
+            if road_clearance(pos) < 1.2:
+                continue
+            var size: float = rng.randf_range(0.9,1.9)
+            var basis := Basis(Vector3.UP,rng.randf_range(0.0,TAU))*Basis.from_scale(Vector3(size,1.0,size))
+            xf.append(Transform3D(basis,Vector3(pos.x,0.03,pos.y)))
+            flower_positions.append(pos)
+            cols.append(Color(1,1,1).lerp(Color(1.0,0.75,0.9),rng.randf()))
+    var mat := StandardMaterial3D.new()
+    mat.albedo_texture = FLOWERS
+    mat.vertex_color_use_as_albedo = true
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+    mat.alpha_scissor_threshold = 0.45
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    var quad := PlaneMesh.new()
+    quad.size = Vector2.ONE
+    _multimesh("Verge blossom clusters",quad,mat,xf,cols)

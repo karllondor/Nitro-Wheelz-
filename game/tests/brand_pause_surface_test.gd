@@ -25,15 +25,15 @@ func _run() -> void:
     var road: MeshInstance3D = track.find_child("Single continuous driving surface",true,false) as MeshInstance3D
     var exterior: MeshInstance3D = track.find_child("Ground outside track",true,false) as MeshInstance3D
     if road == null or exterior == null:
-        _fail("Textured road or sand ground missing")
+        _fail("Textured road or grass ground missing")
         return
     var road_material: StandardMaterial3D = road.mesh.surface_get_material(0) as StandardMaterial3D
-    var sand_material: StandardMaterial3D = exterior.material_override as StandardMaterial3D
+    var ground_material: StandardMaterial3D = exterior.material_override as StandardMaterial3D
     if road_material == null or road_material.albedo_texture == null:
         _fail("User asphalt image not assigned to road UV material")
         return
-    if sand_material == null or sand_material.albedo_texture == null:
-        _fail("User sand image not assigned to ground material")
+    if ground_material == null or ground_material.albedo_texture == null:
+        _fail("Night grass texture not assigned to ground material")
         return
     race.call("_toggle_pause")
     var pause_layer: CanvasLayer = race.get("pause_layer")
@@ -55,7 +55,7 @@ func _run() -> void:
     if RESULTS.short_date("2026-11-19T01:21:56") != "19 Nov  01:21":
         _fail("Local results should display short date and time")
         return
-    print("PASS: logo texture, asphalt+sand UV, exclusive PAUSE/RESUME, concise run history")
+    print("PASS: logo texture, asphalt+grass UV, exclusive PAUSE/RESUME, concise run history")
     print("NOT RUN: actual mobile touch coordinates, physical speed sensation, on-device keyboard")
     quit(0)
 

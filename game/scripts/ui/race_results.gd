@@ -2,7 +2,8 @@ extends Control
 class_name NitroRaceResults
 ## Local-only three-lap race history. No network leaderboard or fabricated ranks.
 const STORAGE: String = "user://nitro_local_runs.json"
-const PINK: Color = Color(0.57,0.30,0.98)
+const STYLE = preload("res://scripts/ui/hud_style.gd")
+const PINK: Color = Color(1.0,0.16,0.56)
 const GOLD: Color = Color(1.0,0.78,0.26)
 const WHITE: Color = Color(0.97,0.97,0.99)
 const MUTED: Color = Color(0.68,0.71,0.78)
@@ -105,12 +106,8 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     add_child(scroll)
     var panel := PanelContainer.new()
     panel.custom_minimum_size.x = s.x*0.91
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.054,0.061,0.080,0.98)
-    style.border_color = Color(0.39,0.40,0.47)
-    style.set_border_width_all(int(maxf(1.0,1.4*sc)))
-    style.set_corner_radius_all(int(19.0*sc))
-    panel.add_theme_stylebox_override("panel",style)
+    panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
+    theme = STYLE.screen_theme(sc)
     scroll.add_child(panel)
     var padding := MarginContainer.new()
     for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
@@ -172,5 +169,6 @@ func _action(parent: HBoxContainer,label: String,callback: Callable,scale: float
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.custom_minimum_size.y = 58.0*scale
     button.add_theme_font_size_override("font_size",int(19.0*scale))
+    STYLE.style_button(button,scale)
     button.pressed.connect(callback)
     parent.add_child(button)

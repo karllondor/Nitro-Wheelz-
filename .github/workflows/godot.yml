@@ -1,7 +1,7 @@
 name: Godot pinned import and smoke
 on:
   push:
-    branches: [main, "starter/**", "agent/**"]
+    branches: [main, "starter/**", "agent/**", "ccr-91dad981-53kkbi"]
   pull_request:
 permissions:
   contents: read

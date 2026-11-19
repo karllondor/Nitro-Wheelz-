@@ -2,6 +2,7 @@ extends Control
 ## Nitro Wheelz Track Editor beta: touch and mouse drag of spline knots,
 ## insert/delete, validate, save to user://, and play. Not a random generator.
 const DNA = preload("res://scripts/world/track_dna.gd")
+const STYLE = preload("res://scripts/ui/hud_style.gd")
 const SOURCE: String = "res://tracks/shin_kawa_full_circuit.json"
 const CUSTOM: String = "user://nitro_custom_track.json"
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
@@ -83,25 +84,30 @@ func _world_point(p: Vector2) -> Vector2:
 func _make_ui() -> void:
     var s: Vector2 = get_viewport_rect().size
     var scale: float = clampf(s.x/720.0,0.75,2.0)
+    theme = STYLE.screen_theme(clampf(s.x/700.0,0.85,1.8))
     var logo := TextureRect.new()
     logo.name = "Nitro Wheelz brand mark"
     logo.texture = load("res://assets/brand/nitro_wheelz_logo.svg") as Texture2D
-    logo.position = Vector2(s.x*0.035,s.y*0.009)
-    logo.size = Vector2(s.x*0.32,s.y*0.082)
+    # expand_mode must be set BEFORE size, or the SVG's native 620x349
+    # minimum size wins and the logo overlaps the title/instructions.
     logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    logo.position = Vector2(s.x*0.03,s.y*0.008)
+    logo.size = Vector2(s.x*0.30,s.y*0.070)
     logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(logo)
     var title := Label.new()
     title.text = "TRACK EDITOR  /  BETA"
-    title.position = Vector2(s.x*0.38,s.y*0.028)
-    title.size = Vector2(s.x*0.59,s.y*0.047)
+    title.position = Vector2(s.x*0.36,s.y*0.022)
+    title.size = Vector2(s.x*0.61,s.y*0.047)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     title.add_theme_font_size_override("font_size",int(24.0*scale))
-    title.add_theme_color_override("font_color",Color(1.0,0.83,0.26))
+    title.add_theme_font_override("font",STYLE.BOLD)
+    title.add_theme_color_override("font_color",STYLE.WHITE)
     add_child(title)
     var instructions := Label.new()
     instructions.text = "DRAG nodes • ADD NODE then tap canvas • ORANGE = selected / RED = invalid"
-    instructions.position = Vector2(s.x*0.05,s.y*0.098)
+    instructions.position = Vector2(s.x*0.05,s.y*0.090)
     instructions.size = Vector2(s.x*0.9,s.y*0.042)
     instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     instructions.add_theme_font_size_override("font_size",int(15.0*scale))
@@ -181,12 +187,7 @@ func _show_dialog(kind: String) -> void:
     panel.position = Vector2(s.x*0.065,s.y*0.13)
     panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else 0.21))
     panel.custom_minimum_size = panel.size
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.062,0.046,0.095,0.995)
-    style.border_color = Color(0.57,0.30,0.98)
-    style.set_border_width_all(int(maxf(2.0,2.0*sc)))
-    style.set_corner_radius_all(int(17.0*sc))
-    panel.add_theme_stylebox_override("panel",style)
+    panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
     dialog_overlay.add_child(panel)
     var margin := MarginContainer.new()
     for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
@@ -351,19 +352,7 @@ func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callab
     button.position = Vector2(s.x*xx,s.y*yy)
     button.size = Vector2(s.x*ww,s.y*hh)
     button.add_theme_font_size_override("font_size",int(clampf(s.x/31.0,14.0,30.0)))
-    var normal := StyleBoxFlat.new()
-    normal.bg_color = Color(0.058,0.050,0.082,0.98)
-    normal.border_color = Color(0.41,0.26,0.67)
-    normal.set_border_width_all(1)
-    normal.set_corner_radius_all(7)
-    button.add_theme_stylebox_override("normal",normal)
-    var pressed: StyleBoxFlat = normal.duplicate()
-    pressed.border_color = Color(0.57,0.30,0.98)
-    pressed.set_border_width_all(2)
-    pressed.bg_color = Color(0.16,0.095,0.25)
-    button.add_theme_stylebox_override("hover",pressed)
-    button.add_theme_stylebox_override("pressed",pressed)
-    button.add_theme_color_override("font_hover_color",Color(1.0,0.82,0.25))
+    STYLE.style_button(button,clampf(s.x/700.0,0.85,1.8))
     button.pressed.connect(action)
     add_child(button)
 
@@ -584,7 +573,7 @@ func _input(event: InputEvent) -> void:
 func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.015,0.012,0.026),true)
     draw_rect(canvas,Color(0.062,0.049,0.093,0.92),true)
-    draw_rect(canvas,Color(0.57,0.30,0.98,0.75),false,2.0)
+    draw_rect(canvas,Color(1.0,0.16,0.56,0.65),false,2.0)
     var n: int = _point_count()
     if n <= 0:
         return

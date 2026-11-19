@@ -45,7 +45,12 @@ var chase_occlusion_point: Vector3 = Vector3.ZERO
 var chase_is_blocked: bool = false
 const CAMERA_LOOKAHEAD_SECONDS: float = 0.45
 const CAMERA_LEAD_MAX_METRES: float = 19.0
+const OVERHEAD_BASE_PORTRAIT: float = 46.0
+const OVERHEAD_BASE_LANDSCAPE: float = 58.0
+const OVERHEAD_FRAMING_PORTRAIT: float = 0.11
+const VIGNETTE_SHADER = preload("res://assets/shaders/night_vignette.gdshader")
 var wall_collision_count: int = 0
+var tyre_smoke: Array[CPUParticles3D] = []
 
 var skid_mesh: ImmediateMesh
 var skid_material: StandardMaterial3D
@@ -83,6 +88,60 @@ func _make_car() -> void:
     (car_root as NitroLadaLowPoly).paint_variant = str(ProjectSettings.get_setting(
         "nitro/car_variant","red"))
     add_child(car_root)
+    _make_tyre_smoke()
+
+func _make_tyre_smoke() -> void:
+    # Restrained white tyre smoke from both rear wheels while sliding.
+    # CPU particles keep GL Compatibility / Android support predictable.
+    var puff := GradientTexture2D.new()
+    var ramp := Gradient.new()
+    ramp.set_color(0,Color(1,1,1,1))
+    ramp.set_color(1,Color(1,1,1,0))
+    puff.gradient = ramp
+    puff.fill = GradientTexture2D.FILL_RADIAL
+    puff.fill_from = Vector2(0.5,0.5)
+    puff.fill_to = Vector2(1.0,0.5)
+    puff.width = 64
+    puff.height = 64
+    var mat := StandardMaterial3D.new()
+    mat.albedo_texture = puff
+    mat.vertex_color_use_as_albedo = true
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+    mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+    var quad := QuadMesh.new()
+    quad.size = Vector2(1.0,1.0)
+    quad.material = mat
+    var fade := Gradient.new()
+    fade.set_color(0,Color(0.92,0.92,0.98,0.42))
+    fade.set_color(1,Color(0.80,0.80,0.90,0.0))
+    var grow := Curve.new()
+    grow.add_point(Vector2(0.0,0.9))
+    grow.add_point(Vector2(1.0,3.4))
+    for side in [-1.0,1.0]:
+        var smoke := CPUParticles3D.new()
+        smoke.name = "Tyre smoke "+("left" if side < 0.0 else "right")
+        smoke.mesh = quad
+        smoke.amount = 36
+        smoke.lifetime = 1.15
+        smoke.local_coords = false
+        smoke.emitting = false
+        smoke.direction = Vector3(0.0,0.6,1.0)
+        smoke.spread = 35.0
+        smoke.initial_velocity_min = 0.6
+        smoke.initial_velocity_max = 1.8
+        smoke.gravity = Vector3(0.0,0.35,0.0)
+        smoke.damping_min = 0.8
+        smoke.damping_max = 1.4
+        smoke.scale_amount_min = 0.9
+        smoke.scale_amount_max = 1.4
+        smoke.scale_amount_curve = grow
+        smoke.color_ramp = fade
+        smoke.position = Vector3(side*0.80,0.30,1.25)
+        smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        car_root.add_child(smoke)
+        tyre_smoke.append(smoke)
 
 func _make_cameras() -> void:
     overhead = Camera3D.new()
@@ -101,7 +160,7 @@ func _make_cameras() -> void:
 func _make_tyre_marks() -> void:
     skid_mesh = ImmediateMesh.new()
     skid_material = StandardMaterial3D.new()
-    skid_material.albedo_color = Color(0.055,0.055,0.065,0.78)
+    skid_material.albedo_color = Color(0.02,0.02,0.03,0.50)
     skid_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     skid_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
     skid_material.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -112,6 +171,19 @@ func _make_tyre_marks() -> void:
     add_child(marks)
 
 func _make_ui() -> void:
+    # Night atmosphere: soft violet vignette under the HUD.
+    var mood := CanvasLayer.new()
+    mood.layer = 2
+    mood.name = "Night vignette"
+    add_child(mood)
+    var vignette := ColorRect.new()
+    vignette.name = "Vignette"
+    vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var vmat := ShaderMaterial.new()
+    vmat.shader = VIGNETTE_SHADER
+    vignette.material = vmat
+    mood.add_child(vignette)
+    vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var overlay := CanvasLayer.new()
     overlay.layer = 4
     overlay.name = "Race HUD"
@@ -123,8 +195,11 @@ func _make_ui() -> void:
     hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else (
         "FULL CIRCUIT" if track.track_id=="shin_kawa_full_circuit" else track.display_name)
     hud.track_points = PackedVector2Array(track.centerline)
+    hud.track_id = track.track_id
+    # Same provisional local target as the finish screen uses, so the HUD
+    # chasing-time stars and the result stars always agree.
     hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
-        90.0 if track.track_id=="benchmark_sweepers" else 0.0)
+        90.0 if track.track_id=="benchmark_sweepers" else track.length_metres*3.0/14.0)
 
     var touch_layer := CanvasLayer.new()
     touch_layer.layer = 6
@@ -299,7 +374,7 @@ func _refresh_skid_mesh() -> void:
         var delta: Vector2 = b-a
         if delta.length_squared() < 0.0001:
             continue
-        var n: Vector2 = Vector2(-delta.y,delta.x).normalized()*0.13
+        var n: Vector2 = Vector2(-delta.y,delta.x).normalized()*0.15
         for p in [a-n,b-n,a+n,a+n,b-n,b+n]:
             skid_mesh.surface_set_normal(Vector3.UP)
             skid_mesh.surface_add_vertex(Vector3(p.x,0.08,p.y))
@@ -311,6 +386,9 @@ func _update_visuals() -> void:
     car_root.position = Vector3(model.position.x,0.0,model.position.y)
     # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
     car_root.rotation.y = -model.heading
+    var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished
+    for smoke in tyre_smoke:
+        smoke.emitting = smoking
     if car_root is NitroLadaLowPoly:
         (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.signed_forward_speed_mps(), get_physics_process_delta_time())
     if hud != null:
@@ -379,8 +457,9 @@ func _update_camera(delta: float) -> void:
         view_dir = forward_dir.lerp(model.velocity.normalized(),0.25).normalized()
     var f: Vector3 = Vector3(view_dir.x,0.0,view_dir.y)
     var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-    # Wider track preview than v0.1.7, with speed-responsive smooth zoom.
-    var base_size: float = 84.0 if portrait else 76.0
+    # v0.1.13: closer framing (approved gameplay reference) so the car reads
+    # as a collectible model; speed-responsive zoom still widens the view.
+    var base_size: float = OVERHEAD_BASE_PORTRAIT if portrait else OVERHEAD_BASE_LANDSCAPE
     var zoom_target: float = base_size/_zoom_factor_for_speed(model.speed_kmh())
     var zoom_alpha: float = 1.0-exp(-3.3*maxf(delta,0.0))
     overhead.size = lerpf(overhead.size,zoom_target,zoom_alpha)
@@ -417,8 +496,11 @@ func _update_camera(delta: float) -> void:
     chase.look_at(look_target,Vector3.UP)
     chase.fov = lerpf(chase.fov,lerpf(76.0,82.0,speed_lerp),zoom_alpha)
 
+    # Portrait framing: lift the car out of the pedal/handbrake area while the
+    # velocity lookahead still opens the view ahead of it.
+    var framing: float = -overhead.size*(OVERHEAD_FRAMING_PORTRAIT if portrait else 0.0)
     overhead.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.42
-    overhead.v_offset = cos(camera_shake_phase*1.3)*camera_shake_strength*0.42
+    overhead.v_offset = framing+cos(camera_shake_phase*1.3)*camera_shake_strength*0.42
     chase.h_offset = sin(camera_shake_phase)*camera_shake_strength*0.38
     chase.v_offset = cos(camera_shake_phase*1.3)*camera_shake_strength*0.22
 

@@ -1,0 +1,116 @@
+extends SceneTree
+## Developer visual capture (NOT part of the automated pass/fail suite).
+## Renders real scenes with a real GPU/software renderer and saves PNG stills
+## so art changes can be reviewed against approved references.
+##
+## Usage (needs a display; Xvfb + Mesa works):
+##   xvfb-run -s "-screen 0 720x1600x24" godot --path game \
+##       --rendering-driver opengl3 --resolution 720x1600 \
+##       --script res://tests/capture_visuals.gd -- /abs/output/dir [shots...]
+## Shots: race_drift race_start race_chase garage_red garage_white menu editor
+
+var out_dir: String = "user://captures"
+var shots: PackedStringArray = PackedStringArray([
+    "race_drift","race_start","race_chase","garage_red","garage_white","menu","editor"])
+
+func _initialize() -> void:
+    var args: PackedStringArray = OS.get_cmdline_user_args()
+    if args.size() > 0:
+        out_dir = args[0]
+    if args.size() > 1:
+        shots = args.slice(1)
+    DirAccess.make_dir_recursive_absolute(out_dir)
+    call_deferred("_run")
+
+func _run() -> void:
+    for shot in shots:
+        match shot:
+            "race_drift":
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,true)
+            "race_start":
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,false)
+            "race_chase":
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",1,true)
+            "race_white":
+                ProjectSettings.set_setting("nitro/car_variant","white")
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,true)
+                ProjectSettings.set_setting("nitro/car_variant","red")
+            "garage_red":
+                await _garage_shot(shot,"red")
+            "garage_white":
+                await _garage_shot(shot,"white")
+            "menu":
+                await _scene_shot(shot,"res://scenes/boot.tscn")
+            "editor":
+                await _scene_shot(shot,"res://scenes/track_editor.tscn")
+    quit(0)
+
+func _save(name: String) -> void:
+    await process_frame
+    await process_frame
+    var image: Image = root.get_texture().get_image()
+    var path: String = out_dir.path_join(name+".png")
+    image.save_png(path)
+    print("CAPTURED: "+path)
+
+func _race_shot(name: String,track_path: String,camera_mode: int,drift: bool) -> void:
+    ProjectSettings.set_setting("nitro/selected_track",track_path)
+    var race: Node3D = (load("res://scenes/race.tscn") as PackedScene).instantiate()
+    root.add_child(race)
+    await process_frame
+    var touch: Control = race.get("touch")
+    if touch != null:
+        touch.visible = true
+    race.set_physics_process(false)
+    var dt: float = 1.0/120.0
+    if drift:
+        # Scripted: accelerate, flick the handbrake into the first bend and
+        # hold an angle with throttle + countersteer. Visual fixture only.
+        Input.action_press("throttle")
+        for i in range(330):
+            race._physics_process(dt)
+        Input.action_press("steer_right",0.85)
+        Input.action_press("handbrake")
+        for i in range(30):
+            race._physics_process(dt)
+        Input.action_release("handbrake")
+        for i in range(70):
+            race._physics_process(dt)
+        Input.action_release("steer_right")
+        Input.action_press("steer_left",0.25)
+        for i in range(40):
+            race._physics_process(dt)
+        Input.action_release("steer_left")
+        Input.action_release("throttle")
+    else:
+        Input.action_press("throttle")
+        for i in range(60):
+            race._physics_process(dt)
+        Input.action_release("throttle")
+    if camera_mode == 1:
+        race.call("_toggle_camera")
+    for i in range(90):
+        race.call("_update_camera",1.0/60.0)
+    if drift:
+        # Let particle systems (tyre smoke) run for a moment.
+        for i in range(36):
+            await process_frame
+    await _save(name)
+    race.queue_free()
+    await process_frame
+
+func _garage_shot(name: String,variant: String) -> void:
+    ProjectSettings.set_setting("nitro/car_variant",variant)
+    var cfg := ConfigFile.new()
+    cfg.set_value("garage","paint",variant)
+    cfg.save("user://nitro_garage.cfg")
+    await _scene_shot(name,"res://scenes/garage.tscn")
+
+func _scene_shot(name: String,path: String) -> void:
+    var node: Node = (load(path) as PackedScene).instantiate()
+    root.add_child(node)
+    for i in range(6):
+        await process_frame
+    await _save(name)
+    node.queue_free()
+    await process_frame

@@ -1,5 +1,11 @@
 # Nitro Wheelz — visual identity (approved direction)
 
+## v0.1.13 owner targets (shared in chat 2026-11-19, not yet locked in assets/references/approved)
+- **Driving HUD:** the owner's portrait gameplay mock-up: dark glass parallelogram panels, hot-pink neon lower-right edges, bold italic type, minimap + SHIN-KAWA + LAP + clock with pink bar, TOTAL SCORE / SCORE xN / CHASING TIME with gold stars, skewed angle and KM/H tiles, metal joystick, ribbed handbrake with pink cap and "///" base, perforated aluminium pedals with pink glow.
+- **Cars:** collectible die-cast ("resorak") rather than realistic: smooth rounded body, glossy paint highlights, dark tinted glass, chunky deep-dish wheels, widebody stance. Red Lada 2106 drift-spec sheet and pearl-white sheet are the silhouette/detail targets.
+- **Circuit at night:** dark asphalt, white edge line, blue/white kerbs, earth verge, olive grass with pink blossoms, pixel/voxel cherry trees, dark pines with soft shadows.
+To lock these images formally, the owner adds them under assets/references/approved and runs tools/lock_asset.py (see docs/ART_LOCK.md).
+
 Default in-game presentation resembles the user's DRIFTIT mobile references: high near-orthographic top-down, clean readable asphalt, strong black skid marks, darkened translucent HUD panels, stylized low-poly colourful car, uncluttered outside scenery. Do not copy original textures, exact GUI, circuit map, name or licensed assets.
 
 Second mode is a real 3D behind-car chase camera, toggleable without changing motion physics. Do not make chase camera mandatory or introduce an isometric static camera.

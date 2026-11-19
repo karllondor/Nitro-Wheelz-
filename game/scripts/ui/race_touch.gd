@@ -4,6 +4,8 @@ class_name NitroRaceTouch
 ## buttons. Every visible control shares its exact Rect2 with touch detection.
 ## Independent pointer IDs support steering, gas and handbrake simultaneously.
 
+const STYLE = preload("res://scripts/ui/hud_style.gd")
+
 signal camera_requested
 signal pause_requested
 signal restart_requested
@@ -26,6 +28,9 @@ func _process(_delta: float) -> void:
 
 func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
     var s: Vector2 = get_viewport_rect().size if size_override == Vector2.ZERO else size_override
+    # PAUSE / CAM share their rectangles with the HUD style metrics so the
+    # drawn buttons and touch targets are always identical.
+    var hud: Dictionary = STYLE.metrics(s)
     if s.y > s.x:
         return {
             "joystick_center": Vector2(s.x*0.215,s.y*0.853),
@@ -33,8 +38,8 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
             "drift": Rect2(s.x*0.790,s.y*0.470,s.x*0.188,s.y*0.300),
             "brake": Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132),
             "gas": Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190),
-            "pause": Rect2(s.x*0.690,s.y*0.206,s.x*0.126,s.y*0.057),
-            "camera": Rect2(s.x*0.842,s.y*0.206,s.x*0.136,s.y*0.057),
+            "pause": hud["pause"],
+            "camera": hud["camera"],
             "restart": Rect2(s.x*0.265,s.y*0.43,s.x*0.470,s.y*0.095),
             "menu": Rect2(s.x*0.265,s.y*0.55,s.x*0.470,s.y*0.095)
         }
@@ -44,8 +49,8 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
         "drift": Rect2(s.x*0.850,s.y*0.390,s.x*0.128,s.y*0.340),
         "brake": Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161),
         "gas": Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224),
-        "pause": Rect2(s.x*0.921,s.y*0.180,s.x*0.057,s.y*0.125),
-        "camera": Rect2(s.x*0.846,s.y*0.180,s.x*0.062,s.y*0.125),
+        "pause": hud["pause"],
+        "camera": hud["camera"],
         "restart": Rect2(s.x*0.33,s.y*0.49,s.x*0.34,s.y*0.12),
         "menu": Rect2(s.x*0.33,s.y*0.65,s.x*0.34,s.y*0.12)
     }
@@ -135,119 +140,180 @@ func _ui_scale() -> float:
 
 func _draw() -> void:
     var geo: Dictionary = _layout()
-    var centre: Vector2 = Vector2(geo["joystick_center"])
-    var radius: float = float(geo["joystick_radius"])
-    var scale: float = _ui_scale()
-    # Minimal transparent steering pad; the physical hit zone is identical.
-    draw_circle(centre,radius,Color(0.025,0.029,0.037,0.32))
-    draw_arc(centre,radius,0.0,TAU,80,Color(0.87,0.89,0.94,0.78),2.1*scale,true)
-    draw_circle(centre+Vector2(steer*radius*0.57,0),
-        radius*0.34,Color(0.70,0.73,0.76,0.90))
-    draw_arc(centre+Vector2(steer*radius*0.57,0),
-        radius*0.34,0.0,TAU,48,Color(1,1,1,0.66),1.4*scale,true)
-    _handbrake(Rect2(geo["drift"]),handbrake>0.0)
-    _pedal(Rect2(geo["brake"]),"BRAKE",brake>0.0)
-    _pedal(Rect2(geo["gas"]),"GAS",throttle>0.0)
-    _button(Rect2(geo["pause"]),"Ⅱ",false,false,true)
-    _button(Rect2(geo["camera"]),"CAM",false,false,true)
+    var u: float = _ui_scale()
+    _joystick(Vector2(geo["joystick_center"]),float(geo["joystick_radius"]),u)
+    _handbrake(Rect2(geo["drift"]),handbrake > 0.0)
+    _pedal(Rect2(geo["brake"]),"BRAKE",brake > 0.0)
+    _pedal(Rect2(geo["gas"]),"GAS",throttle > 0.0)
+    _button(Rect2(geo["pause"]),"pause",u)
+    _button(Rect2(geo["camera"]),"camera",u)
     # PAUSE and FINISH have exclusive modal menus in their own CanvasLayers.
 
-func _button(rect: Rect2, label: String, pushed: bool,
-        highlight: bool=false, small: bool=false) -> void:
-    var scale: float = _ui_scale()
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.25,0.07,0.18,0.80) if pushed else Color(0.020,0.025,0.035,0.76)
-    style.border_color = Color(0.57,0.30,0.98,0.87) if pushed else Color(0.83,0.84,0.89,0.63)
-    style.set_border_width_all(int(maxf(1.8,1.8*scale)))
-    style.set_corner_radius_all(int(minf(rect.size.y*0.28,16.0*scale)))
-    draw_style_box(style,rect)
-    var font: Font = get_theme_default_font()
-    var font_size: int = int((17.0 if small else 27.0)*scale)
-    var col: Color = Color(0.71,0.55,1.0) if highlight else Color(1,1,1)
-    var baseline: float = rect.position.y+rect.size.y*0.5+font.get_ascent(font_size)*0.37
-    draw_string(font,Vector2(rect.position.x,baseline),label,
-        HORIZONTAL_ALIGNMENT_CENTER,rect.size.x,font_size,col)
+func _joystick(centre: Vector2, radius: float, u: float) -> void:
+    # Thin ring + metal knob; the hit zone is the same circle (x1.17).
+    draw_circle(centre,radius,Color(0.02,0.02,0.035,0.30))
+    draw_arc(centre,radius,0.0,TAU,96,Color(0.92,0.93,0.97,0.80),2.2*u,true)
+    draw_arc(centre,radius*0.965,0.0,TAU,96,Color(1,1,1,0.10),1.2*u,true)
+    var knob: Vector2 = centre+Vector2(steer*radius*0.57,0.0)
+    var rk: float = radius*0.36
+    draw_circle(knob+Vector2(rk*0.05,rk*0.12),rk*1.04,Color(0,0,0,0.38))
+    var steps: int = 16
+    for k in range(steps):
+        var t: float = float(k)/float(steps-1)
+        var c: Color = Color(0.34,0.35,0.39).lerp(Color(0.95,0.95,0.97),pow(t,0.75))
+        draw_circle(knob+Vector2(-0.30,-0.34)*rk*t,rk*(1.0-t*0.80),c)
+    draw_arc(knob,rk,0.0,TAU,48,Color(1,1,1,0.55),1.3*u,true)
+    draw_circle(knob+Vector2(-0.42,-0.46)*rk,rk*0.10,Color(1,1,1,0.55))
+
+func _button(rect: Rect2, icon: String, u: float) -> void:
+    var pts: PackedVector2Array = STYLE.shape(rect,13.0*u,STYLE.SKEW*0.85)
+    var cols := PackedColorArray()
+    for p in pts:
+        cols.append(STYLE.GLASS_TOP.lerp(STYLE.GLASS_BOTTOM,clampf((p.y-rect.position.y)/rect.size.y,0.0,1.0)))
+    draw_polygon(pts,cols)
+    var outline: PackedVector2Array = pts.duplicate()
+    outline.append(pts[0])
+    draw_polyline(outline,Color(1,1,1,0.14),6.0*u,true)
+    draw_polyline(outline,Color(0.93,0.94,0.98,0.85),2.0*u,true)
+    var c: Vector2 = rect.get_center()
+    var h: float = rect.size.y
+    if icon == "pause":
+        for side in [-1.0,1.0]:
+            var bar := Rect2(c.x+side*h*0.13-h*0.065,c.y-h*0.24,h*0.13,h*0.48)
+            draw_rect(bar,STYLE.WHITE,true)
+    else:
+        var body := Rect2(c.x-h*0.36,c.y-h*0.20,h*0.48,h*0.40)
+        var box := StyleBoxFlat.new()
+        box.bg_color = STYLE.WHITE
+        box.set_corner_radius_all(int(h*0.08))
+        draw_style_box(box,body)
+        draw_colored_polygon(PackedVector2Array([
+            Vector2(body.end.x+h*0.02,c.y-h*0.03),Vector2(body.end.x+h*0.24,c.y-h*0.17),
+            Vector2(body.end.x+h*0.24,c.y+h*0.17),Vector2(body.end.x+h*0.02,c.y+h*0.03)]),STYLE.WHITE)
 
 func _handbrake(rect: Rect2, pressed: bool) -> void:
-    # The entire drawn lever rectangle is the functional touch target.
-    var scale: float = _ui_scale()
+    # Lever reference: black ribbed grip with pink cap, chrome shaft and a
+    # black base with pink neon. The WHOLE drawn rectangle is the target.
+    var u: float = _ui_scale()
     var x: float = rect.position.x
     var y: float = rect.position.y
     var w: float = rect.size.x
     var h: float = rect.size.y
-    var pink := Color(0.57,0.30,0.98,0.95)
-    var cx: float = x+w*0.50
-    var bottom: float = y+h*0.77
-    var shaft_bottom := Vector2(cx,bottom)
-    var shaft_top := Vector2(cx,y+h*(0.24 if pressed else 0.14))
-    draw_line(shaft_bottom,shaft_top,Color(0.85,0.88,0.91),w*0.110,true)
-    draw_line(shaft_bottom+Vector2(w*0.032,0),shaft_top+Vector2(w*0.032,0),
-        Color(0.33,0.36,0.40),w*0.026,true)
-    var grip := Rect2(x+w*0.31,y+h*0.015,w*0.38,h*(0.34 if pressed else 0.42))
-    var rubber := StyleBoxFlat.new()
-    rubber.bg_color = Color(0.065,0.065,0.080)
-    rubber.border_color = pink
-    rubber.set_border_width_all(int(maxf(1.4,1.5*scale)))
-    rubber.set_corner_radius_all(int(w*0.14))
-    draw_style_box(rubber,grip)
-    for rib in range(9):
-        var ry: float = grip.position.y+grip.size.y*(0.19+float(rib)*0.069)
-        draw_line(Vector2(grip.position.x+w*0.055,ry),
-            Vector2(grip.end.x-w*0.055,ry),Color(0.65,0.67,0.69,0.46),1.2*scale,true)
-    # Enlarge only the lower handbrake BUTTON by 10%; keep lever grip.
-    var base := Rect2(x+w*0.06,y+h*0.7265,w*0.88,h*0.2585)
-    var metal := StyleBoxFlat.new()
-    metal.bg_color = Color(0.09,0.075,0.095,0.92)
-    metal.border_color = pink if pressed else Color(0.92,0.91,0.95,0.80)
-    metal.set_border_width_all(int(2.2*scale))
-    metal.set_corner_radius_all(int(w*0.17))
-    draw_style_box(metal,base)
-    var font: Font = get_theme_default_font()
-    var symbol_size: int = int(34.0*scale)
-    draw_string(font,Vector2(base.position.x,base.position.y+base.size.y*0.56+
-        font.get_ascent(symbol_size)*0.28),"Ⅲ",HORIZONTAL_ALIGNMENT_CENTER,
-        base.size.x,symbol_size,pink)
-    draw_circle(Vector2(base.position.x+base.size.x*0.16,base.position.y+base.size.y*0.15),
-        w*0.025,Color(0.86,0.88,0.93))
-    draw_circle(Vector2(base.end.x-base.size.x*0.16,base.position.y+base.size.y*0.15),
-        w*0.025,Color(0.86,0.88,0.93))
+    var cx: float = x+w*0.5
+    var pull: float = h*0.06 if pressed else 0.0
+    # Base plate.
+    var base := Rect2(x+w*0.05,y+h*0.705,w*0.90,h*0.285)
+    var base_pts: PackedVector2Array = STYLE.shape(base,w*0.17,0.0)
+    var base_cols := PackedColorArray()
+    for p in base_pts:
+        base_cols.append(Color(0.16,0.16,0.19).lerp(Color(0.035,0.035,0.045),
+            clampf((p.y-base.position.y)/base.size.y,0.0,1.0)))
+    var glow_pts: PackedVector2Array = base_pts.duplicate()
+    glow_pts.append(base_pts[0])
+    STYLE.glow_line(self,glow_pts,STYLE.PINK,2.4*u,1.6 if pressed else 1.0)
+    draw_polygon(base_pts,base_cols)
+    draw_polyline(glow_pts,Color(1.0,0.55,0.80,0.9),1.6*u,true)
+    for side in [-1.0,1.0]:
+        var bolt := Vector2(cx+side*base.size.x*0.32,base.position.y+base.size.y*0.17)
+        draw_circle(bolt,w*0.045,Color(0.55,0.56,0.60))
+        draw_circle(bolt+Vector2(-1,-1)*w*0.012,w*0.026,Color(0.92,0.93,0.96))
+    # "///" logo.
+    var lh: float = base.size.y*0.34
+    var lw: float = base.size.x*0.075
+    for k in range(3):
+        var lx: float = cx-base.size.x*0.20+float(k)*base.size.x*0.15
+        var ly: float = base.position.y+base.size.y*0.58
+        draw_colored_polygon(PackedVector2Array([
+            Vector2(lx+lh*0.45,ly-lh*0.5),Vector2(lx+lh*0.45+lw,ly-lh*0.5),
+            Vector2(lx-lh*0.45+lw,ly+lh*0.5),Vector2(lx-lh*0.45,ly+lh*0.5)]),STYLE.PINK)
+    # Chrome shaft (three vertical strips fake a cylinder).
+    var shaft_top: float = y+h*0.34+pull
+    var shaft_bottom: float = base.position.y+base.size.y*0.06
+    var sw: float = w*0.15
+    var strips: Array = [[-0.5,-0.15,Color(0.45,0.47,0.52),Color(0.88,0.89,0.93)],
+        [-0.15,0.18,Color(0.97,0.98,1.0),Color(0.97,0.98,1.0)],
+        [0.18,0.5,Color(0.82,0.83,0.88),Color(0.30,0.31,0.36)]]
+    for strip in strips:
+        var a: float = cx+sw*float(strip[0])
+        var b: float = cx+sw*float(strip[1])
+        draw_polygon(PackedVector2Array([Vector2(a,shaft_top),Vector2(b,shaft_top),
+            Vector2(b,shaft_bottom),Vector2(a,shaft_bottom)]),
+            PackedColorArray([strip[2],strip[3],strip[3],strip[2]]))
+    draw_rect(Rect2(cx-sw*0.75,shaft_top-h*0.012,sw*1.5,h*0.03),Color(0.08,0.08,0.10),true)
+    # Ribbed rubber grip.
+    var grip := Rect2(cx-w*0.17,y+h*0.045+pull,w*0.34,h*0.30)
+    var grip_box := StyleBoxFlat.new()
+    grip_box.bg_color = Color(0.07,0.07,0.085)
+    grip_box.set_corner_radius_all(int(w*0.12))
+    grip_box.border_color = Color(0.25,0.25,0.29)
+    grip_box.set_border_width_all(int(maxf(1.0,1.2*u)))
+    draw_style_box(grip_box,grip)
+    var ribs: int = 12
+    for k in range(ribs):
+        var ry: float = grip.position.y+grip.size.y*(0.10+0.82*float(k)/float(ribs-1))
+        draw_line(Vector2(grip.position.x+w*0.035,ry),Vector2(grip.end.x-w*0.035,ry),
+            Color(0.20,0.20,0.24,0.95),2.2*u,true)
+        draw_line(Vector2(grip.position.x+w*0.035,ry+1.6*u),Vector2(grip.end.x-w*0.035,ry+1.6*u),
+            Color(0.0,0.0,0.0,0.6),1.2*u,true)
+    draw_line(Vector2(grip.position.x+w*0.06,grip.position.y+grip.size.y*0.12),
+        Vector2(grip.position.x+w*0.06,grip.end.y-grip.size.y*0.10),Color(1,1,1,0.16),2.0*u,true)
+    # Pink cap.
+    var cap := Rect2(cx-w*0.19,grip.position.y-h*0.03,w*0.38,h*0.055)
+    var cap_box := StyleBoxFlat.new()
+    cap_box.bg_color = STYLE.PINK
+    cap_box.set_corner_radius_all(int(w*0.10))
+    cap_box.shadow_color = Color(1.0,0.16,0.56,0.55 if pressed else 0.35)
+    cap_box.shadow_size = int(10.0*u)
+    draw_style_box(cap_box,cap)
+    draw_line(Vector2(cap.position.x+w*0.06,cap.position.y+cap.size.y*0.32),
+        Vector2(cap.end.x-w*0.06,cap.position.y+cap.size.y*0.32),Color(1,0.75,0.88,0.9),2.0*u,true)
 
 func _pedal(rect: Rect2, label: String, pressed: bool) -> void:
-    # Separate brake and throttle silhouettes based on the approved
-    # perforated aluminium pedal reference. Visual shape and touch Rect2 match.
-    var x: float = rect.position.x
-    var y: float = rect.position.y
-    var w: float = rect.size.x
-    var h: float = rect.size.y
-    var scale: float = _ui_scale()
+    # Perforated brushed-aluminium pedals with a pink-lit lower edge.
+    # Visual footprint stays inside the touch Rect2.
+    var u: float = _ui_scale()
     var gas_pedal: bool = label == "GAS"
-    var poly := PackedVector2Array()
+    var press: float = rect.size.y*0.025 if pressed else 0.0
+    var face := Rect2(rect.position.x+rect.size.x*0.05,rect.position.y+rect.size.y*0.01+press,
+        rect.size.x*0.90,rect.size.y*(0.88 if gas_pedal else 0.86))
+    var skew: float = 0.10
+    var radius: float = rect.size.x*0.14
+    var depth: float = rect.size.y*(0.055 if gas_pedal else 0.075)
+    var side_rect := Rect2(face.position+Vector2(0,depth),face.size)
+    var side_pts: PackedVector2Array = STYLE.shape(side_rect,radius,skew)
+    STYLE.glow_line(self,STYLE.glow_path(side_rect,radius,skew,0.02,0.75),STYLE.PINK,
+        2.6*u,1.8 if pressed else 1.0)
+    draw_colored_polygon(side_pts,Color(0.30,0.31,0.35))
+    var face_pts: PackedVector2Array = STYLE.shape(face,radius,skew)
+    var cols := PackedColorArray()
+    for p in face_pts:
+        var t: float = clampf((p.y-face.position.y)/face.size.y,0.0,1.0)
+        var d: float = clampf((p.x-face.position.x)/face.size.x,0.0,1.0)
+        cols.append(Color(0.93,0.94,0.96).lerp(Color(0.55,0.57,0.62),t*0.75+d*0.25))
+    draw_polygon(face_pts,cols)
+    # Brushed grain.
+    for k in range(22):
+        var gy: float = face.position.y+face.size.y*(0.04+0.92*float(k)/21.0)
+        var a: Vector2 = STYLE.skew_point(Vector2(face.position.x+radius*0.4,gy),face,skew)
+        var b: Vector2 = STYLE.skew_point(Vector2(face.end.x-radius*0.4,gy),face,skew)
+        draw_line(a,b,Color(1,1,1,0.07) if k%2 == 0 else Color(0,0,0,0.05),1.0*u)
+    var outline: PackedVector2Array = face_pts.duplicate()
+    outline.append(face_pts[0])
+    draw_polyline(outline,Color(1,1,1,0.85),1.6*u,true)
+    # Holes: gas 2x5 grid, brake 2-1-2.
+    var holes: Array[Vector2] = []
     if gas_pedal:
-        poly = PackedVector2Array([
-            Vector2(x+w*0.14,y+h*0.012),Vector2(x+w*0.84,y+h*0.012),
-            Vector2(x+w*0.96,y+h*0.087),Vector2(x+w*0.95,y+h*0.92),
-            Vector2(x+w*0.84,y+h*0.987),Vector2(x+w*0.12,y+h*0.987),
-            Vector2(x+w*0.045,y+h*0.91),Vector2(x+w*0.045,y+h*0.082)
-        ])
+        for row in range(5):
+            for col in [0.30,0.70]:
+                holes.append(Vector2(col,0.13+0.74*float(row)/4.0))
     else:
-        poly = PackedVector2Array([
-            Vector2(x+w*0.18,y+h*0.008),Vector2(x+w*0.88,y+h*0.008),
-            Vector2(x+w*0.972,y+h*0.090),Vector2(x+w*0.91,y+h*0.92),
-            Vector2(x+w*0.80,y+h*0.989),Vector2(x+w*0.06,y+h*0.989),
-            Vector2(x+w*0.012,y+h*0.90),Vector2(x+w*0.10,y+h*0.087)
-        ])
-    draw_colored_polygon(poly,Color(0.92,0.62,0.75) if pressed else Color(0.68,0.70,0.73))
-    var outline: PackedVector2Array = poly.duplicate()
-    outline.append(poly[0])
-    draw_polyline(outline,Color(0.99,0.99,1.0,0.95),2.4*scale,true)
-    # Matte holes: staggered rows. The gas pedal is taller than the brake.
-    var rows: int = 6 if gas_pedal else 4
-    for row in range(rows):
-        var hole_y: float = y+h*(0.15+(0.70*float(row)/float(rows-1)))
-        var positions: Array[float] = [0.31,0.69] if row%2==0 else [0.5]
-        for hole_x in positions:
-            var centre: Vector2 = Vector2(x+w*hole_x,hole_y)
-            draw_circle(centre,w*0.101,Color(0.93,0.94,0.95,0.80))
-            draw_circle(centre,w*0.083,Color(0.028,0.031,0.040,1.0))
-    draw_line(Vector2(x+w*0.12,y+h*0.97),Vector2(x+w*0.86,y+h*0.97),
-        Color(0.57,0.30,0.98,0.94) if pressed else Color(0.43,0.45,0.50,0.7),2.4*scale,true)
+        holes = [Vector2(0.28,0.20),Vector2(0.72,0.20),Vector2(0.5,0.50),
+            Vector2(0.28,0.80),Vector2(0.72,0.80)]
+    var hole_r: float = face.size.x*(0.105 if gas_pedal else 0.12)
+    for rel in holes:
+        var c: Vector2 = STYLE.skew_point(face.position+face.size*rel,face,skew)
+        draw_circle(c+Vector2(hole_r*0.10,hole_r*0.14),hole_r*1.08,Color(1,1,1,0.55))
+        draw_circle(c,hole_r,Color(0.05,0.05,0.07))
+        draw_circle(c-Vector2(hole_r*0.18,hole_r*0.20),hole_r*0.72,Color(0.015,0.015,0.02))
+    if pressed:
+        draw_polyline(outline,Color(1.0,0.35,0.70,0.9),2.4*u,true)

@@ -3,12 +3,14 @@ class_name NitroPauseMenu
 ## Single modal pause overlay. Blocks touch to old race controls.
 const PURPLE := Color(0.56,0.29,0.99)
 const GOLD := Color(1.0,0.82,0.25)
+const STYLE = preload("res://scripts/ui/hud_style.gd")
 
 func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable) -> void:
     mouse_filter = Control.MOUSE_FILTER_STOP
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/700.0,0.85,1.7)
+    theme = STYLE.screen_theme(sc)
     var shade := ColorRect.new()
     shade.color = Color(0.005,0.006,0.011,0.76)
     shade.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -20,12 +22,7 @@ func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable) ->
     add_child(centre)
     var panel := PanelContainer.new()
     panel.custom_minimum_size = Vector2(s.x*0.82,0)
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.051,0.046,0.075,0.985)
-    style.border_color = PURPLE
-    style.set_border_width_all(int(maxf(2.0,2.0*sc)))
-    style.set_corner_radius_all(int(18.0*sc))
-    panel.add_theme_stylebox_override("panel",style)
+    panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
     centre.add_child(panel)
     var margin := MarginContainer.new()
     var p: int = int(20.0*sc)
@@ -38,7 +35,8 @@ func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable) ->
     var head := Label.new()
     head.text = "PAUSED"
     head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    head.add_theme_color_override("font_color",GOLD)
+    head.add_theme_color_override("font_color",STYLE.WHITE)
+    head.add_theme_font_override("font",STYLE.BOLD)
     head.add_theme_font_size_override("font_size",int(34.0*sc))
     stack.add_child(head)
     var hint := Label.new()
@@ -57,5 +55,6 @@ func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable) ->
         btn.text = str(item["name"])
         btn.custom_minimum_size.y = 52.0*sc
         btn.add_theme_font_size_override("font_size",int(20.0*sc))
+        STYLE.style_button(btn,sc)
         btn.pressed.connect(item["action"])
         stack.add_child(btn)

@@ -1,4 +1,6 @@
 extends Control
+const STYLE = preload("res://scripts/ui/hud_style.gd")
+var ui_unit: float = 1.0
 ## Starter menu redesigned for readable portrait phones without tiny inherited
 ## desktop fonts. Buttons scale with the project viewport and remain focusable.
 
@@ -6,6 +8,8 @@ func _ready() -> void:
     var s: Vector2 = get_viewport_rect().size
     var portrait: bool = s.y > s.x
     var scale_factor: float = clampf(s.x/700.0,1.0,2.2) if portrait else 1.0
+    ui_unit = scale_factor
+    theme = STYLE.screen_theme(scale_factor)
 
     var background := ColorRect.new()
     background.color = Color(0.016,0.014,0.024)
@@ -86,7 +90,7 @@ func _ready() -> void:
     stamp.text = "NITRO WHEELZ v" + str(ProjectSettings.get_setting("application/config/version","unknown")) + "  |  TECHNICAL PLAYTEST"
     stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     stamp.add_theme_font_size_override("font_size",int(16*scale_factor))
-    stamp.add_theme_color_override("font_color",Color(0.69,0.58,1.0))
+    stamp.add_theme_color_override("font_color",STYLE.PINK_SOFT)
     menu.add_child(stamp)
     if not OS.has_feature("mobile"):
         var quit := Button.new()
@@ -112,20 +116,4 @@ func _button(parent: VBoxContainer,title: String, scene: String,
     return button
 
 func _brand_button(button: Button) -> void:
-    var normal := StyleBoxFlat.new()
-    normal.bg_color = Color(0.052,0.048,0.076)
-    normal.border_color = Color(0.40,0.27,0.58)
-    normal.set_border_width_all(1)
-    normal.set_corner_radius_all(10)
-    button.add_theme_stylebox_override("normal",normal)
-    var hover: StyleBoxFlat = normal.duplicate()
-    hover.bg_color = Color(0.12,0.080,0.22)
-    hover.border_color = Color(0.57,0.30,0.98)
-    hover.set_border_width_all(2)
-    button.add_theme_stylebox_override("hover",hover)
-    button.add_theme_stylebox_override("focus",hover)
-    var pressed: StyleBoxFlat = hover.duplicate()
-    pressed.bg_color = Color(0.24,0.12,0.36)
-    button.add_theme_stylebox_override("pressed",pressed)
-    button.add_theme_color_override("font_color",Color(0.98,0.98,1.0))
-    button.add_theme_color_override("font_hover_color",Color(1.0,0.83,0.30))
+    STYLE.style_button(button,ui_unit)

@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.12 MODEL/GARAGE/SFX-IMPORT TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.13 DIE-CAST CAR / APPROVED HUD / NIGHT PARK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,7 +51,7 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.12_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.13_Platform and are never overwritten.
 
 
 ## v0.1.9 mobile playtest
@@ -76,6 +76,14 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Physics: approximately 10% reduction to yaw torque contribution and power-oversteer kick relative to v0.1.10. Handbrake flick remains unchanged.
 - Surfaces: source-derived reduced WebP samples from the two provided images (dark asphalt / sand) are tiled on the shared procedural corridor, shoulders and ground using world-space UVs. The lighter textures may repeat at close range until a later visual polish pass.
 - Tests: strict Godot import + tests for playable scenes, touch logic, pause exclusivity, loaded logo texture, asphalt/sand materials, editor Undo/dialog, and date formatting. Physical Android controls and perceived speed require owner approval.
+
+## v0.1.13 — Die-cast car, approved HUD and night drift park
+- Car: smooth procedural die-cast Lada 2106 (lofted shell + greenhouse, inset glass, widebody arches, deep-dish wheels, glossy toy-paint shader, contact shadow). Red = quad lamps, chrome, exposed trumpets, white 5-spoke; white = rectangular lamps, clean creased bonnet, mesh wheels.
+- HUD and touch controls redrawn to the approved gameplay reference (pink neon glass panels, Exo 2 italic, gold stars, metal pedals, ribbed handbrake). Fixes the per-frame pedal draw error.
+- Track art: blue/white kerbs with a seamless block sequence, white edge line, concrete barrier (same collision), earth verge, grass with blossoms, voxel cherry trees, pines, tree shadows, tyre smoke, vignette.
+- Closer top-down framing (one constant: `OVERHEAD_BASE_PORTRAIT` in `scripts/race/race.gd`).
+- Developer stills: `xvfb-run -s "-screen 0 720x1600x24" godot --path game --rendering-driver opengl3 --resolution 720x1600 --script res://tests/capture_visuals.gd -- /abs/out/dir`.
+- Handset rendering, frame rate and feel: NOT RUN.
 
 ## v0.1.12 — Car dimensions, garage and sound-import workflow
 - Lada 2106 dimensions from technical manual: 4.166m body and 2.424m wheelbase, synchronized in visual geometry and model physics. Widebody/drift wheel track intentionally stylized, not stock 1.611m body width.
