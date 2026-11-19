@@ -12,6 +12,20 @@ const CLIPS: Array[String] = [
     "barrier_scrape_heavy","gravel_roll","wind_speed"
 ]
 var voices: Dictionary = {}
+const STYLE = preload("res://scripts/ui/hud_style.gd")
+## Which player volume slider each recorded clip follows.
+static func clip_group(name: String) -> String:
+    if name.begins_with("tyre_") or name == "gravel_roll":
+        return "tyres"
+    if name.begins_with("turbo_") or name.begins_with("exhaust_") or name == "engine_limiter":
+        return "engine"
+    return "fx"
+
+static func group_gain(group: String) -> float:
+    match group:
+        "engine": return STYLE.vol_engine
+        "tyres": return STYLE.vol_tyres
+    return STYLE.vol_fx
 var previous_gas: float = 0.0
 var previous_handbrake: float = 0.0
 var previous_drifting: bool = false
@@ -69,6 +83,10 @@ func _make_synth() -> void:
     synth_playback = synth_player.get_stream_playback() as AudioStreamGeneratorPlayback
 
 func _process(_delta: float) -> void:
+    if synth != null:
+        synth.engine_gain = STYLE.vol_engine
+        synth.tyre_gain = STYLE.vol_tyres
+        synth.fx_gain = STYLE.vol_fx
     if synth == null or synth_playback == null or synth_muted:
         return
     var frames: int = synth_playback.get_frames_available()
@@ -79,7 +97,7 @@ func _loop_volume(name: String,linear: float,dt: float) -> void:
     if not voices.has(name):
         return
     var player: AudioStreamPlayer = voices[name]
-    var target_db: float = linear_to_db(maxf(linear,0.0005))
+    var target_db: float = linear_to_db(maxf(linear*group_gain(clip_group(name)),0.0005))
     player.volume_db = move_toward(player.volume_db,target_db,50.0*dt)
     if not player.playing:
         player.play()
@@ -88,7 +106,7 @@ func _one_shot(name: String,db: float = -9.0) -> void:
     if not voices.has(name):
         return
     var player: AudioStreamPlayer = voices[name]
-    player.volume_db = db
+    player.volume_db = db+linear_to_db(maxf(group_gain(clip_group(name)),0.0005))
     player.stop()
     player.play()
 

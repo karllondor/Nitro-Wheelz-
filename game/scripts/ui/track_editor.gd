@@ -45,12 +45,18 @@ var map_view: Control
 var header_name: Label
 var help_check: CheckBox
 var zoom_strip: Rect2 = Rect2()
+## Compiled spline and the sample ranges the validator rejected, so the
+## failing arc itself can be drawn in red (not just its nodes).
+var compiled_samples: Array = []
+var problem_ranges: Array[Vector2i] = []
+var smooth_button: Button
 const HELP_LINES: Array[String] = [
     "DRAG a node to reshape the road",
     "DRAG empty map to move  •  2 FINGERS pinch to zoom",
     "ADD NODE, then tap the map to place it",
     "ORANGE = selected node  •  RED = problem section",
     "GREEN frame = drivable  •  RED frame = fix the track",
+    "AUTO-SMOOTH widens a too-tight red corner for you",
     "SAVE AS names your track  •  DRIVE tests it"]
 
 func _ready() -> void:
@@ -250,7 +256,9 @@ func _make_ui() -> void:
     _button("ADD NODE",0.03,0.788,0.30,0.056,Callable(self,"_add_point"))
     _button("DELETE NODE",0.35,0.788,0.30,0.056,Callable(self,"_delete_point"))
     _button("↶ UNDO",0.67,0.788,0.30,0.056,Callable(self,"_undo"))
-    _button("VALIDATE",0.03,0.852,0.46,0.056,Callable(self,"_validate"))
+    # Validation runs after every edit; this slot now FIXES problems.
+    smooth_button = _button("AUTO-SMOOTH",0.03,0.852,0.46,0.056,Callable(self,"_auto_smooth"))
+    smooth_button.name = "Auto smooth"
     _button("SAVE AS...",0.51,0.852,0.46,0.056,Callable(self,"_request_save"))
     _button("START NEW",0.03,0.916,0.30,0.056,Callable(self,"_request_new"))
     _button("BACK",0.35,0.916,0.30,0.056,Callable(self,"_back"))
@@ -520,6 +528,8 @@ func _validate() -> void:
     var result: Dictionary = DNA.compile(data)
     ready_to_play = bool(result.get("ok",false))
     invalid_nodes.clear()
+    problem_ranges.clear()
+    compiled_samples = result.get("centerline",[])
     if ready_to_play:
         last_length = float(result["length_metres"])
         _status("VALID • %.0f m / %.1f m width • closed loop" % [last_length,float(data["width_m"])],true)
@@ -527,8 +537,93 @@ func _validate() -> void:
         var errors: PackedStringArray = result.get("errors",PackedStringArray())
         for error in errors:
             _flag_problem_nodes(str(error))
-        _status("INVALID • "+(str(errors[0]) if not errors.is_empty() else "Unknown geometry error"),false)
+            _flag_problem_samples(str(error))
+        var fixable: bool = not invalid_nodes.is_empty()
+        _status(friendly_error(str(errors[0]) if not errors.is_empty() else "")+
+            ("  •  TAP AUTO-SMOOTH" if fixable else ""),false)
+    if smooth_button != null:
+        STYLE.style_button(smooth_button,clampf(get_viewport_rect().size.x/700.0,0.85,1.8),not ready_to_play)
     _redraw()
+
+## Short player-facing wording for validator messages (full text stays in
+## the validator for tests/logs).
+static func friendly_error(message: String) -> String:
+    var regex := RegEx.new()
+    regex.compile("Curve radius ([0-9.]+) m")
+    var m: RegExMatch = regex.search(message)
+    if m != null:
+        return "CORNER TOO TIGHT (%s m)" % m.get_string(1)
+    if message.contains("overlap"):
+        return "ROADS TOO CLOSE TOGETHER"
+    if message.contains("Self-intersecting"):
+        return "TRACK CROSSES ITSELF"
+    if message.contains("too-close control points"):
+        return "TWO NODES ON TOP OF EACH OTHER"
+    if message.contains("eight control points"):
+        return "PLACE AT LEAST 8 NODES"
+    return "INVALID • "+(message if not message.is_empty() else "Unknown geometry error")
+
+## Sample ranges named in a validator message (radius / overlap / crossing).
+func _flag_problem_samples(message: String) -> void:
+    var regex := RegEx.new()
+    regex.compile("(?:sample |samples |segments )([0-9]+)(?:(?:/| and )([0-9]+))?")
+    var m: RegExMatch = regex.search(message)
+    if m == null:
+        return
+    for g in [1,2]:
+        var txt: String = m.get_string(g)
+        if not txt.is_empty():
+            var c: int = int(txt)
+            problem_ranges.append(Vector2i(c-DNA.SUBDIVISIONS/2,c+DNA.SUBDIVISIONS/2))
+
+## Relax the knots around every reported problem (each moves 35% towards
+## the midpoint of its neighbours) until the circuit validates. Reverts and
+## says so if it cannot be fixed this way. One UNDO step.
+func _auto_smooth() -> void:
+    _validate()
+    if ready_to_play:
+        _status("ALREADY VALID • nothing to smooth",true)
+        return
+    if _point_count() < 8:
+        _status("PLACE AT LEAST 8 NODES FIRST",false)
+        return
+    _save_undo_snapshot()
+    var original: Array = (data["control_points"] as Array).duplicate(true)
+    var moved: Dictionary = {}
+    var passes: int = 0
+    for _it in range(60):
+        var result: Dictionary = DNA.compile(data)
+        if bool(result.get("ok",false)):
+            break
+        invalid_nodes.clear()
+        for e in result.get("errors",PackedStringArray()):
+            _flag_problem_nodes(str(e))
+        if invalid_nodes.is_empty():
+            break
+        var pts: Array = data["control_points"]
+        var n: int = pts.size()
+        var targets: Dictionary = {}
+        for k in invalid_nodes.keys():
+            for d in [-1,0,1]:
+                targets[posmod(int(k)+d,n)] = true
+        var next: Array = pts.duplicate(true)
+        for k in targets.keys():
+            var a := Vector2(float(pts[posmod(k-1,n)][0]),float(pts[posmod(k-1,n)][1]))
+            var b := Vector2(float(pts[k][0]),float(pts[k][1]))
+            var c := Vector2(float(pts[(k+1)%n][0]),float(pts[(k+1)%n][1]))
+            var p: Vector2 = b.lerp((a+c)*0.5,0.35)
+            next[k] = [snappedf(p.x,0.01),snappedf(p.y,0.01)]
+            moved[k] = true
+        data["control_points"] = next
+        passes += 1
+    _validate()
+    if ready_to_play:
+        _status("SMOOTHED %d NODES IN %d PASSES • VALID • %.0f m" % [moved.size(),passes,last_length],true)
+    else:
+        data["control_points"] = original
+        undo_stack.pop_back()
+        _validate()
+        _status("CAN'T FIX AUTOMATICALLY • drag the red nodes apart",false)
 
 func _flag_ring_sample(sample_index: int) -> void:
     if _point_count() == 0:
@@ -810,6 +905,17 @@ func _draw_map() -> void:
             var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
             v.draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
             v.draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
+        # Failing spline section in red (from the validator's samples).
+        if not problem_ranges.is_empty() and compiled_samples.size() > 4:
+            var m: int = compiled_samples.size()
+            for rng in problem_ranges:
+                var arc := PackedVector2Array()
+                for k in range(rng.x,rng.y+1):
+                    arc.append(_screen_point(Vector2(compiled_samples[posmod(k,m)]))+o)
+                if arc.size() > 1:
+                    var road_px2: float = float(data.get("width_m",25.0))*pixels_per_metre
+                    v.draw_polyline(arc,Color(1.0,0.15,0.20,0.35),road_px2,true)
+                    v.draw_polyline(arc,Color(1.0,0.25,0.30,0.95),4.0,true)
         # The first node also represents start/finish.
         v.draw_arc(line[0],15.0,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
         for idx in range(n):

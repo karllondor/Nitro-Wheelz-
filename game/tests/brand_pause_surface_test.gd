@@ -72,6 +72,35 @@ func _run() -> void:
     if STYLE.sound_on == sound_before or AudioServer.is_bus_mute(0) == STYLE.sound_on:
         _fail("Sound toggle must mute/unmute the master bus")
         return
+    # Separate ENGINE / TYRES / EFFECTS volumes drive the synth mix.
+    var engine_before: float = STYLE.vol_engine
+    var tyres_before: float = STYLE.vol_tyres
+    var fx_before: float = STYLE.vol_fx
+    var panel_now: NitroSettingsPanel = (pause_layer.get_child(0) as NitroPauseMenu).settings
+    for g in ["engine","tyres","fx"]:
+        if panel_now.find_child("Slider "+g,true,false) == null:
+            _fail("Volume slider missing: "+g)
+            return
+    panel_now.set_volume("engine",0.25)
+    panel_now.set_volume("tyres",0.0)
+    panel_now.set_volume("fx",0.6)
+    var sfx = race.get("sfx")
+    if sfx != null:
+        sfx._process(0.016)
+        if absf(sfx.synth.engine_gain-0.25) > 0.001 or sfx.synth.tyre_gain != 0.0 or absf(sfx.synth.fx_gain-0.6) > 0.001:
+            _fail("Volume sliders must reach the synth mix")
+            return
+    var vcfg := ConfigFile.new()
+    if vcfg.load(STYLE.SETTINGS_PATH) != OK or absf(float(vcfg.get_value("audio","engine",-1.0))-0.25) > 0.001:
+        _fail("Volumes were not persisted")
+        return
+    if load("res://scripts/audio/drive_audio.gd").clip_group("tyre_drift") != "tyres" \
+            or load("res://scripts/audio/drive_audio.gd").clip_group("barrier_hit") != "fx":
+        _fail("Recorded clips must follow their volume group")
+        return
+    STYLE.vol_engine = engine_before
+    STYLE.vol_tyres = tyres_before
+    STYLE.vol_fx = fx_before
     STYLE.set_sound(sound_before)
     STYLE.set_accent(accent_before)
     STYLE.save_settings()
@@ -82,7 +111,7 @@ func _run() -> void:
     if RESULTS.short_date("2026-11-19T01:21:56") != "19 Nov  01:21":
         _fail("Local results should display short date and time")
         return
-    print("PASS: logo texture, asphalt+grass UV, exclusive PAUSE/RESUME with sound + accent settings, concise run history")
+    print("PASS: logo texture, asphalt+grass UV, exclusive PAUSE/RESUME with sound, engine/tyre/effects volumes + accent settings, concise run history")
     print("NOT RUN: actual mobile touch coordinates, physical speed sensation, on-device keyboard")
     quit(0)
 

@@ -42,6 +42,10 @@ var scrape: float = 0.0        # body sliding along a wall 0..1
 var scrape_target: float = 0.0
 var gear: int = 1
 var master: float = 0.55
+# Player mix (pause / settings sliders): engine, tyres, effects.
+var engine_gain: float = 1.0
+var tyre_gain: float = 1.0
+var fx_gain: float = 1.0
 var afterfire: float = 0.0     # overrun crackle window after lifting off
 var limiter_hits: int = 0
 var shifts: int = 0
@@ -259,7 +263,7 @@ func render(frames: int) -> PackedVector2Array:
         var dc: float = mix-_dc_x+0.996*_dc_y
         _dc_x = mix
         _dc_y = dc
-        var s: float = dc*amp
+        var s: float = dc*amp*engine_gain
         if sq_amp > 0.002:
             var y0: float = q0.z*noise+q0.x*_sq_state[0]-q0.y*_sq_state[1]
             _sq_state[1] = _sq_state[0]
@@ -274,7 +278,7 @@ func render(frames: int) -> PackedVector2Array:
             var tri: float = absf(_sq_flutter_ph*2.0-1.0)
             _sq_gain += (_sq_gain_target-_sq_gain)*0.0006
             var am: float = (1.0-fl_depth*tri)*_sq_gain
-            s += (y0*7.2+y1*3.6+y2*1.8)*am*sq_amp
+            s += (y0*7.2+y1*3.6+y2*1.8)*am*sq_amp*tyre_gain
         if sc_amp > 0.002:
             # Grinding scrape: bright grit + low body rumble, gritty AM.
             if (i & 63) == 0:
@@ -285,7 +289,7 @@ func render(frames: int) -> PackedVector2Array:
             var z2: float = s2.z*noise+s2.x*_sc3-s2.y*_sc4
             _sc4 = _sc3
             _sc3 = z2
-            s += (z1*2.6+z2*3.2)*_grit*sc_amp
+            s += (z1*2.6+z2*3.2)*_grit*sc_amp*fx_gain
         if _imp_t < 0.45:
             # Impact: falling-pitch body thud, crunch and panel rattle.
             var a_imp: float = _thump*master*1.25
@@ -298,7 +302,7 @@ func render(frames: int) -> PackedVector2Array:
             var crunch: float = yc*exp(-_imp_t/0.030)
             _imp_lp += (noise-_imp_lp)*0.12
             var rattle: float = _imp_lp*exp(-_imp_t/0.07)*(0.6+0.4*float((i>>7)&1))
-            s += (thud*0.95+crunch*0.55+rattle*0.9)*a_imp
+            s += (thud*0.95+crunch*0.55+rattle*0.9)*a_imp*fx_gain
             _imp_t += 1.0/SAMPLE_RATE
         # Soft knee limiter: never clips, untouched below 0.8.
         var a: float = absf(s)

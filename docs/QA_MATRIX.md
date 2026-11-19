@@ -21,6 +21,14 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.18 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 18 Godot tests incl. new main_menu_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Negative control: AUTO-SMOOTH with smoothing disabled | Linux container | PASS (editor test FAILs) | local run |
+| Stills: editor notch before/after AUTO-SMOOTH, menu main/drive/settings, pause with volumes | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | scratch captures |
+| Volume balance on phone speakers, menu thumb reach | Physical Android | NOT RUN | owner to confirm |
+
 ## v0.1.17 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

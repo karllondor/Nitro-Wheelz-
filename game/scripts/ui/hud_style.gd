@@ -15,6 +15,9 @@ static var PINK: Color = Color(1.0,0.16,0.56)
 static var PINK_SOFT: Color = Color(1.0,0.42,0.72)
 static var accent_name: String = "pink"
 static var sound_on: bool = true
+static var vol_engine: float = 1.0
+static var vol_tyres: float = 1.0
+static var vol_fx: float = 1.0
 static var settings_loaded: bool = false
 const ACCENTS: Dictionary = {
     "pink":Color(1.0,0.16,0.56),"violet":Color(0.64,0.34,1.0),"cyan":Color(0.10,0.80,1.0),
@@ -49,6 +52,9 @@ static func load_settings() -> void:
     if cfg.load(SETTINGS_PATH) == OK:
         set_accent(str(cfg.get_value("ui","accent","pink")))
         set_sound(bool(cfg.get_value("audio","sound_on",true)))
+        vol_engine = clampf(float(cfg.get_value("audio","engine",1.0)),0.0,1.0)
+        vol_tyres = clampf(float(cfg.get_value("audio","tyres",1.0)),0.0,1.0)
+        vol_fx = clampf(float(cfg.get_value("audio","effects",1.0)),0.0,1.0)
     else:
         set_accent("pink")
         set_sound(true)
@@ -63,6 +69,9 @@ static func save_settings() -> void:
     cfg.load(SETTINGS_PATH)  # keep other sections (editor help flag)
     cfg.set_value("ui","accent",accent_name)
     cfg.set_value("audio","sound_on",sound_on)
+    cfg.set_value("audio","engine",vol_engine)
+    cfg.set_value("audio","tyres",vol_tyres)
+    cfg.set_value("audio","effects",vol_fx)
     cfg.save(SETTINGS_PATH)
 
 ## Layout shared by HUD drawing and touch hit-testing so visuals and

@@ -169,6 +169,38 @@ func _run() -> void:
     editor.queue_free()
     await process_frame
 
+    # AUTO-SMOOTH: a too-tight notch is highlighted and fixed automatically,
+    # only nodes near the problem move, and UNDO restores the original.
+    var smoother: Control = EDITOR.new()
+    root.add_child(smoother)
+    await process_frame
+    smoother.call("_close_dialog")
+    smoother.call("_start_new_circle")
+    var circle: Array = (smoother.get("data")["control_points"] as Array).duplicate(true)
+    var notched: Array = circle.duplicate(true)
+    notched[5] = [float(circle[5][0])*0.42,float(circle[5][1])*0.42]
+    var dd: Dictionary = smoother.get("data")
+    dd["control_points"] = notched
+    smoother.call("_validate")
+    if bool(smoother.get("ready_to_play")) or (smoother.get("problem_ranges") as Array).is_empty():
+        _fail("Notched circle must be invalid with a highlighted arc")
+        return
+    smoother.call("_auto_smooth")
+    if not bool(smoother.get("ready_to_play")):
+        _fail("AUTO-SMOOTH did not fix a tight notch")
+        return
+    var after: Array = smoother.get("data")["control_points"]
+    for k in [0,1,10,11,12,13]:
+        if Vector2(float(after[k][0]),float(after[k][1])).distance_to(Vector2(float(notched[k][0]),float(notched[k][1]))) > 0.01:
+            _fail("AUTO-SMOOTH moved node %d far from the problem" % k)
+            return
+    smoother.call("_undo")
+    if Vector2(float(smoother.get("data")["control_points"][5][0]),0).distance_to(Vector2(float(notched[5][0]),0)) > 0.01:
+        _fail("UNDO must restore the pre-smooth shape")
+        return
+    smoother.queue_free()
+    await process_frame
+
     # Stars are earned with drift points (scaled by distance), not time.
     var tiers: Array[int] = RESULTS.star_tiers(295.0)
     if tiers.size() != 3 or not (tiers[0] < tiers[1] and tiers[1] < tiers[2]):
@@ -191,7 +223,7 @@ func _run() -> void:
     if ranked.size()!=2 or float(ranked[0]["seconds"]) >= float(ranked[1]["seconds"]):
         _fail("Local leaderboard sorting incorrect")
         return
-    print("PASS: clipped edit window + help popup layout, drag/add/delete/UNDO, circle/blank, zoom + pan/pinch/FIT, red invalid knots, readable dialogs, named save, local records")
+    print("PASS: clipped edit window + help popup layout, AUTO-SMOOTH of tight corners, drag/add/delete/UNDO, circle/blank, zoom + pan/pinch/FIT, red invalid knots, readable dialogs, named save, local records")
     print("NOT RUN: real phone touch interaction, full 3-lap UI screenshot and online leaderboard")
     quit(0)
 

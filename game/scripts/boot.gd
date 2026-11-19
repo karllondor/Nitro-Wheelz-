@@ -1,121 +1,215 @@
 extends Control
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const RESULTS = preload("res://scripts/ui/race_results.gd")
+const DNA = preload("res://scripts/world/track_dna.gd")
+const SETTINGS = preload("res://scripts/ui/settings_panel.gd")
+const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
+## Player main menu (owner audit P2): four clear choices — DRIVE, GARAGE,
+## TRACK BUILDER, SETTINGS — each opening its own page; tools for testing
+## (controller diagnostics) live under DEVELOPER. Portrait-first sizes,
+## focusable buttons for controllers.
+const TRACKS: Array = [
+    ["SHIN-KAWA","res://tracks/shin_kawa_v2.json","shin_kawa_v2"],
+    ["SHIN-KAWA • FULL CIRCUIT","res://tracks/shin_kawa_full_circuit.json","shin_kawa_full_circuit"],
+    ["OVAL","res://tracks/benchmark_oval.json","benchmark_oval"],
+    ["SWEEPERS","res://tracks/benchmark_sweepers.json","benchmark_sweepers"]]
+
 var ui_unit: float = 1.0
-## Starter menu redesigned for readable portrait phones without tiny inherited
-## desktop fonts. Buttons scale with the project viewport and remain focusable.
+var page: VBoxContainer
+var page_name: String = ""
+var status_label: Label
 
 func _ready() -> void:
     STYLE.ensure_settings()
     var s: Vector2 = get_viewport_rect().size
     var portrait: bool = s.y > s.x
-    var scale_factor: float = clampf(s.x/700.0,1.0,2.2) if portrait else 1.0
-    ui_unit = scale_factor
-    theme = STYLE.screen_theme(scale_factor)
-
+    ui_unit = clampf(s.x/700.0,1.0,2.2) if portrait else 1.0
+    theme = STYLE.screen_theme(ui_unit)
     var background := ColorRect.new()
     background.color = Color(0.016,0.014,0.024)
     add_child(background)
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
     var center := CenterContainer.new()
     add_child(center)
     center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var menu := VBoxContainer.new()
-    menu.custom_minimum_size = Vector2(s.x*(0.83 if portrait else 0.42),0)
-    menu.add_theme_constant_override("separation",int(10*scale_factor))
-    center.add_child(menu)
-
+    var column := VBoxContainer.new()
+    column.custom_minimum_size = Vector2(s.x*(0.83 if portrait else 0.42),0)
+    column.add_theme_constant_override("separation",int(12*ui_unit))
+    center.add_child(column)
     # Brand artwork derived from user-supplied graffiti logo.
     var logo := TextureRect.new()
     logo.name = "Nitro Wheelz Graffiti Crown Logo"
     logo.texture = load("res://assets/brand/nitro_wheelz_logo.svg") as Texture2D
-    logo.custom_minimum_size = Vector2(s.x*0.70,s.y*(0.175 if portrait else 0.22))
+    logo.custom_minimum_size = Vector2(s.x*0.70,s.y*(0.17 if portrait else 0.22))
     logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    menu.add_child(logo)
+    column.add_child(logo)
+    page = VBoxContainer.new()
+    page.name = "Menu page"
+    page.add_theme_constant_override("separation",int(12*ui_unit))
+    column.add_child(page)
+    status_label = Label.new()
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    status_label.add_theme_font_size_override("font_size",int(16*ui_unit))
+    status_label.add_theme_color_override("font_color",Color(1.0,0.45,0.45))
+    column.add_child(status_label)
+    var stamp := Label.new()
+    stamp.text = "NITRO WHEELZ v"+str(ProjectSettings.get_setting("application/config/version","unknown"))
+    stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stamp.add_theme_font_size_override("font_size",int(15*ui_unit))
+    stamp.add_theme_color_override("font_color",STYLE.DIM)
+    column.add_child(stamp)
+    show_page("main")
 
-    var description := Label.new()
-    description.text = "3 LAPS  •  2 CAMERAS  •  ORIGINAL PHYSICS\nCHOOSE A TRACK TO DRIVE"
-    description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    description.add_theme_font_size_override("font_size",int(19*scale_factor))
-    menu.add_child(description)
+func _clear_page() -> void:
+    for child in page.get_children():
+        page.remove_child(child)
+        child.queue_free()
+    status_label.text = ""
 
-    var start := _button(menu,"SHIN-KAWA • ORIGINAL","res://scenes/race.tscn",
-        scale_factor,"res://tracks/shin_kawa_v2.json")
-    _button(menu,"TEST 01 • OVAL (271m)","res://scenes/race.tscn",
-        scale_factor,"res://tracks/benchmark_oval.json")
-    _button(menu,"TEST 02 • SWEEPERS (295m)","res://scenes/race.tscn",
-        scale_factor,"res://tracks/benchmark_sweepers.json")
-    _button(menu,"SHIN-KAWA • FULL CIRCUIT","res://scenes/race.tscn",
-        scale_factor,"res://tracks/shin_kawa_full_circuit.json")
+func show_page(which: String) -> void:
+    _clear_page()
+    page_name = which
+    match which:
+        "drive": _drive_page()
+        "build": _build_page()
+        "settings": _settings_page()
+        "dev": _dev_page()
+        _: _main_page()
+    for child in page.get_children():
+        if child is Button:
+            (child as Button).grab_focus()
+            break
 
-    _button(menu,"GARAGE • RED / WHITE LADA","res://scenes/garage.tscn",scale_factor)
-    _button(menu,"BUILD TRACK • 3D","res://scenes/track_builder.tscn",scale_factor)
-    _button(menu,"EDIT TRACK • BETA","res://scenes/track_editor.tscn",scale_factor)
-
-    # Generator BETA: generates a valid variant but does NOT permit editing.
-    # Creator BETA: generate a new safe closed Track DNA variant locally;
-    # never start a race with an unvalidated corridor.
-    var generated_status := Label.new()
-    generated_status.text = ""
-    generated_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    generated_status.add_theme_font_size_override("font_size",int(16*scale_factor))
-    var generator_button := Button.new()
-    generator_button.text = "GENERATE TRACK • BETA"
-    generator_button.custom_minimum_size.y = 62*scale_factor
-    generator_button.add_theme_font_size_override("font_size",int(21*scale_factor))
-    _brand_button(generator_button)
-    menu.add_child(generator_button)
-    generator_button.pressed.connect(func():
-        var creator: Variant = load("res://scripts/world/track_generator.gd").new()
-        var seed: int = Time.get_ticks_usec()
-        var result: Dictionary = creator.generate(seed)
-        if bool(result.get("ok",false)):
-            ProjectSettings.set_setting("nitro/selected_track",str(result["path"]))
-            get_tree().change_scene_to_file("res://scenes/race.tscn")
-        else:
-            generated_status.text = "GENERATION FAILED: "+str(result.get("error","unknown"))
-    )
-    menu.add_child(generated_status)
-    _button(menu,"CONTROLLER DIAGNOSTICS","res://scenes/dev/input_monitor.tscn",scale_factor)
-
+func _main_page() -> void:
+    var drive: Button = _big("DRIVE",func(): show_page("drive"),true)
+    drive.name = "DRIVE"
+    _big("GARAGE",func(): _go("res://scenes/garage.tscn")).name = "GARAGE"
+    _big("TRACK BUILDER",func(): show_page("build")).name = "TRACK BUILDER"
+    _big("SETTINGS",func(): show_page("settings")).name = "SETTINGS"
     var hint := Label.new()
-    hint.text = "LEFT JOYSTICK • GAS • BRAKE • DRIFT\nCAM changes camera • PAUSE opens menu"
+    hint.text = "JOYSTICK • GAS • BRAKE • HANDBRAKE\nCAM switches camera  •  PAUSE opens settings"
     hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    hint.add_theme_font_size_override("font_size",int(18*scale_factor))
-    menu.add_child(hint)
-
-    var stamp := Label.new()
-    stamp.text = "NITRO WHEELZ v" + str(ProjectSettings.get_setting("application/config/version","unknown")) + "  |  TECHNICAL PLAYTEST"
-    stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    stamp.add_theme_font_size_override("font_size",int(16*scale_factor))
-    stamp.add_theme_color_override("font_color",STYLE.PINK_SOFT)
-    menu.add_child(stamp)
+    hint.add_theme_font_size_override("font_size",int(16*ui_unit))
+    hint.add_theme_color_override("font_color",STYLE.MUTED)
+    page.add_child(hint)
+    var row := HBoxContainer.new()
+    row.alignment = BoxContainer.ALIGNMENT_CENTER
+    row.add_theme_constant_override("separation",int(12*ui_unit))
+    page.add_child(row)
+    var dev := _small("DEVELOPER",func(): show_page("dev"))
+    page.remove_child(dev)
+    row.add_child(dev)
     if not OS.has_feature("mobile"):
-        var quit := Button.new()
-        quit.text = "QUIT"
-        quit.custom_minimum_size.y = 53*scale_factor
-        quit.add_theme_font_size_override("font_size",int(22*scale_factor))
-        quit.pressed.connect(func():get_tree().quit())
-        menu.add_child(quit)
-    start.grab_focus()
+        var quit := _small("QUIT",func(): get_tree().quit())
+        page.remove_child(quit)
+        row.add_child(quit)
 
-func _button(parent: VBoxContainer,title: String, scene: String,
-        scale_factor: float,track_path: String = "") -> Button:
-    var button := Button.new()
-    button.text = title
-    button.custom_minimum_size.y = 62*scale_factor
-    button.add_theme_font_size_override("font_size",int(21*scale_factor))
-    button.pressed.connect(func():
-        if not track_path.is_empty():
-            ProjectSettings.set_setting("nitro/selected_track",track_path)
-        get_tree().change_scene_to_file(scene))
-    _brand_button(button)
-    parent.add_child(button)
-    return button
+func _drive_page() -> void:
+    _title("CHOOSE A TRACK")
+    for t in TRACKS:
+        var best: int = _best(str(t[2]))
+        var label: String = str(t[0])+("\nBEST %s PTS" % RESULTS.points(best) if best > 0 else "\nNO RUN YET")
+        var b: Button = _big(label,_race.bind(str(t[1])))
+        b.name = "Track "+str(t[2])
+    var mine: String = _last_custom_track()
+    if not mine.is_empty():
+        var checked: Dictionary = DNA.read_track(mine)
+        if bool(checked.get("ok",false)):
+            _big("MY TRACK • "+str(checked.get("track_name","CUSTOM")).to_upper(),_race.bind(mine)).name = "Track custom"
+    _big("RANDOM TRACK",_random_track).name = "Track random"
+    _small("◀  BACK",func(): show_page("main"))
 
-func _brand_button(button: Button) -> void:
-    STYLE.style_button(button,ui_unit)
+func _build_page() -> void:
+    _title("TRACK BUILDER")
+    _big("BUILD • 3D TILES\nTAP TO LAY ROAD",func(): _go("res://scenes/track_builder.tscn")).name = "Builder 3D"
+    _big("EDIT NODES\nSHAPE ANY CIRCUIT",func(): _go("res://scenes/track_editor.tscn")).name = "Editor nodes"
+    _big("GENERATE & DRIVE\nRANDOM VALID LOOP",_random_track).name = "Generate"
+    _small("◀  BACK",func(): show_page("main"))
+
+func _settings_page() -> void:
+    _title("SETTINGS")
+    var panel: NitroSettingsPanel = SETTINGS.new()
+    panel.name = "Settings panel"
+    page.add_child(panel)
+    panel.build(ui_unit,false)
+    panel.accent_changed.connect(func(_a: String) -> void:
+        theme = STYLE.screen_theme(ui_unit)
+        call_deferred("show_page","settings"))
+    _small("◀  BACK",func(): show_page("main"))
+
+func _dev_page() -> void:
+    _title("DEVELOPER")
+    _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
+    var info := Label.new()
+    info.text = "Godot %s  •  %s renderer" % [Engine.get_version_info().get("string",""),
+        str(ProjectSettings.get_setting("rendering/renderer/rendering_method","?"))]
+    info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    info.add_theme_font_size_override("font_size",int(15*ui_unit))
+    info.add_theme_color_override("font_color",STYLE.MUTED)
+    page.add_child(info)
+    _small("◀  BACK",func(): show_page("main"))
+
+# ------------------------------------------------------------------ helpers
+
+func _title(txt: String) -> void:
+    var l := Label.new()
+    l.text = txt
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.add_theme_font_override("font",STYLE.BOLD)
+    l.add_theme_font_size_override("font_size",int(26*ui_unit))
+    l.add_theme_color_override("font_color",STYLE.WHITE)
+    page.add_child(l)
+
+func _big(caption: String, action: Callable, primary: bool = false) -> Button:
+    var b := Button.new()
+    b.text = caption
+    var two_lines: bool = caption.contains("\n")
+    b.custom_minimum_size.y = (86.0 if two_lines else 74.0)*ui_unit
+    b.add_theme_font_size_override("font_size",int((21.0 if two_lines else 26.0)*ui_unit))
+    STYLE.style_button(b,ui_unit,primary)
+    b.pressed.connect(action)
+    page.add_child(b)
+    return b
+
+func _small(caption: String, action: Callable) -> Button:
+    var b := Button.new()
+    b.text = caption
+    b.custom_minimum_size = Vector2(170.0,52.0)*ui_unit
+    b.add_theme_font_size_override("font_size",int(17.0*ui_unit))
+    STYLE.style_button(b,ui_unit)
+    b.pressed.connect(action)
+    page.add_child(b)
+    return b
+
+func _best(track_id: String) -> int:
+    var best: int = 0
+    for run in RESULTS.track_runs(track_id):
+        best = maxi(best,int((run as Dictionary).get("score",0)))
+    return best
+
+func _last_custom_track() -> String:
+    if not FileAccess.file_exists(LAST_SAVED):
+        return ""
+    var path: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
+    return path if path.begins_with("user://") and FileAccess.file_exists(path) else ""
+
+func _race(track_path: String) -> void:
+    ProjectSettings.set_setting("nitro/selected_track",track_path)
+    _go("res://scenes/race.tscn")
+
+func _random_track() -> void:
+    # Never start a race with an unvalidated corridor.
+    var creator: Variant = load("res://scripts/world/track_generator.gd").new()
+    var result: Dictionary = creator.generate(Time.get_ticks_usec())
+    if bool(result.get("ok",false)):
+        _race(str(result["path"]))
+    else:
+        status_label.text = "GENERATION FAILED: "+str(result.get("error","unknown"))
+
+func _go(scene: String) -> void:
+    get_tree().change_scene_to_file(scene)
