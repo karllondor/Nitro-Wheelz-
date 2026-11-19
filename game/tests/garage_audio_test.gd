@@ -73,14 +73,22 @@ func _run() -> void:
     if sound.CLIPS.size()!=17:
         _fail("Audio registry must expose 17 named user recordings")
         return
+    if not sound.has_source_audio or sound.voices.size() != 17:
+        _fail("All 17 imported user OGG clips must be present and playable")
+        return
+    for name in sound.CLIPS:
+        var player: AudioStreamPlayer = sound.voices.get(name) as AudioStreamPlayer
+        if player == null or player.stream == null:
+            _fail("Missing or invalid imported SFX: "+name)
+            return
     # Partial asset import must never crash the game or cover controls.
     sound.drive_tick(65.0,35.0,1.0,1.0,false,1.0/120.0)
     sound.wall_event(8.0)
     sound.kerb_event(65.0)
     sound.silence()
     sound.queue_free()
-    print("PASS: 4.166m shell/2.424m wheelbase, premium low poly, red/white garage and audio event wiring")
-    print("NOT RUN: audio playback quality without user OGG files in repository, physical Android speaker, real handset steering feel")
+    print("PASS: 4.166m/2.424m Lada, red/white garage, 17 source OGG streams decoded and wired")
+    print("NOT RUN: physical Android speaker and real handset audio/steering feel")
     quit(0)
 
 func _fail(msg: String) -> void:

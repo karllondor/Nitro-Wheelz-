@@ -41,4 +41,4 @@ Consider crossfading and true zero-crossing loops of `tyre_rolling`, `tyre_drift
 
 Source media were supplied by the project owner, derived from WAN generations. The project owner controls the source content; do not imply that third-party samples are automatically licensed for external distribution.
 
-WAV editing masters are in the previously provided Nitro Wheelz audio-pack ZIP; these imported OGG files are the runtime assets.
+The 17 original 16-bit WAV editing masters are also committed to the repository under [`audio_masters/`](../../audio_masters/), with filenames matching the OGG assets. Only the game-runtime OGG files belong under `game/`, keeping the Android APK smaller.
