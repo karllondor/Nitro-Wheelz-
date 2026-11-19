@@ -41,6 +41,12 @@ func _run() -> void:
     menu.call("show_page","settings")
     await process_frame
     var panel: Node = menu.find_child("Settings panel",true,false)
+    if panel == null or panel.find_child("Slider music",true,false) == null:
+        _fail("SETTINGS needs a MUSIC volume slider")
+        return
+    if not ResourceLoader.exists("res://assets/music/night_drift.ogg") or root.get_node_or_null("Music") == null:
+        _fail("Background music track / Music autoload missing")
+        return
     if panel == null or panel.find_child("Slider engine",true,false) == null or panel.find_child("Accent swatches",true,false) == null:
         _fail("SETTINGS page must hold the shared settings panel")
         return
@@ -48,6 +54,9 @@ func _run() -> void:
     await process_frame
     if menu.find_child("Diagnostics",true,false) == null:
         _fail("Controller diagnostics must live under DEVELOPER")
+        return
+    if menu.find_child("Audio mode",true,false) == null or menu.find_child("Audio debug",true,false) == null:
+        _fail("DEVELOPER needs the audio mode switch and the audio debug overlay switch")
         return
     if menu.find_child("Baseline physics",true,false) == null or menu.find_child("Audio benchmark",true,false) == null:
         _fail("DEVELOPER needs the baseline-physics switch and the audio benchmark")

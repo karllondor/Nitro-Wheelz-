@@ -25,5 +25,6 @@
     "rasp_hz": 820, "rasp_bw": 300, "intake_hz": 610, "intake_bw": 220,
     "boom_gain": 1.0, "intake_gain": 1.0, "uneven_idle": 0.24, "uneven_high": 0.06,
     "turbo": true, "loudness": 1.0
-  }
+  },
+  "sfx": {"turbo_clips": true, "exhaust_pitch": 1.0}
 }

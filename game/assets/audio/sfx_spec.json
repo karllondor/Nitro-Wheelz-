@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "about": "Cuts of the owner's 17 recorded clips (audio_masters/*.wav) used by the game, built by tools/build_sfx.py into assets/audio/processed/. Times in seconds. The original OGG files stay untouched. Measured audit: docs/audio/SFX_AUDIT.md.",
+  "clips": {
+    "tyre_drift":     {"start": 1.10, "length": 4.30, "loop": true,  "crossfade": 0.25, "group": "tyres", "event": "loop: rear slip angle while drifting"},
+    "tyre_handbrake": {"start": 1.92, "length": 1.40, "fade_in": 0.02, "fade_out": 0.50, "group": "tyres", "event": "handbrake pulled at speed (edge)"},
+    "tyre_regrip":    {"start": 4.85, "length": 0.45, "fade_in": 0.02, "fade_out": 0.25, "group": "tyres", "event": "a real drift ends and the tyres grip"},
+    "turbo_spool":    {"start": 0.17, "length": 2.20, "fade_in": 0.03, "fade_out": 0.60, "group": "engine", "event": "turbo cars: throttle stamped from closed"},
+    "turbo_bov":      {"start": 0.70, "length": 1.15, "fade_in": 0.01, "fade_out": 0.35, "group": "engine", "event": "turbo cars: lift-off after boost"},
+    "exhaust_single": {"start": 2.21, "length": 0.35, "fade_in": 0.005, "fade_out": 0.15, "group": "engine", "event": "single pop on lift-off at medium speed"},
+    "exhaust_pops":   {"start": 2.63, "length": 0.60, "fade_in": 0.005, "fade_out": 0.25, "group": "engine", "event": "pop burst once per afterfire window"},
+    "curb_rumble":    {"start": 0.45, "length": 1.30, "fade_in": 0.02, "fade_out": 0.30, "group": "fx", "event": "wheels run onto a kerb (edge)"},
+    "barrier_hit":    {"start": 0.30, "length": 1.50, "fade_in": 0.005, "fade_out": 0.60, "group": "fx", "event": "wall impact >= 3 m/s"},
+    "barrier_scrape_light": {"start": 2.92, "length": 0.60, "fade_in": 0.005, "fade_out": 0.30, "group": "fx", "event": "light wall touch 1.2-3 m/s"},
+    "barrier_scrape_heavy": {"start": 0.55, "length": 2.70, "loop": true, "crossfade": 0.20, "group": "fx", "event": "loop: body sliding along a wall"},
+    "gravel_roll":    {"start": 1.45, "length": 1.90, "loop": true,  "crossfade": 0.25, "group": "tyres", "event": "loop: off the asphalt"},
+    "wind_speed":     {"start": 1.70, "length": 3.80, "loop": true,  "crossfade": 0.40, "group": "fx", "event": "loop: speed above ~60 km/h"}
+  },
+  "not_used": {
+    "tyre_rolling":   "Contains a low engine hum (60-200 Hz harmonics, f0 ~58 Hz), no tyre noise; replaced by the synth road-noise layer.",
+    "tyre_corner":    "Same engine hum with a rev sweep, no tyre squeal.",
+    "turbo_flutter":  "Low-frequency flutter overlapping turbo_bov on every lift; kept out to avoid stacking.",
+    "engine_limiter": "7 s of continuous high-rev engine audio; it fights the per-car engine synth, which already models the limiter."
+  }
+}

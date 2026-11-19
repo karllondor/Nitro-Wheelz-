@@ -18,6 +18,7 @@ static var sound_on: bool = true
 static var vol_engine: float = 1.0
 static var vol_tyres: float = 1.0
 static var vol_fx: float = 1.0
+static var vol_music: float = 0.6
 static var settings_loaded: bool = false
 const ACCENTS: Dictionary = {
     "pink":Color(1.0,0.16,0.56),"violet":Color(0.64,0.34,1.0),"cyan":Color(0.10,0.80,1.0),
@@ -55,6 +56,7 @@ static func load_settings() -> void:
         vol_engine = clampf(float(cfg.get_value("audio","engine",1.0)),0.0,1.0)
         vol_tyres = clampf(float(cfg.get_value("audio","tyres",1.0)),0.0,1.0)
         vol_fx = clampf(float(cfg.get_value("audio","effects",1.0)),0.0,1.0)
+        vol_music = clampf(float(cfg.get_value("audio","music",0.6)),0.0,1.0)
     else:
         set_accent("pink")
         set_sound(true)
@@ -72,6 +74,7 @@ static func save_settings() -> void:
     cfg.set_value("audio","engine",vol_engine)
     cfg.set_value("audio","tyres",vol_tyres)
     cfg.set_value("audio","effects",vol_fx)
+    cfg.set_value("audio","music",vol_music)
     cfg.save(SETTINGS_PATH)
 
 ## Layout shared by HUD drawing and touch hit-testing so visuals and

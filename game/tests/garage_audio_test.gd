@@ -89,8 +89,8 @@ func _run() -> void:
             _fail("Missing Git-tracked OGG asset: "+uri)
             return
     if DisplayServer.get_name() != "headless":
-        if not sound.has_source_audio or sound.voices.size()!=17:
-            _fail("Actual display build did not attach 17 imported OGG streams")
+        if not sound.has_source_audio or sound.voices.size()!=sound.clip_length.size():
+            _fail("Actual display build did not attach the processed SFX cuts")
             return
     # Partial asset import must never crash the game or cover controls.
     sound.drive_tick(65.0,35.0,1.0,1.0,false,1.0/120.0)

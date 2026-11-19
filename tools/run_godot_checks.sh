@@ -17,7 +17,7 @@ esac
 python3 tools/check_project.py
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
-for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test benchmark_track_test generated_track_test editor_results_test brand_pause_surface_test garage_audio_test dynamic_camera_test visual_identity_test track_builder_test drift_scoring_test engine_audio_test wall_body_test results_screen_test main_menu_test car_profiles_test; do
+for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test benchmark_track_test generated_track_test editor_results_test brand_pause_surface_test garage_audio_test dynamic_camera_test visual_identity_test track_builder_test drift_scoring_test engine_audio_test wall_body_test results_screen_test main_menu_test car_profiles_test sfx_mixer_test; do
     echo "START TEST: $spec"
     if [ "$spec" = import ]; then
         timeout 45s "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"

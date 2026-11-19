@@ -153,6 +153,18 @@ func _dev_page() -> void:
         show_page("dev"))
     phys.name = "Baseline physics"
     STYLE.style_button(phys,ui_unit,forced)
+    # Audio comparison: engine synth alone vs synth + recorded effects.
+    var synth_only: bool = load("res://scripts/audio/drive_audio.gd").audio_mode() == "synth"
+    var mode_b: Button = _big("AUDIO: "+("SYNTH ONLY" if synth_only else "SYNTH + RECORDED FX"),func():
+        load("res://scripts/audio/drive_audio.gd").set_audio_mode("recorded" if synth_only else "synth")
+        show_page("dev"))
+    mode_b.name = "Audio mode"
+    var dbg_on: bool = load("res://scripts/ui/audio_debug_overlay.gd").enabled()
+    var dbg_b: Button = _big("AUDIO DEBUG OVERLAY: "+("ON" if dbg_on else "OFF"),func():
+        load("res://scripts/ui/audio_debug_overlay.gd").set_enabled(not dbg_on)
+        show_page("dev"))
+    dbg_b.name = "Audio debug"
+    STYLE.style_button(dbg_b,ui_unit,dbg_on)
     var bench_label := Label.new()
     bench_label.name = "Benchmark result"
     bench_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

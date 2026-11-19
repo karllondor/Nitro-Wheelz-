@@ -113,6 +113,16 @@ var _sc2: float = 0.0
 var _sc3: float = 0.0
 var _sc4: float = 0.0
 var _grit: float = 1.0
+# Road (tyre rolling) noise layer, 0..1; 0 = off (default, keeps the
+# baseline sound identical). Used instead of the recorded "tyre_rolling"
+# clip, which turned out to contain engine hum, not tyre noise.
+var road_noise: float = 0.0
+var _road: float = 0.0
+var _road_lp: float = 0.0
+var _road_lp2: float = 0.0
+# Engine-matched afterfire crackle; switched off when the recorded exhaust
+# pops play, so lift-off does not fire both.
+var crackle: bool = true
 var _coef: Dictionary = {}
 
 func _init() -> void:
@@ -282,7 +292,7 @@ func _fire() -> void:
         strength *= 0.08
         if rpm > 5000.0 and _rng.randf() < 0.35:
             _pop = maxf(_pop,_rng.randf_range(0.4,0.8))
-    elif afterfire > 0.0 and load < 0.25:
+    elif crackle and afterfire > 0.0 and load < 0.25:
         var p: float = 0.30*afterfire*clampf((rpm-2200.0)/3000.0,0.0,1.0)
         if _rng.randf() < p:
             _pop = maxf(_pop,_rng.randf_range(0.5,1.0))
@@ -327,6 +337,8 @@ func render(frames: int) -> PackedVector2Array:
     var fl_depth: float = 0.35
     scrape = lerpf(scrape,scrape_target,0.35)
     var sc_amp: float = master*scrape
+    _road = lerpf(_road,road_noise,0.25)
+    var road_amp: float = master*_road*1.3
     var s1: Vector3 = _reso(1900.0,1300.0)
     var s2: Vector3 = _reso(430.0,260.0)
     var size_f: float = float(TABLE_SIZE)
@@ -377,6 +389,11 @@ func render(frames: int) -> PackedVector2Array:
             _sq_gain += (_sq_gain_target-_sq_gain)*0.0006
             var am: float = (1.0-fl_depth*tri)*_sq_gain
             s += (y0*7.2+y1*3.6+y2*1.8)*am*sq_amp*tyre_gain
+        if road_amp > 0.0005:
+            # Low tyre roar on asphalt: two low-passed noise bands.
+            _road_lp += (noise-_road_lp)*0.035
+            _road_lp2 += (noise-_road_lp2)*0.16
+            s += (_road_lp*2.2+(_road_lp2-_road_lp)*0.55)*road_amp*tyre_gain
         if sc_amp > 0.002:
             # Grinding scrape: bright grit + low body rumble, gritty AM.
             if (i & 63) == 0:

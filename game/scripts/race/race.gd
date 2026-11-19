@@ -89,7 +89,19 @@ func _ready() -> void:
     add_child(sfx)
     # Engine sound follows the car's profile (Lada I4 / RYU-32 V8).
     if sfx.synth != null:
-        sfx.synth.apply_profile(CARS.engine(str(ProjectSettings.get_setting("nitro/car_variant","red"))))
+        var car_variant: String = str(ProjectSettings.get_setting("nitro/car_variant","red"))
+        sfx.synth.apply_profile(CARS.engine(car_variant))
+        # Engine-specific recorded effects (Lada turbo vs RYU-32 V8, no turbo).
+        sfx.apply_car_sfx(CARS.profile(car_variant).get("sfx",{}),sfx.synth.turbo)
+    # DEVELOPER audio diagnostics overlay (off by default, not part of the HUD).
+    if load("res://scripts/ui/audio_debug_overlay.gd").enabled():
+        var dbg_layer := CanvasLayer.new()
+        dbg_layer.name = "Audio debug"
+        dbg_layer.layer = 30
+        add_child(dbg_layer)
+        var dbg: Control = load("res://scripts/ui/audio_debug_overlay.gd").new()
+        dbg.set("audio",sfx)
+        dbg_layer.add_child(dbg)
     _make_cameras()
     _make_tyre_marks()
     _make_ui()

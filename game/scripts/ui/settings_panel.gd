@@ -37,7 +37,7 @@ func build(scale: float, show_header: bool = true) -> void:
     sound_button.pressed.connect(toggle_sound)
     add_child(sound_button)
     _refresh_sound()
-    for spec in [["engine","ENGINE"],["tyres","TYRES"],["fx","EFFECTS"]]:
+    for spec in [["engine","ENGINE"],["tyres","TYRES"],["fx","EFFECTS"],["music","MUSIC"]]:
         add_child(_volume_row(str(spec[0]),str(spec[1])))
     var accent_label := Label.new()
     accent_label.text = "ACCENT COLOUR"
@@ -64,6 +64,7 @@ static func volume(group: String) -> float:
     match group:
         "engine": return STYLE.vol_engine
         "tyres": return STYLE.vol_tyres
+        "music": return STYLE.vol_music
     return STYLE.vol_fx
 
 func set_volume(group: String, value: float) -> void:
@@ -71,6 +72,7 @@ func set_volume(group: String, value: float) -> void:
     match group:
         "engine": STYLE.vol_engine = v
         "tyres": STYLE.vol_tyres = v
+        "music": STYLE.vol_music = v
         _: STYLE.vol_fx = v
     STYLE.save_settings()
     if sliders.has(group):

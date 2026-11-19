@@ -21,6 +21,17 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.20 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 21 Godot tests incl. new sfx_mixer_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Negative control: v0.1.19 trigger logic | Linux container | PASS (test FAILs: "exhaust_pops played 14") | local run |
+| Car profiles bit-identical after audio changes | Linux container | PASS | car_profiles_test |
+| 17-clip audit (length, LUFS, clipping, spectrograms, event regions) | Linux container | DONE | docs/audio/SFX_AUDIT.md |
+| Real game mix recorded (Movie Maker), Lada + RYU-32 x synth-only / synth+recorded, scripted autopilot drive | Xvfb + llvmpipe | RECORDED, peaks -2.8..-8 dBFS, -19.5..-22 LUFS, NOT LISTENED BY A HUMAN | tests/audio_drive_render.gd |
+| Music analysis vs reference profile | Linux container | 120 BPM, A minor, sub/bass/low-mid/mid 22/39/19/19% (ref 32/36/15/14) | tools/compose_music.py |
+| **Listening test on Android, both cars** | Physical Android | **NOT RUN — required before audio approval** | owner |
+
 ## v0.1.19 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|
