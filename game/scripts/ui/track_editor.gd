@@ -83,12 +83,21 @@ func _world_point(p: Vector2) -> Vector2:
 func _make_ui() -> void:
     var s: Vector2 = get_viewport_rect().size
     var scale: float = clampf(s.x/720.0,0.75,2.0)
+    var logo := TextureRect.new()
+    logo.name = "Nitro Wheelz brand mark"
+    logo.texture = load("res://assets/brand/nitro_wheelz_logo.svg") as Texture2D
+    logo.position = Vector2(s.x*0.035,s.y*0.009)
+    logo.size = Vector2(s.x*0.32,s.y*0.082)
+    logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(logo)
     var title := Label.new()
-    title.text = "NITRO WHEELZ / TRACK EDITOR BETA"
-    title.position = Vector2(s.x*0.05,s.y*0.025)
-    title.size = Vector2(s.x*0.90,s.y*0.06)
-    title.add_theme_font_size_override("font_size",int(23.0*scale))
-    title.add_theme_color_override("font_color",Color(0.99,0.95,0.98))
+    title.text = "TRACK EDITOR  /  BETA"
+    title.position = Vector2(s.x*0.38,s.y*0.028)
+    title.size = Vector2(s.x*0.59,s.y*0.047)
+    title.add_theme_font_size_override("font_size",int(24.0*scale))
+    title.add_theme_color_override("font_color",Color(1.0,0.83,0.26))
     add_child(title)
     var instructions := Label.new()
     instructions.text = "DRAG nodes • ADD NODE then tap canvas • ORANGE = selected / RED = invalid"
@@ -338,6 +347,19 @@ func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callab
     button.position = Vector2(s.x*xx,s.y*yy)
     button.size = Vector2(s.x*ww,s.y*hh)
     button.add_theme_font_size_override("font_size",int(clampf(s.x/31.0,14.0,30.0)))
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color(0.058,0.050,0.082,0.98)
+    normal.border_color = Color(0.41,0.26,0.67)
+    normal.set_border_width_all(1)
+    normal.set_corner_radius_all(7)
+    button.add_theme_stylebox_override("normal",normal)
+    var pressed: StyleBoxFlat = normal.duplicate()
+    pressed.border_color = Color(0.57,0.30,0.98)
+    pressed.set_border_width_all(2)
+    pressed.bg_color = Color(0.16,0.095,0.25)
+    button.add_theme_stylebox_override("hover",pressed)
+    button.add_theme_stylebox_override("pressed",pressed)
+    button.add_theme_color_override("font_hover_color",Color(1.0,0.82,0.25))
     button.pressed.connect(action)
     add_child(button)
 
