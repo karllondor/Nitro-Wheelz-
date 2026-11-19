@@ -28,6 +28,7 @@ var track_points: PackedVector2Array = PackedVector2Array()
 var car_world_position: Vector2 = Vector2.ZERO
 var track_progress: float = 0.0
 var target_time: float = 0.0
+var score_events: Array[Dictionary] = []
 
 var _outline_cache: PackedVector2Array = PackedVector2Array()
 var _outline_rect: Rect2 = Rect2()
@@ -71,6 +72,24 @@ func _draw() -> void:
     _draw_chase(Rect2(m["chase"]),u)
     _draw_angle(Rect2(m["angle"]),u)
     _draw_speed(Rect2(m["speed"]),u)
+    _draw_events(Rect2(m["score"]),u)
+
+func _draw_events(anchor: Rect2, u: float) -> void:
+    # Short-lived scoring callouts under the SCORE tile (kerb clip,
+    # transition, banked chain, wall/spin chain loss).
+    var y: float = anchor.end.y+anchor.size.y*0.36
+    var size: float = anchor.size.y*0.20
+    for k in range(score_events.size()-1,-1,-1):
+        var e: Dictionary = score_events[k]
+        var age: float = float(e.get("age",0.0))
+        var alpha: float = clampf(1.6-age,0.0,1.0)
+        var txt: String = str(e.get("text",""))
+        var bad: bool = txt.contains("LOST")
+        var col: Color = (Color(1.0,0.45,0.45) if bad else (STYLE.GOLD if txt.begins_with("BANKED") else STYLE.PINK_SOFT))
+        col.a = alpha
+        STYLE.text(self,Vector2(anchor.position.x-anchor.size.x*0.5,y-age*6.0*u),txt,size,col,
+            HORIZONTAL_ALIGNMENT_CENTER,anchor.size.x*2.0)
+        y += size*1.25
 
 func _draw_header(r: Rect2, u: float) -> void:
     STYLE.panel(self,r,u,18.0,0.0,true,1.0)

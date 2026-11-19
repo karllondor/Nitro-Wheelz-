@@ -43,6 +43,18 @@ func _run() -> void:
                 await _scene_shot(shot,"res://scenes/boot.tscn")
             "editor":
                 await _scene_shot(shot,"res://scenes/track_editor.tscn")
+            "builder_partial":
+                await _builder_shot(shot,false)
+            "builder_loop":
+                await _builder_shot(shot,true)
+            "race_built":
+                var grid: RefCounted = load("res://scripts/world/track_grid.gd").new(8,12)
+                grid.generate(4242,24)
+                var data: Dictionary = grid.to_track_data("MY BUILT CIRCUIT","player_built_track")
+                var f := FileAccess.open("user://nitro_track_capture.json",FileAccess.WRITE)
+                f.store_string(JSON.stringify(data))
+                f.close()
+                await _race_shot(shot,"user://nitro_track_capture.json",0,false)
     quit(0)
 
 func _save(name: String) -> void:
@@ -97,6 +109,26 @@ func _race_shot(name: String,track_path: String,camera_mode: int,drift: bool) ->
             await process_frame
     await _save(name)
     race.queue_free()
+    await process_frame
+
+func _builder_shot(name: String, full_loop: bool) -> void:
+    var scene: Node3D = (load("res://scenes/track_builder.tscn") as PackedScene).instantiate()
+    root.add_child(scene)
+    await process_frame
+    var grid: RefCounted = scene.get("grid")
+    grid.clear()
+    if full_loop:
+        grid.generate(4242,24)
+    else:
+        scene.call("begin_stroke",Vector2i(2,3))
+        for c in [Vector2i(5,3),Vector2i(5,6),Vector2i(6,6),Vector2i(6,9)]:
+            scene.call("move_stroke",c)
+        scene.call("end_stroke")
+    scene.call("_rebuild")
+    for i in range(6):
+        await process_frame
+    await _save(name)
+    scene.queue_free()
     await process_frame
 
 func _garage_shot(name: String,variant: String) -> void:

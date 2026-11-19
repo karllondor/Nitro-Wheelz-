@@ -83,6 +83,9 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Track art: blue/white kerbs with a seamless block sequence, white edge line, concrete barrier (same collision), earth verge, grass with blossoms, voxel cherry trees, pines, tree shadows, tyre smoke, vignette.
 - Closer top-down framing (one constant: `OVERHEAD_BASE_PORTRAIT` in `scripts/race/race.gd`).
 - Developer stills: `xvfb-run -s "-screen 0 720x1600x24" godot --path game --rendering-driver opengl3 --resolution 720x1600 --script res://tests/capture_visuals.gd -- /abs/out/dir`.
+- BUILD TRACK • 3D: tap-to-build circuit builder with live road/kerb/scenery preview, GENERATE, SAVE and DRIVE (validated by Track DNA).
+- Drift scoring with chains: kerb clips, left/right transitions, wall/spin loses the chain; TOTAL vs SCORE xN like the reference HUD.
+- Procedural inline-six engine sound (works without the recorded OGG pack).
 - Handset rendering, frame rate and feel: NOT RUN.
 
 ## v0.1.12 — Car dimensions, garage and sound-import workflow

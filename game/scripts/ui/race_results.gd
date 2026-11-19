@@ -80,7 +80,7 @@ static func clock(seconds: float) -> String:
     return "%d:%05.2f" % [mins,fmod(seconds,60.0)]
 
 func show_race(track_id: String,track_name: String,seconds: float,score: int,
-        target: float,on_replay: Callable,on_garage: Callable) -> void:
+        target: float,on_replay: Callable,on_garage: Callable,stats: Dictionary = {}) -> void:
     replay = on_replay
     garage = on_garage
     mouse_filter = Control.MOUSE_FILTER_STOP
@@ -126,6 +126,10 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
         "NEW PERSONAL BEST" if seconds < prior_best else "+%.2f s VS BEST" % (seconds-prior_best))
     _label(v,difference,19,MUTED,sc)
     _label(v,"%d DRIFT POINTS  •  THREE LAPS" % score,21,PINK,sc)
+    if not stats.is_empty():
+        _label(v,"BEST CHAIN %d  •  %d TRANSITIONS  •  %d KERB CLIPS  •  %d CHAINS LOST" % [
+            int(stats.get("best_chain",0)),int(stats.get("transitions",0)),
+            int(stats.get("kerb_clips",0)),int(stats.get("chains_lost",0))],15,MUTED,sc)
     if track_id != "benchmark_oval":
         _label(v,"Stars: provisional local practice thresholds",15,MUTED,sc)
     if not stored:

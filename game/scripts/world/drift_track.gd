@@ -46,6 +46,10 @@ var length_metres: float = 0.0
 var validation_errors: PackedStringArray = PackedStringArray()
 var track_valid: bool = false
 var track_id: String = ""
+## Visual options used by the 3D track builder preview: open chains are
+## drawn without wrap-around, start line, ground or lights.
+var closed_loop: bool = true
+var with_environment: bool = true
 
 func _ready() -> void:
     if centerline.is_empty():
@@ -82,8 +86,51 @@ func _apply_compiled(compiled: Dictionary) -> void:
     length_metres = float(compiled["length_metres"])
     track_id = str(compiled["track_id"])
     display_name = str(compiled["track_name"])
+    closed_loop = true
+    _build_visuals()
+
+## Builder preview: draw the same road/kerb/verge/scenery for an arbitrary
+## sampled centreline (open chain or closed loop). Not used for racing.
+func build_from_samples(samples: Array[Vector2], halfwidth: float, closed: bool,
+        id: String = "builder_preview", environment: bool = false) -> void:
+    for child in get_children():
+        remove_child(child)
+        child.queue_free()
+    closed_loop = closed
+    with_environment = environment
+    centerline = samples.duplicate()
+    left_edge.clear()
+    right_edge.clear()
+    halfwidths = PackedFloat32Array()
+    arc_lengths = PackedFloat32Array()
+    var n: int = centerline.size()
+    if n < 2:
+        track_valid = false
+        return
+    var total: float = 0.0
+    for i in range(n):
+        var prev: Vector2 = centerline[(i-1+n)%n] if (closed or i > 0) else centerline[i]
+        var next: Vector2 = centerline[(i+1)%n] if (closed or i < n-1) else centerline[i]
+        var tangent: Vector2 = (next-prev).normalized()
+        var normal := Vector2(-tangent.y,tangent.x)
+        left_edge.append(centerline[i]-normal*halfwidth)
+        right_edge.append(centerline[i]+normal*halfwidth)
+        halfwidths.append(halfwidth)
+        arc_lengths.append(total)
+        if closed or i < n-1:
+            total += centerline[i].distance_to(centerline[(i+1)%n])
+    length_metres = total
+    track_id = id
+    track_valid = true
+    _build_visuals()
+
+func _segment_count() -> int:
+    return centerline.size() if closed_loop else centerline.size()-1
+
+func _build_visuals() -> void:
     _build_clearance_grid()
-    _build_environment()
+    if with_environment:
+        _build_environment()
     # Layering outward from the racing surface (brief: surface -> painted
     # line -> safety gap -> kerb -> outer gap -> barrier -> verge).
     _add_corridor("Compacted shoulder",_shift_edge(left_edge,-VERGE_WIDTH),
@@ -95,7 +142,8 @@ func _apply_compiled(compiled: Dictionary) -> void:
         _shift_edge(left_edge,LINE_INSET+LINE_WIDTH),0.066,LINE_COLOUR)
     _add_corridor("White edge right",_shift_edge(right_edge,-LINE_INSET-LINE_WIDTH),
         _shift_edge(right_edge,-LINE_INSET),0.066,LINE_COLOUR)
-    _build_start_line()
+    if closed_loop:
+        _build_start_line()
     _build_barriers()
     _build_track_props()
 
@@ -166,7 +214,7 @@ func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
         height: float,tint: Color,texture: Texture2D = null,tile_m: float = 7.0) -> void:
     var st := SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
-    for i in range(centerline.size()):
+    for i in range(_segment_count()):
         var next_i: int = (i+1)%centerline.size()
         var p: Vector3 = Vector3(a[i].x,height,a[i].y)
         var q: Vector3 = Vector3(b[i].x,height,b[i].y)
@@ -210,7 +258,7 @@ func _build_barriers() -> void:
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
     var triangles := PackedVector3Array()
     var count: int = centerline.size()
-    for i in range(count):
+    for i in range(_segment_count()):
         var next_i: int = (i+1)%count
         # Concrete barrier: darker inner face, lit top, subtle 3-sample
         # panel rhythm as a speed reference. Geometry is unchanged.
@@ -293,7 +341,7 @@ func _build_clearance_grid() -> void:
     # branch is this point" queries for scenery placement.
     _clearance_grid.clear()
     var n: int = centerline.size()
-    for i in range(n):
+    for i in range(_segment_count()):
         var a: Vector2 = centerline[i]
         var b: Vector2 = centerline[(i+1)%n]
         var lo := Vector2i(int(floor(minf(a.x,b.x)/CLEARANCE_CELL_M)),int(floor(minf(a.y,b.y)/CLEARANCE_CELL_M)))
@@ -348,7 +396,7 @@ func _build_kerbs() -> void:
         var inner: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET+KERB_WIDTH))
         var lip: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET+KERB_WIDTH+0.16))
         var back: Array[Vector2] = _shift_edge(edge,inward*(KERB_INSET-0.10))
-        for i in range(n):
+        for i in range(_segment_count()):
             var j: int = (i+1)%n
             var s0: float = arc_lengths[i]
             var s1: float = arc_lengths[j] if j != 0 else length_metres
@@ -447,7 +495,9 @@ func _build_track_props() -> void:
         if arc_lengths[i] < next_s:
             continue
         next_s = arc_lengths[i]+rng.randf_range(7.0,13.0)
-        var tangent: Vector2 = (centerline[(i+1)%n]-centerline[(i-1+n)%n]).normalized()
+        var ahead: Vector2 = centerline[mini(i+1,n-1)] if not closed_loop else centerline[(i+1)%n]
+        var behind: Vector2 = centerline[maxi(i-1,0)] if not closed_loop else centerline[(i-1+n)%n]
+        var tangent: Vector2 = (ahead-behind).normalized()
         var normal := Vector2(-tangent.y,tangent.x)
         for side in [-1.0,1.0]:
             for ring in range(2):
@@ -583,7 +633,7 @@ func _build_verge_flowers(rng: RandomNumberGenerator) -> void:
     for side in [-1.0,1.0]:
         var edge: Array[Vector2] = left_edge if side < 0.0 else right_edge
         var next_s: float = 0.0
-        for i in range(n):
+        for i in range(_segment_count()):
             if arc_lengths[i] < next_s:
                 continue
             next_s = arc_lengths[i]+rng.randf_range(0.8,2.2)

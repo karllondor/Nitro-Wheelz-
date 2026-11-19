@@ -28,4 +28,7 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | tools/run_godot_checks.sh (import + 13 Godot tests incl. new visual_identity_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI run pending on push |
 | visual_identity_test negative control (tree clearance gate disabled -> FAIL) | Linux container | PASS | local run |
 | Rendered stills race/garage/menu/editor | Xvfb + Mesa llvmpipe, GL Compatibility, 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd (stills not committed) |
-| Android look, frame rate, touch, smoke/scenery cost | Physical Android | NOT RUN | install CI APK v0.1.13 |
+| track_builder_test / drift_scoring_test / engine_audio_test + negative controls | Linux container, Godot 4.7.2 headless | PASS | local run |
+| Builder stills (partial chain, generated loop, race on built loop) | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd |
+| Synth engine offline render (9 s launch/drift/impact/coast) | Linux container | RENDERED, NOT LISTENED ON DEVICE | spectral check only |
+| Android look, frame rate, touch, smoke/scenery cost, builder finger feel, audio on speakers | Physical Android | NOT RUN | install CI APK v0.1.13 |

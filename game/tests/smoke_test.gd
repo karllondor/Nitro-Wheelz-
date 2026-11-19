@@ -8,6 +8,7 @@ func _run() -> void:
         "res://scenes/prototype.tscn",
         "res://scenes/dev/input_monitor.tscn",
         "res://scenes/race.tscn",
+        "res://scenes/track_builder.tscn",
     ]
     for path in paths:
         var packed = load(path)

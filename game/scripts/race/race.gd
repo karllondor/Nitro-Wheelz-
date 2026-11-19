@@ -10,6 +10,7 @@ const TOUCH = preload("res://scripts/ui/race_touch.gd")
 const PAUSE_VIEW = preload("res://scripts/ui/race_pause.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
+const SCORER = preload("res://scripts/race/drift_scorer.gd")
 
 var model: NitroDriveModel
 var sfx: NitroDriveAudio
@@ -30,6 +31,7 @@ var lap: int = 1
 var last_progress: float = 0.0
 var lap_started_at: float = 0.0
 var lap_score: int = 0
+var scorer: NitroDriftScorer = SCORER.new()
 var active_drift_points: int = 0
 var combo: float = 1.0
 var combo_timer: float = 0.0
@@ -253,6 +255,7 @@ func _physics_process(delta: float) -> void:
         had_skid = false
         if float(collision["impact_speed"]) > 1.2:
             _wall_feedback(float(collision["impact_speed"]))
+        scorer.wall_hit(float(collision["impact_speed"]))
     var info: Dictionary = track.sample_info(model.position)
     offroad = false
     if sfx != null:
@@ -262,7 +265,7 @@ func _physics_process(delta: float) -> void:
 
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
-    _drift_scoring(delta)
+    _drift_scoring(delta,float(info["width"])-float(info["distance"]))
     _record_marks(delta)
     _update_visuals()
     if finished and not results_open:
@@ -291,7 +294,9 @@ func _show_results() -> void:
         # Uncalibrated courses use provisional local practice tiers.
         target = track.length_metres*3.0/14.0
     view.show_race(track.track_id,track.display_name,time_elapsed,lap_score,target,
-        Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+        Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
+        {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
+        "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost})
 
 func _wall_feedback(impact_speed: float) -> void:
     if collision_cooldown > 0.0:
@@ -315,32 +320,23 @@ func _lap_logic(progress: float, tangent: Vector2, _delta: float) -> void:
         if model.velocity.dot(tangent) > 1.5:
             lap += 1
             lap_started_at = time_elapsed
-            combo = 1.0
             if lap > 3:
                 lap = 3
                 finished = true
                 model.velocity = Vector2.ZERO
+                # Bank the running chain so the final corner still counts.
+                scorer.bank()
+                lap_score = scorer.total
     last_progress = progress
 
-func _drift_scoring(dt: float) -> void:
-    if model.is_drifting() and not offroad:
-        var angle_ratio: float = minf(absf(model.drift_angle),75.0)/45.0
-        var points: float = model.speed_mps()*pow(angle_ratio,1.2)*combo*dt*3.0
-        var gain: int = int(maxf(points,0.0)*10.0)
-        lap_score += gain
-        active_drift_points += gain
-        combo_timer += dt
-        if combo_timer > 1.8:
-            combo = minf(5.0,combo+0.1)
-            combo_timer = 0.0
-    elif offroad:
-        active_drift_points = 0
-        combo = 1.0
-        combo_timer = 0.0
-    else:
-        if not model.is_drifting():
-            active_drift_points = 0
-        combo_timer = maxf(combo_timer-dt,0.0)
+func _drift_scoring(dt: float, edge_distance: float) -> void:
+    # P3 scorer: chain points x multiplier, kerb proximity, transitions and
+    # wall/spin penalties. TOTAL shows banked points, SCORE the live chain.
+    scorer.update(dt,model.is_drifting() and not offroad,model.drift_angle,
+        model.speed_mps(),edge_distance)
+    lap_score = scorer.total
+    active_drift_points = scorer.chain_score()
+    combo = scorer.multiplier
 
 func _record_marks(dt: float) -> void:
     skid_clock += dt
@@ -402,6 +398,7 @@ func _update_visuals() -> void:
         hud.score = lap_score
         hud.drift_score = active_drift_points
         hud.combo = combo
+        hud.score_events = scorer.events
         hud.mode = "TOP-DOWN" if camera_mode == 0 else "CHASE"
         hud.paused = paused
         hud.finished = finished
@@ -559,6 +556,7 @@ func _restart() -> void:
     last_progress = 0.0
     lap_started_at = 0.0
     lap_score = 0
+    scorer.reset()
     active_drift_points = 0
     combo = 1.0
     combo_timer = 0.0

@@ -9,11 +9,16 @@ BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-
 - Track art: game/scripts/world/drift_track.gd (kerbs, verge, scenery, lighting; barrier/collision geometry unchanged), game/assets/surfaces/{grass_night,dirt_verge}.webp, {flower_cluster,blossom_leaf}.png, tools/generate_surface_textures.py, game/assets/shaders/night_vignette.gdshader.
 - Race: game/scripts/race/race.gd (closer camera constants, portrait framing offset, tyre smoke, vignette layer, HUD target/track id, softer skids).
 - Tests/tools: game/tests/visual_identity_test.gd (registered), game/tests/capture_visuals.gd (manual stills), brand_pause_surface_test.gd (grass wording).
+- Builder: game/scripts/world/track_grid.gd (tile model, loop detection, generator, Track DNA export), game/scripts/ui/track_builder.gd + game/scenes/track_builder.tscn, drift_track.gd build_from_samples(), boot menu entry.
+- Scoring: game/scripts/race/drift_scorer.gd, race.gd wiring, HUD callouts, results breakdown.
+- Audio: game/scripts/audio/engine_synth.gd, drive_audio.gd (synth layer always on; recorded clips override squeal/impact).
+- New tests: track_builder_test.gd, drift_scoring_test.gd, engine_audio_test.gd (registered).
 - Version 0.1.13 / Android versionCode 13; workflows also trigger on this branch.
 
 ## TESTS
-- PASS (local, Godot 4.7.2 headless): import + smoke, input, driving, mobile_visual, track_dna, benchmark_track, generated_track, editor_results, brand_pause_surface, garage_audio, dynamic_camera, visual_identity. check_project.py PASS.
-- PASS: negative control — disabling the tree road-clearance gate makes visual_identity_test FAIL.
+- PASS (local, Godot 4.7.2 headless): import + smoke, input, driving, mobile_visual, track_dna, benchmark_track, generated_track, editor_results, brand_pause_surface, garage_audio, dynamic_camera, visual_identity, track_builder, drift_scoring, engine_audio. check_project.py PASS.
+- PASS: negative controls — tree clearance gate off -> visual_identity FAIL; wall penalty off -> drift_scoring FAIL; 2 pulses/rev -> engine_audio FAIL.
+- NOTE: editor_results_test appends to user://nitro_local_runs.json and expects exactly two QA runs, so a second local run fails until that file is deleted (pre-existing; CI starts clean).
 - RENDERED (not device): stills of race top-down/chase, garage red/white, menu, editor via Xvfb + Mesa llvmpipe.
 - NOT RUN: Android install/look/FPS/thermals, touch feel, Xbox hardware, CI for this push (check Actions by commit SHA).
 
@@ -22,12 +27,12 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 
 ## GAPS AGAINST THE MASTER BRIEF (after this pass)
 - P0: track geometry and collisions are validated; driving feel and speed perception still need handset review (closer camera now makes speed more visible but is a tuning constant).
-- P1: three laps, timing, results exist; drift scoring is still speed x angle x combo only — no line/clipping zones, transitions or collision penalties (brief section 3). The new kerb/gap/barrier layering gives the geometry those zones need.
-- P1 audio: 17-clip mixer exists but the OGG files are still not in the repository; no single continuous engine loop.
+- P1: chain scoring now rewards angle sweet spot, speed, duration, kerb proximity and transitions and punishes wall hits/spins. Not yet: an explicit authored racing line or per-corner clipping points; thresholds need tuning on real laps.
+- P1 audio: procedural inline-six engine now plays in every build; the 17 recorded OGG clips are still not in the repository.
 - P2: car/HUD/environment now follow the owner targets; only one car model exists.
-- Editor: the current editor drags spline knots on a 2D canvas. The owner wants a visual "click where the road goes and the road plus surroundings appear" builder (reference video "How One Guy FIXED Procedural Generation", Game Dev Buddies — likely Townscaper-style click-to-build). Not started.
+- Editor: BUILD TRACK • 3D implements tap-to-build on a tile grid with live scenery (inspired by the owner's reference video; the video itself could not be viewed). Tiles are 56 m because the uniform spline tightens S-bends ~35%; smaller tiles would require a different spline or relaxing the 16 m rule (not done).
 
 ## NEXT ACTION
 1. Owner installs the v0.1.13 debug APK from CI and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
-2. Visual track builder: 3D top-down editor view that rebuilds the real NitroDriftTrack (road, kerbs, verge, trees) live on every valid tap/drag via rebuild_from_data(); tap-to-extend, auto-close, invalid segments shown red; same Track DNA validator.
-3. P3 scoring zones on kerbs/outer gap; then engine audio.
+2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
+3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

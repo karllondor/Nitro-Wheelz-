@@ -4,6 +4,7 @@ class_name NitroDriveAudio
 ## Audio assets are separate .ogg in res://assets/audio/ - no hardwired video.
 ## Silent fail-safe if some imported clips are unavailable.
 const ROOT: String = "res://assets/audio/"
+const SYNTH = preload("res://scripts/audio/engine_synth.gd")
 const CLIPS: Array[String] = [
     "tyre_rolling","tyre_corner","tyre_drift","tyre_handbrake","tyre_regrip",
     "turbo_spool","turbo_bov","turbo_flutter","exhaust_single","exhaust_pops",
@@ -19,6 +20,12 @@ var bump_cooldown: float = 0.0
 var scrape_cooldown: float = 0.0
 var roll_cooldown: float = 0.0
 var has_source_audio: bool = false
+## Procedural inline-six engine (always on) + squeal/impact fallbacks used
+## when the recorded clips are missing from the build.
+var synth: NitroEngineSynth
+var synth_player: AudioStreamPlayer
+var synth_playback: AudioStreamGeneratorPlayback
+var synth_muted: bool = false
 
 func _ready() -> void:
     for name in CLIPS:
@@ -46,6 +53,27 @@ func _ready() -> void:
                 (duplicated as AudioStreamOggVorbis).loop = true
             player.stream = duplicated
             player.play()
+    _make_synth()
+
+func _make_synth() -> void:
+    synth = SYNTH.new()
+    synth_player = AudioStreamPlayer.new()
+    synth_player.name = "Synth inline-six engine"
+    var generator := AudioStreamGenerator.new()
+    generator.mix_rate = SYNTH.SAMPLE_RATE
+    generator.buffer_length = 0.12
+    synth_player.stream = generator
+    synth_player.volume_db = -8.0
+    add_child(synth_player)
+    synth_player.play()
+    synth_playback = synth_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func _process(_delta: float) -> void:
+    if synth == null or synth_playback == null or synth_muted:
+        return
+    var frames: int = synth_playback.get_frames_available()
+    if frames > 0:
+        synth_playback.push_buffer(synth.render(frames))
 
 func _loop_volume(name: String,linear: float,dt: float) -> void:
     if not voices.has(name):
@@ -66,7 +94,19 @@ func _one_shot(name: String,db: float = -9.0) -> void:
 
 func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
         handbrake: float,offroad: bool,dt: float) -> void:
-    if not has_source_audio or dt <= 0.0:
+    if dt <= 0.0:
+        return
+    if synth != null:
+        var synth_slip: float = clampf((absf(drift_angle_deg)-8.0)/30.0,0.0,1.0)
+        if handbrake > 0.45 and speed_kmh > 10.0:
+            synth_slip = maxf(synth_slip,0.6)
+        synth.set_state(speed_kmh,gas,synth_slip,dt)
+        if voices.has("tyre_drift"):
+            synth.squeal = 0.0
+        if synth_muted:
+            synth_muted = false
+            synth_player.stream_paused = false
+    if not has_source_audio:
         return
     var speed: float = clampf(speed_kmh/115.0,0.0,1.0)
     var slip: float = clampf((absf(drift_angle_deg)-6.0)/32.0,0.0,1.0)
@@ -102,6 +142,8 @@ func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
     previous_drifting = skidding
 
 func wall_event(impact_mps: float) -> void:
+    if synth != null and not voices.has("barrier_hit"):
+        synth.impact(clampf(impact_mps/14.0,0.15,1.0))
     if not has_source_audio:
         return
     if bump_cooldown <= 0.0:
@@ -120,6 +162,13 @@ func kerb_event(speed_kmh: float) -> void:
         roll_cooldown = 1.3
 
 func reset() -> void:
+    synth_muted = false
+    if synth_player != null:
+        synth_player.stream_paused = false
+    if synth != null:
+        synth.rpm = SYNTH.IDLE_RPM
+        synth.load = 0.0
+        synth.squeal = 0.0
     previous_gas = 0.0
     previous_handbrake = 0.0
     previous_drifting = false
@@ -128,5 +177,12 @@ func reset() -> void:
             (voices[continuous] as AudioStreamPlayer).volume_db = -56.0
 
 func silence() -> void:
+    synth_muted = true
+    if synth_player != null:
+        # clear_buffer() is illegal while playing; pausing keeps it silent.
+        synth_player.stream_paused = true
+    if synth != null:
+        synth.rpm = SYNTH.IDLE_RPM
+        synth.squeal = 0.0
     for player in voices.values():
         (player as AudioStreamPlayer).volume_db = -56.0
