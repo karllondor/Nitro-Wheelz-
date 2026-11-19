@@ -42,6 +42,15 @@ var synth_playback: AudioStreamGeneratorPlayback
 var synth_muted: bool = false
 
 func _ready() -> void:
+    # Headless CI has no audio output or mixing device. Checking imported
+    # ResourceLoader paths belongs to tests; creating Vorbis decoders in a
+    # displayless SceneTree can leak resources at engine shutdown. The
+    # procedural engine (a generator stream) is still created everywhere.
+    if DisplayServer.get_name() != "headless":
+        _load_clips()
+    _make_synth()
+
+func _load_clips() -> void:
     for name in CLIPS:
         var uri: String = ROOT+name+".ogg"
         if not ResourceLoader.exists(uri):
@@ -53,26 +62,31 @@ func _ready() -> void:
         player.name = "SFX_"+name
         # All clips share the same front-of-car mixing position (2D)
         # on mobile; dedicated volume based on physics, not screen camera.
+        if name in ["tyre_rolling","tyre_drift","wind_speed","gravel_roll"] and stream is AudioStreamOggVorbis:
+            (stream as AudioStreamOggVorbis).loop = true
         player.stream = stream
         player.volume_db = -45.0
         player.bus = "Master"
         add_child(player)
         voices[name] = player
         has_source_audio = true
-    for continuous in ["tyre_rolling","tyre_drift","wind_speed","gravel_roll"]:
-        if voices.has(continuous):
-            var player: AudioStreamPlayer = voices[continuous]
-            var duplicated: AudioStream = player.stream.duplicate()
-            if duplicated is AudioStreamOggVorbis:
-                (duplicated as AudioStreamOggVorbis).loop = true
-            player.stream = duplicated
-            player.play()
-    _make_synth()
+    # Loops begin lazily on active physics input. No audio should start
+    # during scene load or while the car is stationary.
+
+func _exit_tree() -> void:
+    # Four looping OGG players must release their decoder streams before the
+    # scene exits, otherwise Godot reports resources still in use at shutdown.
+    for player in voices.values():
+        if is_instance_valid(player):
+            (player as AudioStreamPlayer).stop()
+            (player as AudioStreamPlayer).stream = null
+    voices.clear()
+    has_source_audio = false
 
 func _make_synth() -> void:
     synth = SYNTH.new()
     synth_player = AudioStreamPlayer.new()
-    synth_player.name = "Synth inline-four ITB engine"
+    synth_player.name = "Synth engine"
     var generator := AudioStreamGenerator.new()
     generator.mix_rate = SYNTH.SAMPLE_RATE
     generator.buffer_length = 0.12
@@ -97,6 +111,11 @@ func _loop_volume(name: String,linear: float,dt: float) -> void:
     if not voices.has(name):
         return
     var player: AudioStreamPlayer = voices[name]
+    if linear <= 0.001:
+        player.volume_db = move_toward(player.volume_db,-56.0,50.0*dt)
+        if player.playing and player.volume_db <= -54.0:
+            player.stop()
+        return
     var target_db: float = linear_to_db(maxf(linear*group_gain(clip_group(name)),0.0005))
     player.volume_db = move_toward(player.volume_db,target_db,50.0*dt)
     if not player.playing:
@@ -134,7 +153,7 @@ func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
     scrape_cooldown = maxf(0.0,scrape_cooldown-dt)
     roll_cooldown = maxf(0.0,roll_cooldown-dt)
 
-    _loop_volume("tyre_rolling",0.08 + (speed*0.14 if speed_kmh>3.0 else 0.0),dt)
+    _loop_volume("tyre_rolling",speed*0.22 if speed_kmh>3.0 else 0.0,dt)
     _loop_volume("tyre_drift",slip*(0.25+0.25*gas) if skidding else 0.0,dt)
     _loop_volume("wind_speed",pow(speed,2.3)*0.25,dt)
     _loop_volume("gravel_roll",0.22*speed if offroad else 0.0,dt)
@@ -179,6 +198,10 @@ func wall_event(impact_mps: float) -> void:
 ## 0 when the car is clear of the walls. Drives the synth scrape layer.
 func wall_contact(slide_mps: float) -> void:
     if synth != null:
+        # The owner's recorded scrape clips take priority over the synth layer.
+        if voices.has("barrier_scrape_light") or voices.has("barrier_scrape_heavy"):
+            synth.scrape_target = 0.0
+            return
         synth.scrape_target = clampf((slide_mps-1.0)/22.0,0.0,1.0) if slide_mps > 1.0 else 0.0
 
 func kerb_event(speed_kmh: float) -> void:

@@ -66,7 +66,7 @@
 ## [0.1.12] — Car remake / garage / conditional user audio
 - Redesigned Lada 2106 drift spec to real 4.166m overall length and 2.424m wheelbase; corrected the driving model's axle separation and shortened cabin to increase hood/boot lengths. Added sloped front/rear windshields and refined wheel arches.
 - Red engine-exposed spec and pearl-white closed-hood spec via 3D garage preview, persistent selection until app is restarted.
-- 17-slot physics-reactive sound event mixer implemented. Source videos extracted to 17 independent WAV and OGG tracks; binary files are distributed separately in conversation ZIP, **not yet inside the GitHub APK**. SFX controller safely handles absent clips.
+- 17 independent WAN source-derived OGG files are now COMMITTED under `game/assets/audio/`, and all corresponding 16-bit WAV edit masters are COMMITTED under repository-root `audio_masters/`. Physics-reactive mixer resolves exact filenames. Audio quality still requires mobile listening tests.
 - Android versionCode=12, versionName=0.1.12, distinct export artifact names.
 - Added garage/audio regression suite; physical handset controls and recorded-audio playback require confirmation.
 - Model: GPT-6. Reference dimensions cross-checked against VAZ-2106 workshop specs (4166mm / 2424mm).

@@ -80,14 +80,26 @@ func _run() -> void:
     if sound.CLIPS.size()!=17:
         _fail("Audio registry must expose 17 named user recordings")
         return
+    # Loading 17 live decoders in a headless server can falsely leak streams
+    # at engine shutdown. Import presence is checked here; device playback
+    # is a separate handset QA requirement.
+    for name in sound.CLIPS:
+        var uri: String = "res://assets/audio/"+name+".ogg"
+        if not ResourceLoader.exists(uri):
+            _fail("Missing Git-tracked OGG asset: "+uri)
+            return
+    if DisplayServer.get_name() != "headless":
+        if not sound.has_source_audio or sound.voices.size()!=17:
+            _fail("Actual display build did not attach 17 imported OGG streams")
+            return
     # Partial asset import must never crash the game or cover controls.
     sound.drive_tick(65.0,35.0,1.0,1.0,false,1.0/120.0)
     sound.wall_event(8.0)
     sound.kerb_event(65.0)
     sound.silence()
     sound.queue_free()
-    print("PASS: 4.166m shell/2.424m wheelbase, premium low poly, red/white garage and audio event wiring")
-    print("NOT RUN: audio playback quality without user OGG files in repository, physical Android speaker, real handset steering feel")
+    print("PASS: 4.166m/2.424m Lada, red/white garage, 17 source OGG assets found and wired")
+    print("NOT RUN: headless sound decoding/playback and physical Android speaker/steering feel")
     quit(0)
 
 func _fail(msg: String) -> void:
