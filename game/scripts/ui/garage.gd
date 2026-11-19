@@ -89,16 +89,27 @@ func _ready() -> void:
     _set_status()
 
     _action("RED  •  EXPOSED ENGINE",0.05,0.775,0.44,0.075,
-        func(): _choose("red"),sc)
+        Callable(self,"_choose_red"),sc)
     _action("WHITE  •  CLEAN HOOD",0.51,0.775,0.44,0.075,
-        func(): _choose("white"),sc)
+        Callable(self,"_choose_white"),sc)
     _action("BACK TO MENU",0.05,0.885,0.43,0.075,
-        func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),sc)
+        Callable(self,"_back"),sc)
     _action("DRIVE",0.52,0.885,0.43,0.075,
-        func():
-            if not ProjectSettings.has_setting("nitro/selected_track"):
-                ProjectSettings.set_setting("nitro/selected_track","res://tracks/shin_kawa_v2.json")
-            get_tree().change_scene_to_file("res://scenes/race.tscn"),sc)
+        Callable(self,"_drive"),sc)
+
+func _choose_red() -> void:
+    _choose("red")
+
+func _choose_white() -> void:
+    _choose("white")
+
+func _back() -> void:
+    get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+func _drive() -> void:
+    if not ProjectSettings.has_setting("nitro/selected_track"):
+        ProjectSettings.set_setting("nitro/selected_track","res://tracks/shin_kawa_v2.json")
+    get_tree().change_scene_to_file("res://scenes/race.tscn")
 
 func _set_status() -> void:
     version_label.text = "SELECTED: "+("PEARL WHITE" if active_variant=="white" else "RACING RED")
