@@ -22,7 +22,7 @@ const HANDBRAKE_DECEL: float = 2.0
 const DRAG_COEFF: float = 0.009
 const ROLLING_DRAG: float = 0.45
 const YAW_DAMPING: float = 1.22
-const YAW_TORQUE_GAIN: float = 0.58
+const YAW_TORQUE_GAIN: float = 0.522
 const YAW_LATERAL_BUDGET: float = 13.5
 const SLIDE_YAW_BONUS: float = 2.4
 const LOW_SPEED_GRIP_START: float = 2.7
@@ -211,9 +211,9 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     # Small progressive power-oversteer kicker only after slide starts.
     # Straight driving with GAS is not subject to a forced yaw impulse.
     if powered_entry and handbrake < 0.1:
-        yaw_accel += steer*0.28*slide_fraction
+        yaw_accel += steer*0.252*slide_fraction
     if powered_donut and handbrake < 0.1:
-        yaw_accel += steer*0.62*clampf((8.0-speed)/5.0,0.0,1.0)
+        yaw_accel += steer*0.558*clampf((8.0-speed)/5.0,0.0,1.0)
     # A slide with the joystick near centre should be recoverable. Lift-off
     # increases alignment assistance; full throttle suppresses part of it.
     var hands_off: float = clampf(1.0-absf(steer)*2.7,0.0,1.0)
