@@ -36,6 +36,26 @@ func _run() -> void:
     if (data["control_points"] as Array).size()!=initial_count:
         _fail("Delete Node did not remove waypoint")
         return
+    # Undo a completed touchscreen drag, and verify Start New can be cancelled.
+    var selected_before: int = int(editor.get("selected"))
+    if selected_before < 0:
+        editor.set("selected",0)
+        selected_before = 0
+    var before_undo: Vector2 = editor.call("_node_position",selected_before)
+    editor.call("_start_touch",editor.call("_screen_point",before_undo),-2)
+    editor.call("_drag_touch",editor.call("_screen_point",before_undo+Vector2(3.0,1.0)),-2)
+    editor.call("_release_touch",-2)
+    editor.call("_undo")
+    var after_undo: Vector2 = editor.call("_node_position",selected_before)
+    if after_undo.distance_to(before_undo) > 0.1:
+        _fail("UNDO must restore the last dragged knot")
+        return
+    editor.call("_request_new")
+    if editor.get("dialog_overlay") == null:
+        _fail("Start New custom dialog did not appear")
+        return
+    editor.call("_close_dialog")
+
     editor.call("_start_new_circle")
     data = editor.get("data")
     if (data["control_points"] as Array).size() != 16 or not bool(editor.get("ready_to_play")):
@@ -73,6 +93,15 @@ func _run() -> void:
     if not bool(editor.get("ready_to_play")):
         _fail("Eight-point closed loop rejected after touch placement")
         return
+    editor.call("_request_save")
+    if editor.get("dialog_overlay") == null:
+        _fail("Accessible Save dialog did not appear")
+        return
+    var input: LineEdit = editor.get("name_input")
+    if input == null or input.get_theme_font_size("font_size") < 18:
+        _fail("Name field font too small on portrait screens")
+        return
+    editor.call("_close_dialog")
     if not bool(editor.call("_persist_track","QA Oval v010")):
         _fail("Named track could not be saved")
         return
@@ -100,7 +129,7 @@ func _run() -> void:
     if ranked.size()!=2 or float(ranked[0]["seconds"]) >= float(ranked[1]["seconds"]):
         _fail("Local leaderboard sorting incorrect")
         return
-    print("PASS: drag/add/delete, new circle/blank, zoom, invalid-node highlighting, named save, local records")
+    print("PASS: drag/add/delete/UNDO, circle/blank, zoom, red invalid knots, readable dialogs, named save, local records")
     print("NOT RUN: real phone touch interaction, full 3-lap UI screenshot and online leaderboard")
     quit(0)
 
