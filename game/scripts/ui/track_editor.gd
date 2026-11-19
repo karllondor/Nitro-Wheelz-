@@ -18,9 +18,10 @@ var last_length: float = 0.0
 var zoom_level: float = 1.0
 var add_mode: bool = false
 var invalid_nodes: Dictionary = {}
-var name_dialog: ConfirmationDialog
+var dialog_overlay: ColorRect
 var name_input: LineEdit
-var start_dialog: ConfirmationDialog
+var undo_stack: Array[Dictionary] = []
+var drag_recorded: bool = false
 var pending_drive: bool = false
 var last_saved_path: String = ""
 var last_saved_name: String = ""
@@ -105,39 +106,119 @@ func _make_ui() -> void:
     add_child(message_label)
     _button("ZOOM +",0.832,0.534,0.112,0.042,func(): _zoom(1.25))
     _button("ZOOM -",0.832,0.582,0.112,0.042,func(): _zoom(0.8))
-    _button("ADD NODE",0.05,0.746,0.425,0.065,Callable(self,"_add_point"))
-    _button("DELETE NODE",0.525,0.746,0.425,0.065,Callable(self,"_delete_point"))
+    _button("ADD NODE",0.05,0.746,0.28,0.065,Callable(self,"_add_point"))
+    _button("DELETE NODE",0.36,0.746,0.28,0.065,Callable(self,"_delete_point"))
+    _button("↶ UNDO",0.67,0.746,0.28,0.065,Callable(self,"_undo"))
     _button("VALIDATE",0.05,0.825,0.425,0.065,Callable(self,"_validate"))
     _button("SAVE AS...",0.525,0.825,0.425,0.065,Callable(self,"_request_save"))
     _button("START NEW",0.05,0.905,0.275,0.055,Callable(self,"_request_new"))
     _button("BACK",0.36,0.905,0.275,0.055,Callable(self,"_back"))
     _button("DRIVE",0.675,0.905,0.275,0.055,Callable(self,"_drive"))
 
-    start_dialog = ConfirmationDialog.new()
-    start_dialog.title = "START NEW TRACK"
-    start_dialog.dialog_text = "Choose a starting shape. Unsaved edits will be discarded."
-    start_dialog.ok_button_text = "CIRCLE"
-    start_dialog.confirmed.connect(func(): _start_new_circle())
-    start_dialog.add_button("BLANK CANVAS",false,"blank")
-    start_dialog.custom_action.connect(func(action: String):
-        if action == "blank":
-            start_dialog.hide()
-            _start_new_blank())
-    add_child(start_dialog)
 
-    name_dialog = ConfirmationDialog.new()
-    name_dialog.title = "SAVE CUSTOM TRACK"
-    name_dialog.dialog_text = "Track name (used for the file and race HUD):"
-    name_dialog.ok_button_text = "SAVE"
-    name_input = LineEdit.new()
-    name_input.placeholder_text = "e.g. Welsh Mountain Drift"
-    name_input.max_length = 42
-    name_input.position = Vector2(22,76)
-    name_input.size = Vector2(475,44)
-    name_input.custom_minimum_size = Vector2(350,44)
-    name_dialog.add_child(name_input)
-    name_dialog.confirmed.connect(_confirm_save)
-    add_child(name_dialog)
+func _save_undo_snapshot() -> void:
+    undo_stack.append({
+        "data":data.duplicate(true),
+        "selected":selected,
+        "add_mode":add_mode,
+        "zoom":zoom_level,
+        "last_saved_path":last_saved_path,
+        "last_saved_name":last_saved_name
+    })
+    if undo_stack.size()>48:
+        undo_stack.pop_front()
+
+func _undo() -> void:
+    if undo_stack.is_empty():
+        _status("NOTHING TO UNDO",false)
+        return
+    var state: Dictionary = undo_stack.pop_back()
+    data = (state["data"] as Dictionary).duplicate(true)
+    selected = int(state["selected"])
+    add_mode = bool(state["add_mode"])
+    zoom_level = float(state["zoom"])
+    last_saved_path = str(state["last_saved_path"])
+    last_saved_name = str(state["last_saved_name"])
+    pointer = -999
+    drag_recorded = false
+    _fit_view()
+    _validate()
+
+func _close_dialog() -> void:
+    if dialog_overlay != null:
+        dialog_overlay.queue_free()
+        dialog_overlay = null
+
+func _modal_button(parent: Node,caption: String,action: Callable,scale: float) -> void:
+    var button := Button.new()
+    button.text = caption
+    button.custom_minimum_size.y = 48.0*scale
+    button.add_theme_font_size_override("font_size",int(20.0*scale))
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.pressed.connect(action)
+    parent.add_child(button)
+
+func _show_dialog(kind: String) -> void:
+    _close_dialog()
+    var s: Vector2 = get_viewport_rect().size
+    var sc: float = clampf(s.x/700.0,0.90,1.65)
+    dialog_overlay = ColorRect.new()
+    dialog_overlay.name = "Single accessible editor modal"
+    dialog_overlay.color = Color(0.005,0.004,0.011,0.71)
+    dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    dialog_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(dialog_overlay)
+    var panel := PanelContainer.new()
+    panel.position = Vector2(s.x*0.065,s.y*0.13)
+    panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else 0.21))
+    panel.custom_minimum_size = panel.size
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.062,0.046,0.095,0.995)
+    style.border_color = Color(0.57,0.30,0.98)
+    style.set_border_width_all(int(maxf(2.0,2.0*sc)))
+    style.set_corner_radius_all(int(17.0*sc))
+    panel.add_theme_stylebox_override("panel",style)
+    dialog_overlay.add_child(panel)
+    var margin := MarginContainer.new()
+    for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
+        margin.add_theme_constant_override(side,int(15.0*sc))
+    panel.add_child(margin)
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation",int(10.0*sc))
+    margin.add_child(stack)
+    var title := Label.new()
+    title.text = "SAVE TRACK" if kind=="save" else "START NEW TRACK"
+    title.add_theme_font_size_override("font_size",int(24.0*sc))
+    title.add_theme_color_override("font_color",Color(1.0,0.82,0.25))
+    stack.add_child(title)
+    var hint := Label.new()
+    hint.text = "Give your circuit a name" if kind=="save" else "Unsaved edits will be replaced"
+    hint.add_theme_font_size_override("font_size",int(16.0*sc))
+    hint.add_theme_color_override("font_color",Color(0.86,0.84,0.92))
+    stack.add_child(hint)
+    if kind=="save":
+        name_input = LineEdit.new()
+        name_input.text = last_saved_name
+        name_input.placeholder_text = "e.g. Welsh Mountain Drift"
+        name_input.max_length = 42
+        name_input.custom_minimum_size.y = 48.0*sc
+        name_input.add_theme_font_size_override("font_size",int(21.0*sc))
+        stack.add_child(name_input)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation",int(11.0*sc))
+    stack.add_child(row)
+    if kind=="save":
+        _modal_button(row,"CANCEL",Callable(self,"_close_dialog"),sc)
+        _modal_button(row,"SAVE",Callable(self,"_confirm_save"),sc)
+        name_input.grab_focus()
+    else:
+        _modal_button(row,"CANCEL",Callable(self,"_close_dialog"),sc)
+        _modal_button(row,"CIRCLE",func():
+            _close_dialog()
+            _start_new_circle(),sc)
+        _modal_button(row,"BLANK",func():
+            _close_dialog()
+            _start_new_blank(),sc)
 
 
 func _zoom(multiplier: float) -> void:
@@ -145,9 +226,10 @@ func _zoom(multiplier: float) -> void:
     _fit_view()
 
 func _request_new() -> void:
-    start_dialog.popup_centered(Vector2i(540,220))
+    _show_dialog("start")
 
 func _start_new_circle() -> void:
+    _save_undo_snapshot()
     var points: Array = []
     for i in range(16):
         var angle: float = PI+TAU*float(i)/16.0
@@ -159,6 +241,7 @@ func _start_new_circle() -> void:
     _validate()
 
 func _start_new_blank() -> void:
+    _save_undo_snapshot()
     _replace_new_track([],true)
     _status("BLANK • Tap the map to place 8+ control points",false)
 
@@ -190,9 +273,7 @@ func _request_save() -> void:
         _status("FIX RED NODES FIRST • Cannot save invalid geometry",false)
         return
     pending_drive = false
-    name_input.text = last_saved_name if not last_saved_name.is_empty() else ""
-    name_dialog.popup_centered(Vector2i(570,240))
-    name_input.grab_focus()
+    _show_dialog("save")
 
 func _safe_slug(name: String) -> String:
     var clean: String = ""
@@ -217,6 +298,7 @@ func _confirm_save() -> void:
     if not _persist_track(title):
         pending_drive = false
         return
+    _close_dialog()
     if pending_drive:
         pending_drive = false
         ProjectSettings.set_setting("nitro/selected_track",last_saved_path)
@@ -332,11 +414,10 @@ func _drive() -> void:
         _status("FIX RED NODES FIRST • Cannot drive an invalid track",false)
         return
     pending_drive = true
-    name_input.text = last_saved_name
-    name_dialog.popup_centered(Vector2i(570,240))
-    name_input.grab_focus()
+    _show_dialog("save")
 
 func _reset_shape() -> void:
+    _save_undo_snapshot()
     var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
     if raw is Dictionary:
         data = raw
@@ -356,6 +437,7 @@ func _add_point() -> void:
         add_mode = true
         _status("ADD NODE ACTIVE • Tap the map to place each waypoint",true)
         return
+    _save_undo_snapshot()
     var idx: int = selected
     if idx < 0:
         var longest: float = 0.0
@@ -378,6 +460,7 @@ func _delete_point() -> void:
     if selected < 0 or pts.size() <= 8:
         _status("SELECT A NODE • Keep at least 8 nodes",false)
         return
+    _save_undo_snapshot()
     pts.remove_at(selected)
     data["control_points"] = pts
     selected = -1
@@ -406,6 +489,7 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
             closest = d
             found = i
     if found < 0 and add_mode:
+        _save_undo_snapshot()
         var world: Vector2 = _world_point(pos)
         var points: Array = data["control_points"]
         points.append([snappedf(world.x,0.01),snappedf(world.y,0.01)])
@@ -420,12 +504,16 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         return
     selected = found
     pointer = pointer_index if found >= 0 else -999
+    drag_recorded = false
     queue_redraw()
 
 func _drag_touch(pos: Vector2,pointer_index: int) -> void:
     if pointer != pointer_index or selected < 0:
         return
     var world: Vector2 = _world_point(pos)
+    if not drag_recorded and world.distance_to(_node_position(selected)) > 0.05:
+        _save_undo_snapshot()
+        drag_recorded = true
     var pts: Array = data["control_points"]
     pts[selected] = [snappedf(world.x,0.01),snappedf(world.y,0.01)]
     data["control_points"] = pts
@@ -434,9 +522,16 @@ func _drag_touch(pos: Vector2,pointer_index: int) -> void:
 func _release_touch(pointer_index: int) -> void:
     if pointer == pointer_index:
         pointer = -999
+        drag_recorded = false
         _validate()
 
 func _input(event: InputEvent) -> void:
+    if dialog_overlay != null:
+        return
+    if event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z:
+        _undo()
+        get_viewport().set_input_as_handled()
+        return
     if event is InputEventScreenTouch:
         if event.pressed:
             _start_touch(event.position,event.index)
@@ -461,9 +556,9 @@ func _input(event: InputEvent) -> void:
             _drag_touch(event.position,-2)
 
 func _draw() -> void:
-    draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.022,0.028,0.038),true)
-    draw_rect(canvas,Color(0.065,0.087,0.105,0.92),true)
-    draw_rect(canvas,Color(0.45,0.48,0.58,0.75),false,2.0)
+    draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.015,0.012,0.026),true)
+    draw_rect(canvas,Color(0.062,0.049,0.093,0.92),true)
+    draw_rect(canvas,Color(0.57,0.30,0.98,0.75),false,2.0)
     var n: int = _point_count()
     if n <= 0:
         return
