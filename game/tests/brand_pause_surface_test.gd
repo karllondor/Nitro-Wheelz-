@@ -48,6 +48,33 @@ func _run() -> void:
     if hud == null or hud.get("paused") != true:
         _fail("Race HUD did not record paused state")
         return
+    # Player settings live in the pause panel: sound toggle + accent colour.
+    var STYLE = load("res://scripts/ui/hud_style.gd")
+    var menu_panel: NitroPauseMenu = pause_layer.get_child(0) as NitroPauseMenu
+    if menu_panel == null or menu_panel.find_child("Sound toggle",true,false) == null \
+            or menu_panel.find_child("Accent swatches",true,false) == null:
+        _fail("Pause menu must offer sound on/off and accent colours")
+        return
+    if (menu_panel.find_child("Accent swatches",true,false) as Control).get_child_count() != STYLE.ACCENT_ORDER.size():
+        _fail("Every accent colour needs a swatch")
+        return
+    var accent_before: String = STYLE.accent_name
+    var sound_before: bool = STYLE.sound_on
+    menu_panel.choose_accent("cyan")
+    if STYLE.PINK != STYLE.ACCENTS["cyan"] or STYLE.accent_name != "cyan":
+        _fail("Choosing an accent must recolour the shared HUD accent")
+        return
+    var cfg := ConfigFile.new()
+    if cfg.load(STYLE.SETTINGS_PATH) != OK or str(cfg.get_value("ui","accent","")) != "cyan":
+        _fail("Accent choice was not persisted")
+        return
+    menu_panel.call("_toggle_sound")
+    if STYLE.sound_on == sound_before or AudioServer.is_bus_mute(0) == STYLE.sound_on:
+        _fail("Sound toggle must mute/unmute the master bus")
+        return
+    STYLE.set_sound(sound_before)
+    STYLE.set_accent(accent_before)
+    STYLE.save_settings()
     race.call("_toggle_pause")
     if bool(race.get("paused")) or race.get("pause_layer") != null:
         _fail("Resume failed to remove exclusive Pause panel")
@@ -55,7 +82,7 @@ func _run() -> void:
     if RESULTS.short_date("2026-11-19T01:21:56") != "19 Nov  01:21":
         _fail("Local results should display short date and time")
         return
-    print("PASS: logo texture, asphalt+grass UV, exclusive PAUSE/RESUME, concise run history")
+    print("PASS: logo texture, asphalt+grass UV, exclusive PAUSE/RESUME with sound + accent settings, concise run history")
     print("NOT RUN: actual mobile touch coordinates, physical speed sensation, on-device keyboard")
     quit(0)
 

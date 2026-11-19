@@ -1,5 +1,6 @@
 extends SceneTree
-## Procedural inline-six fallback: gearbox/RPM model, continuous pitch,
+## Procedural inline-four ITB engine: gearbox/RPM model, continuous pitch,
+## uneven-cylinder idle, shift cut, bouncing limiter, overrun crackle,
 ## headroom (no clipping) and firing-frequency correctness.
 const SYNTH = preload("res://scripts/audio/engine_synth.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
@@ -41,13 +42,44 @@ func _run() -> void:
         synth.load = 1.0
         synth.render(4096)
         var buf: PackedVector2Array = synth.render(8192)
-        var firing: float = target/60.0*3.0
+        # Four-stroke inline-four: 2 firings per crank turn. Uneven
+        # cylinders put energy on quarter orders (0.25f, 0.5f, 0.75f, 1.25f)
+        # by design, so probe BETWEEN those orders.
+        var firing: float = target/60.0*2.0
+        if absf(synth.firing_hz()-firing) > 0.01:
+            _fail("firing_hz() must follow the four-cylinder firing order")
+            return
         var on: float = _goertzel(buf,firing)
-        var off_low: float = _goertzel(buf,firing*0.78)
-        var off_high: float = _goertzel(buf,firing*1.27)
+        var off_low: float = _goertzel(buf,firing*0.875)
+        var off_high: float = _goertzel(buf,firing*1.125)
         if on < 8.0*maxf(off_low,off_high):
             _fail("Firing frequency %.1f Hz not dominant at %d rpm" % [firing,int(target)])
             return
+    # Idle lump: uneven cylinders give a real half-order component.
+    var idle: NitroEngineSynth = SYNTH.new()
+    idle.rpm = SYNTH.IDLE_RPM
+    idle.render(4096)
+    var idle_buf: PackedVector2Array = idle.render(16384)
+    var f_idle: float = idle.firing_hz()
+    if _goertzel(idle_buf,f_idle*0.5) < 4.0*_goertzel(idle_buf,f_idle*0.625):
+        _fail("Idle should carry the uneven-cylinder half-order lump")
+        return
+    # Upshift cut, bouncing limiter and lift-off crackle window.
+    var drive: NitroEngineSynth = SYNTH.new()
+    for k in range(240):
+        drive.set_state(float(k)*0.4,1.0,0.0,1.0/60.0)
+    if drive.shifts < 1:
+        _fail("Upshifts must cut ignition")
+        return
+    for k in range(180):
+        drive.set_state(46.0,1.0,1.0,1.0/60.0)
+    if drive.limiter_hits < 3 or drive.rpm > SYNTH.LIMIT_RPM+0.1:
+        _fail("Held at the limit the engine must bounce off the limiter (%d hits)" % drive.limiter_hits)
+        return
+    drive.set_state(46.0,0.0,0.0,1.0/60.0)
+    if drive.afterfire < 0.9:
+        _fail("Lifting off at high revs must open the overrun crackle window")
+        return
     # Headroom: full load + squeal + impact must not clip.
     synth.rpm = SYNTH.LIMIT_RPM
     synth.load = 1.0
@@ -81,7 +113,7 @@ func _run() -> void:
         return
     sound.queue_free()
     await process_frame
-    print("PASS: gearbox rpm, continuous inline-six pitch, no clipping, controller wiring")
+    print("PASS: gearbox rpm, inline-four ITB firing pitch, uneven idle, shift cut, limiter bounce, overrun crackle, no clipping, controller wiring")
     print("NOT RUN: subjective sound quality on phone speakers/headphones")
     quit(0)
 

@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.13 die-cast car / approved HUD / night park (not released)
+# Nitro Wheelz — v0.1.14 owner feedback: HUD v2 / editor / settings / engine (not released)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -28,7 +28,7 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 ## GAPS AGAINST THE MASTER BRIEF (after this pass)
 - P0: track geometry and collisions are validated; driving feel and speed perception still need handset review (closer camera now makes speed more visible but is a tuning constant).
 - P1: chain scoring now rewards angle sweet spot, speed, duration, kerb proximity and transitions and punishes wall hits/spins. Not yet: an explicit authored racing line or per-corner clipping points; thresholds need tuning on real laps.
-- P1 audio: procedural inline-six engine now plays in every build; the 17 recorded OGG clips are still not in the repository.
+- P1 audio: procedural inline-four ITB engine (v0.1.14) plays in every build; the 17 recorded OGG clips are still not in the repository (checked every branch, release and PR on 2026-11-19).
 - P2: car/HUD/environment now follow the owner targets; only one car model exists.
 - Editor: BUILD TRACK • 3D implements tap-to-build on a tile grid with live scenery (inspired by the owner's reference video; the video itself could not be viewed). Tiles are 56 m because the uniform spline tightens S-bends ~35%; smaller tiles would require a different spline or relaxing the 16 m rule (not done).
 
@@ -36,7 +36,13 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - Editor pan/pinch/FIT (editor_results_test extended), cars restyled to the two reference sheets, camera base 60 + race car x1.15 (visual only), golden-hour sky + cloud shadows (visual_identity_test extended). Full Godot suite PASS locally.
 - Android signing: debug APKs now use the NITRO_DEBUG_KEYSTORE_B64 secret when present (see docs/BUILD_RELEASE.md); until the owner adds it, every CI APK still needs an uninstall before install.
 
+## OWNER FEEDBACK PASS 2 (v0.1.14)
+- HUD v2 (race_hud.gd rewritten, hud_style.gd metrics: header/map/total/chase/score/callout/gauge_centre/gauge_radius/angle), accent + sound settings (hud_style.gd static PINK/PINK_SOFT, set_accent/set_sound/load_settings/save_settings, user://nitro_settings.cfg), pause settings (race_pause.gd), NW handbrake logo (race_touch.gd + assets/brand/nw_initials.png), NW banner removed (lada_lowpoly.gd), garage SubViewport MSAA removed, editor layout/help popup (track_editor.gd), inline-four engine (engine_synth.gd, drive_audio.gd).
+- race.gd: hud.best_score from local results, hud.car_screen after each camera update (callouts above the car), ensure_settings at start.
+- Tests extended (visual_identity, brand_pause_surface, editor_results, engine_audio); full suite PASS; negative controls FAIL as expected.
+- NOT RUN: Android (garage fix, HUD readability, engine on speakers), CI for this push until checked.
+
 ## NEXT ACTION
-1. Owner installs the v0.1.13 debug APK from CI and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

@@ -20,7 +20,7 @@ var bump_cooldown: float = 0.0
 var scrape_cooldown: float = 0.0
 var roll_cooldown: float = 0.0
 var has_source_audio: bool = false
-## Procedural inline-six engine (always on) + squeal/impact fallbacks used
+## Procedural inline-four ITB engine (always on) + squeal/impact fallbacks used
 ## when the recorded clips are missing from the build.
 var synth: NitroEngineSynth
 var synth_player: AudioStreamPlayer
@@ -58,7 +58,7 @@ func _ready() -> void:
 func _make_synth() -> void:
     synth = SYNTH.new()
     synth_player = AudioStreamPlayer.new()
-    synth_player.name = "Synth inline-six engine"
+    synth_player.name = "Synth inline-four ITB engine"
     var generator := AudioStreamGenerator.new()
     generator.mix_rate = SYNTH.SAMPLE_RATE
     generator.buffer_length = 0.12
@@ -132,11 +132,12 @@ func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
         _one_shot("turbo_bov",-10.0)
         if speed_kmh > 55.0:
             _one_shot("exhaust_single",-19.0)
-    # We have no gear/RPM simulation yet. This proxy plays the limiter only
-    # at extreme speed; it must not imitate a constant inline-six soundtrack.
-    if speed_kmh > 140.0 and gas > 0.7 and turbo_cooldown <= 0.0:
+    # Recorded limiter / crackle clips follow the synth's own rev model.
+    if synth != null and synth.on_limiter() and turbo_cooldown <= 0.0:
         _one_shot("engine_limiter",-15.0)
         turbo_cooldown = 3.0
+    if synth != null and synth.afterfire > 0.9 and speed_kmh > 30.0:
+        _one_shot("exhaust_pops",-14.0)
     previous_handbrake = handbrake
     previous_gas = gas
     previous_drifting = skidding

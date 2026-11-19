@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.13 DIE-CAST CAR / APPROVED HUD / NIGHT PARK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.14 OWNER-FEEDBACK TEST CANDIDATE (unmerged).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,7 +51,7 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.13_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.14_Platform and are never overwritten.
 
 
 ## v0.1.9 mobile playtest
@@ -76,6 +76,13 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Physics: approximately 10% reduction to yaw torque contribution and power-oversteer kick relative to v0.1.10. Handbrake flick remains unchanged.
 - Surfaces: source-derived reduced WebP samples from the two provided images (dark asphalt / sand) are tiled on the shared procedural corridor, shoulders and ground using world-space UVs. The lighter textures may repeat at close range until a later visual polish pass.
 - Tests: strict Godot import + tests for playable scenes, touch logic, pause exclusivity, loaded logo texture, asphalt/sand materials, editor Undo/dialog, and date formatting. Physical Android controls and perceived speed require owner approval.
+
+## v0.1.14 — HUD v2, editor layout, settings and engine
+- HUD v2 to the owner sketch: big minimap + TOTAL SCORE / LAP / clock, three-segment lap progress line, centred CHASING score pill, live chain only while scoring, round speedometer, larger callouts above the car.
+- Pause menu: sound on/off and accent colour (recolours the whole interface; saved).
+- NW initials on the handbrake; NW banner removed from the cars; garage preview fixed for Android (no MSAA).
+- Track editor: clipped full-size edit window with green/red validity frame, name + TRACK EDITOR header, compact buttons, first-open help popup with "Don't show again".
+- Inline-four ITB engine synth: uneven idle, exhaust/intake resonances, overrun crackle, shift cut, rev limiter.
 
 ## v0.1.13 — Die-cast car, approved HUD and night drift park
 - Car: smooth procedural die-cast Lada 2106 (lofted shell + greenhouse, inset glass, widebody arches, deep-dish wheels, glossy toy-paint shader, contact shadow). Red = quad lamps, chrome, exposed trumpets, white 5-spoke; white = rectangular lamps, clean creased bonnet, mesh wheels.

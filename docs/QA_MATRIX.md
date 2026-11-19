@@ -21,6 +21,15 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.14 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 15 Godot tests) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Negative controls: editor clipping off, even cylinders, accent not applied | Linux container | PASS (each test FAILs) | local run |
+| Stills: HUD v2 top-down/chase, cyan accent, pause settings, editor + help popup, garage red/white | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd |
+| Engine synth offline render (14 s idle/blips/launch/lift-off/limiter) | Linux container | RENDERED, NOT LISTENED ON DEVICE | level/CPU check: ~14 ms per audio second on the container CPU |
+| Garage preview on Android (MSAA removed) | Physical Android | NOT RUN | owner to confirm |
+
 ## v0.1.13 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

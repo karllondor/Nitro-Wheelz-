@@ -5,6 +5,7 @@ var ui_unit: float = 1.0
 ## desktop fonts. Buttons scale with the project viewport and remain focusable.
 
 func _ready() -> void:
+    STYLE.ensure_settings()
     var s: Vector2 = get_viewport_rect().size
     var portrait: bool = s.y > s.x
     var scale_factor: float = clampf(s.x/700.0,1.0,2.2) if portrait else 1.0

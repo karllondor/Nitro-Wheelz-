@@ -8,6 +8,7 @@ extends SceneTree
 ##       --rendering-driver opengl3 --resolution 720x1600 \
 ##       --script res://tests/capture_visuals.gd -- /abs/output/dir [shots...]
 ## Shots: race_drift race_start race_chase garage_red garage_white menu editor
+##        editor_help race_pause race_accent builder_partial builder_loop race_built
 
 var out_dir: String = "user://captures"
 var shots: PackedStringArray = PackedStringArray([
@@ -42,7 +43,18 @@ func _run() -> void:
             "menu":
                 await _scene_shot(shot,"res://scenes/boot.tscn")
             "editor":
+                await _scene_shot(shot,"res://scenes/track_editor.tscn","_close_dialog")
+            "editor_help":
+                load("res://scripts/ui/track_editor.gd").set_help_hidden(false)
                 await _scene_shot(shot,"res://scenes/track_editor.tscn")
+            "race_pause":
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,false,true)
+            "race_accent":
+                var style = load("res://scripts/ui/hud_style.gd")
+                var before: String = style.accent_name
+                style.set_accent("cyan")
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,true)
+                style.set_accent(before)
             "builder_partial":
                 await _builder_shot(shot,false)
             "builder_loop":
@@ -65,7 +77,7 @@ func _save(name: String) -> void:
     image.save_png(path)
     print("CAPTURED: "+path)
 
-func _race_shot(name: String,track_path: String,camera_mode: int,drift: bool) -> void:
+func _race_shot(name: String,track_path: String,camera_mode: int,drift: bool,pause: bool = false) -> void:
     ProjectSettings.set_setting("nitro/selected_track",track_path)
     var race: Node3D = (load("res://scenes/race.tscn") as PackedScene).instantiate()
     root.add_child(race)
@@ -107,6 +119,10 @@ func _race_shot(name: String,track_path: String,camera_mode: int,drift: bool) ->
         # Let particle systems (tyre smoke) run for a moment.
         for i in range(36):
             await process_frame
+    if pause:
+        race.call("_toggle_pause")
+        for i in range(4):
+            await process_frame
     await _save(name)
     race.queue_free()
     await process_frame
@@ -138,9 +154,12 @@ func _garage_shot(name: String,variant: String) -> void:
     cfg.save("user://nitro_garage.cfg")
     await _scene_shot(name,"res://scenes/garage.tscn")
 
-func _scene_shot(name: String,path: String) -> void:
+func _scene_shot(name: String,path: String,after_ready: String = "") -> void:
     var node: Node = (load(path) as PackedScene).instantiate()
     root.add_child(node)
+    await process_frame
+    if not after_ready.is_empty() and node.has_method(after_ready):
+        node.call(after_ready)
     for i in range(6):
         await process_frame
     await _save(name)

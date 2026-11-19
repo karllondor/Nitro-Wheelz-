@@ -8,8 +8,41 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _run() -> void:
+    EDITOR.set_help_hidden(false)
     var editor: Control = EDITOR.new()
     root.add_child(editor)
+    await process_frame
+    # Layout per owner sketch: no logo/instruction text, clipped edit window
+    # above every bottom button, help shown as a first-open popup.
+    if editor.find_child("Nitro Wheelz brand mark",true,false) != null:
+        _fail("Editor logo should be removed")
+        return
+    var view: Control = editor.find_child("Clipped edit window",true,false) as Control
+    if view == null or not view.clip_contents:
+        _fail("Map must draw inside a clipped edit window")
+        return
+    var edit_rect: Rect2 = editor.get("canvas")
+    var strip: Rect2 = editor.get("zoom_strip")
+    for child in editor.get_children():
+        if child is Button and not strip.encloses(Rect2(child.position,child.size)):
+            var b := Rect2(child.position,child.size)
+            if b.intersects(edit_rect):
+                _fail("Button "+str(child.text)+" overlaps the edit window")
+                return
+    var status: Label = editor.find_child("Validation line",true,false) as Label
+    if status == null or status.position.y < edit_rect.end.y:
+        _fail("Validation line must sit under the edit window")
+        return
+    var help: CheckBox = editor.find_child("Do not show again",true,false) as CheckBox
+    if editor.get("dialog_overlay") == null or help == null:
+        _fail("First open must show the help popup with Don't show again")
+        return
+    help.button_pressed = true
+    editor.call("_close_help")
+    if not EDITOR.help_hidden():
+        _fail("Don't show again was not remembered")
+        return
+    EDITOR.set_help_hidden(false)
     await process_frame
     var data: Dictionary = editor.get("data")
     var initial_count: int = (data["control_points"] as Array).size()
@@ -152,7 +185,7 @@ func _run() -> void:
     if ranked.size()!=2 or float(ranked[0]["seconds"]) >= float(ranked[1]["seconds"]):
         _fail("Local leaderboard sorting incorrect")
         return
-    print("PASS: drag/add/delete/UNDO, circle/blank, zoom + pan/pinch/FIT, red invalid knots, readable dialogs, named save, local records")
+    print("PASS: clipped edit window + help popup layout, drag/add/delete/UNDO, circle/blank, zoom + pan/pinch/FIT, red invalid knots, readable dialogs, named save, local records")
     print("NOT RUN: real phone touch interaction, full 3-lap UI screenshot and online leaderboard")
     quit(0)
 

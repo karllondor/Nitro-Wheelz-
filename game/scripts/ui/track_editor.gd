@@ -41,6 +41,17 @@ var drag_recorded: bool = false
 var pending_drive: bool = false
 var last_saved_path: String = ""
 var last_saved_name: String = ""
+var map_view: Control
+var header_name: Label
+var help_check: CheckBox
+var zoom_strip: Rect2 = Rect2()
+const HELP_LINES: Array[String] = [
+    "DRAG a node to reshape the road",
+    "DRAG empty map to move  •  2 FINGERS pinch to zoom",
+    "ADD NODE, then tap the map to place it",
+    "ORANGE = selected node  •  RED = problem section",
+    "GREEN frame = drivable  •  RED frame = fix the track",
+    "SAVE AS names your track  •  DRIVE tests it"]
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_PASS
@@ -70,10 +81,45 @@ func _ready() -> void:
     _fit_view()
     _make_ui()
     _validate()
+    _update_header()
+    if not help_hidden():
+        _show_dialog("help")
+
+func _redraw() -> void:
+    queue_redraw()
+    if map_view != null:
+        map_view.queue_redraw()
+
+func _update_header() -> void:
+    if header_name != null:
+        header_name.text = last_saved_name.to_upper() if not last_saved_name.is_empty() else "UNSAVED TRACK"
+
+static func help_hidden() -> bool:
+    var cfg := ConfigFile.new()
+    if cfg.load(STYLE.SETTINGS_PATH) != OK:
+        return false
+    return bool(cfg.get_value("editor","hide_help",false))
+
+static func set_help_hidden(hidden: bool) -> void:
+    var cfg := ConfigFile.new()
+    cfg.load(STYLE.SETTINGS_PATH)
+    cfg.set_value("editor","hide_help",hidden)
+    cfg.save(STYLE.SETTINGS_PATH)
+
+func _close_help() -> void:
+    if help_check != null and help_check.button_pressed:
+        set_help_hidden(true)
+    help_check = null
+    _close_dialog()
 
 func _fit_view() -> void:
     var s: Vector2 = get_viewport_rect().size
-    canvas = Rect2(s.x*0.045,s.y*0.155,s.x*0.91,s.y*0.48)
+    # The edit window fills everything between the header and the
+    # validation line; the map is clipped to it and never reaches the buttons.
+    canvas = Rect2(s.x*0.03,s.y*0.066,s.x*0.94,s.y*0.676)
+    if map_view != null:
+        map_view.position = canvas.position
+        map_view.size = canvas.size
     var smallest := Vector2(INF,INF)
     var largest := Vector2(-INF,-INF)
     for item in data.get("control_points",[]):
@@ -96,7 +142,7 @@ func _apply_view() -> void:
     pan_offset = pan_offset.clamp(-limit,limit)
     world_mid = base_mid+pan_offset
     pixels_per_metre = base_ppm*zoom_level
-    queue_redraw()
+    _redraw()
 
 ## Zoom keeping the world point under `screen_pos` fixed (pinch / wheel).
 func _zoom_at(screen_pos: Vector2, new_zoom: float) -> void:
@@ -126,52 +172,70 @@ func _make_ui() -> void:
     var s: Vector2 = get_viewport_rect().size
     var scale: float = clampf(s.x/720.0,0.75,2.0)
     theme = STYLE.screen_theme(clampf(s.x/700.0,0.85,1.8))
-    var logo := TextureRect.new()
-    logo.name = "Nitro Wheelz brand mark"
-    logo.texture = load("res://assets/brand/nitro_wheelz_logo.svg") as Texture2D
-    # expand_mode must be set BEFORE size, or the SVG's native 620x349
-    # minimum size wins and the logo overlaps the title/instructions.
-    logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    logo.position = Vector2(s.x*0.03,s.y*0.008)
-    logo.size = Vector2(s.x*0.30,s.y*0.070)
-    logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(logo)
+    STYLE.ensure_settings()
+    header_name = Label.new()
+    header_name.name = "Saved track name"
+    header_name.position = Vector2(s.x*0.035,s.y*0.012)
+    header_name.size = Vector2(s.x*0.47,s.y*0.045)
+    header_name.clip_text = true
+    header_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    header_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    header_name.add_theme_font_override("font",STYLE.BOLD)
+    header_name.add_theme_font_size_override("font_size",int(22.0*scale))
+    header_name.add_theme_color_override("font_color",STYLE.WHITE)
+    add_child(header_name)
     var title := Label.new()
-    title.text = "TRACK EDITOR  /  BETA"
-    title.position = Vector2(s.x*0.36,s.y*0.022)
-    title.size = Vector2(s.x*0.61,s.y*0.047)
+    title.name = "Editor title"
+    title.text = "TRACK EDITOR"
+    title.position = Vector2(s.x*0.50,s.y*0.012)
+    title.size = Vector2(s.x*0.355,s.y*0.045)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    title.add_theme_font_size_override("font_size",int(24.0*scale))
+    title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size",int(20.0*scale))
     title.add_theme_font_override("font",STYLE.BOLD)
-    title.add_theme_color_override("font_color",STYLE.WHITE)
+    title.add_theme_color_override("font_color",STYLE.PINK_SOFT)
     add_child(title)
-    var instructions := Label.new()
-    instructions.text = "DRAG nodes • DRAG empty map / 2 FINGERS = move & pinch zoom • ADD NODE then tap • ORANGE selected / RED invalid"
-    instructions.position = Vector2(s.x*0.05,s.y*0.090)
-    instructions.size = Vector2(s.x*0.9,s.y*0.042)
-    instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    instructions.add_theme_font_size_override("font_size",int(15.0*scale))
-    instructions.add_theme_color_override("font_color",Color(0.74,0.76,0.83))
-    add_child(instructions)
+    map_view = Control.new()
+    map_view.name = "Clipped edit window"
+    map_view.clip_contents = true
+    map_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    map_view.position = canvas.position
+    map_view.size = canvas.size
+    map_view.draw.connect(_draw_map)
+    add_child(map_view)
     message_label = Label.new()
-    message_label.position = Vector2(s.x*0.06,s.y*0.653)
-    message_label.size = Vector2(s.x*0.88,s.y*0.072)
-    message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    message_label.name = "Validation line"
+    message_label.position = Vector2(s.x*0.03,s.y*0.746)
+    message_label.size = Vector2(s.x*0.94,s.y*0.036)
+    message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    message_label.clip_text = true
+    message_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    message_label.add_theme_font_override("font",STYLE.BOLD)
     message_label.add_theme_font_size_override("font_size",int(16.0*scale))
     add_child(message_label)
-    _button("FIT",0.832,0.486,0.112,0.042,Callable(self,"_fit_all"))
-    _button("ZOOM +",0.832,0.534,0.112,0.042,func(): _zoom(1.25))
-    _button("ZOOM -",0.832,0.582,0.112,0.042,func(): _zoom(0.8))
-    _button("ADD NODE",0.05,0.746,0.28,0.065,Callable(self,"_add_point"))
-    _button("DELETE NODE",0.36,0.746,0.28,0.065,Callable(self,"_delete_point"))
-    _button("↶ UNDO",0.67,0.746,0.28,0.065,Callable(self,"_undo"))
-    _button("VALIDATE",0.05,0.825,0.425,0.065,Callable(self,"_validate"))
-    _button("SAVE AS...",0.525,0.825,0.425,0.065,Callable(self,"_request_save"))
-    _button("START NEW",0.05,0.905,0.275,0.055,Callable(self,"_request_new"))
-    _button("BACK",0.36,0.905,0.275,0.055,Callable(self,"_back"))
-    _button("DRIVE",0.675,0.905,0.275,0.055,Callable(self,"_drive"))
-
+    _button("?",0.875,0.012,0.095,0.045,func(): _show_dialog("help"))
+    # Zoom controls float in the top-right corner of the edit window.
+    var zoom_buttons: Array[Button] = [
+        _button("FIT",0.845,0.080,0.112,0.042,Callable(self,"_fit_all")),
+        _button("ZOOM +",0.845,0.127,0.112,0.042,func(): _zoom(1.25)),
+        _button("ZOOM -",0.845,0.174,0.112,0.042,func(): _zoom(0.8))]
+    zoom_strip = Rect2()
+    for zb in zoom_buttons:
+        zb.add_theme_font_size_override("font_size",int(clampf(s.x/48.0,11.0,22.0)))
+        zb.size = Vector2(s.x*0.112,s.y*0.042)
+        zb.position.x = canvas.end.x-s.x*0.012-zb.size.x
+        var r := Rect2(zb.position,zb.size)
+        zoom_strip = r if zoom_strip.size == Vector2.ZERO else zoom_strip.merge(r)
+    zoom_strip = zoom_strip.grow(6.0)
+    _button("ADD NODE",0.03,0.788,0.30,0.056,Callable(self,"_add_point"))
+    _button("DELETE NODE",0.35,0.788,0.30,0.056,Callable(self,"_delete_point"))
+    _button("↶ UNDO",0.67,0.788,0.30,0.056,Callable(self,"_undo"))
+    _button("VALIDATE",0.03,0.852,0.46,0.056,Callable(self,"_validate"))
+    _button("SAVE AS...",0.51,0.852,0.46,0.056,Callable(self,"_request_save"))
+    _button("START NEW",0.03,0.916,0.30,0.056,Callable(self,"_request_new"))
+    _button("BACK",0.35,0.916,0.30,0.056,Callable(self,"_back"))
+    _button("DRIVE",0.67,0.916,0.30,0.056,Callable(self,"_drive"))
 
 func _save_undo_snapshot() -> void:
     undo_stack.append({
@@ -196,6 +260,7 @@ func _undo() -> void:
     zoom_level = float(state["zoom"])
     last_saved_path = str(state["last_saved_path"])
     last_saved_name = str(state["last_saved_name"])
+    _update_header()
     pointer = -999
     drag_recorded = false
     _fit_view()
@@ -227,7 +292,7 @@ func _show_dialog(kind: String) -> void:
     add_child(dialog_overlay)
     var panel := PanelContainer.new()
     panel.position = Vector2(s.x*0.065,s.y*0.13)
-    panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else 0.21))
+    panel.size = Vector2(s.x*0.87,s.y*(0.25 if kind=="save" else (0.40 if kind=="help" else 0.21)))
     panel.custom_minimum_size = panel.size
     panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
     dialog_overlay.add_child(panel)
@@ -239,15 +304,25 @@ func _show_dialog(kind: String) -> void:
     stack.add_theme_constant_override("separation",int(10.0*sc))
     margin.add_child(stack)
     var title := Label.new()
-    title.text = "SAVE TRACK" if kind=="save" else "START NEW TRACK"
+    title.text = "SAVE TRACK" if kind=="save" else ("HOW TO EDIT" if kind=="help" else "START NEW TRACK")
     title.add_theme_font_size_override("font_size",int(24.0*sc))
     title.add_theme_color_override("font_color",Color(1.0,0.82,0.25))
     stack.add_child(title)
     var hint := Label.new()
-    hint.text = "Give your circuit a name" if kind=="save" else "Unsaved edits will be replaced"
-    hint.add_theme_font_size_override("font_size",int(16.0*sc))
+    hint.text = "Give your circuit a name" if kind=="save" else (
+        "\n".join(HELP_LINES) if kind=="help" else "Unsaved edits will be replaced")
+    hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hint.add_theme_font_size_override("font_size",int((17.0 if kind=="help" else 16.0)*sc))
     hint.add_theme_color_override("font_color",Color(0.86,0.84,0.92))
+    if kind=="help":
+        hint.add_theme_constant_override("line_spacing",int(6.0*sc))
     stack.add_child(hint)
+    if kind=="help":
+        help_check = CheckBox.new()
+        help_check.name = "Do not show again"
+        help_check.text = "Don't show again"
+        help_check.add_theme_font_size_override("font_size",int(18.0*sc))
+        stack.add_child(help_check)
     if kind=="save":
         name_input = LineEdit.new()
         name_input.text = last_saved_name
@@ -259,7 +334,9 @@ func _show_dialog(kind: String) -> void:
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation",int(11.0*sc))
     stack.add_child(row)
-    if kind=="save":
+    if kind=="help":
+        _modal_button(row,"CLOSE",Callable(self,"_close_help"),sc)
+    elif kind=="save":
         _modal_button(row,"CANCEL",Callable(self,"_close_dialog"),sc)
         _modal_button(row,"SAVE",Callable(self,"_confirm_save"),sc)
         name_input.grab_focus()
@@ -321,8 +398,9 @@ func _replace_new_track(points: Array,adding: bool) -> void:
     invalid_nodes.clear()
     last_saved_path = ""
     last_saved_name = ""
+    _update_header()
     _fit_view()
-    queue_redraw()
+    _redraw()
 
 func _request_save() -> void:
     _validate()
@@ -385,10 +463,11 @@ func _persist_track(title: String) -> bool:
         recent.close()
     last_saved_path = path
     last_saved_name = title
+    _update_header()
     _status("SAVED • "+title+" • %.0f m" % last_length,true)
     return true
 
-func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callable) -> void:
+func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callable) -> Button:
     var s: Vector2 = get_viewport_rect().size
     var button := Button.new()
     button.text = text
@@ -398,6 +477,7 @@ func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callab
     STYLE.style_button(button,clampf(s.x/700.0,0.85,1.8))
     button.pressed.connect(action)
     add_child(button)
+    return button
 
 func _status(txt: String,valid: bool) -> void:
     message_label.text = txt
@@ -406,7 +486,7 @@ func _status(txt: String,valid: bool) -> void:
 func _invalidate() -> void:
     ready_to_play = false
     _status("CHANGED • Validate before driving",false)
-    queue_redraw()
+    _redraw()
 
 func _validate() -> void:
     var result: Dictionary = DNA.compile(data)
@@ -420,7 +500,7 @@ func _validate() -> void:
         for error in errors:
             _flag_problem_nodes(str(error))
         _status("INVALID • "+(str(errors[0]) if not errors.is_empty() else "Unknown geometry error"),false)
-    queue_redraw()
+    _redraw()
 
 func _flag_ring_sample(sample_index: int) -> void:
     if _point_count() == 0:
@@ -534,9 +614,8 @@ func _node_position(i: int) -> Vector2:
 func _start_touch(pos: Vector2,pointer_index: int) -> void:
     if not canvas.has_point(pos) or pointer != -999:
         return
-    # Zoom buttons overlap the canvas; do not accidentally add road knots.
-    var size: Vector2 = get_viewport_rect().size
-    if pos.x > size.x*0.81 and pos.y > size.y*0.475 and pos.y < size.y*0.65:
+    # Zoom buttons float over the canvas; do not accidentally add road knots.
+    if zoom_strip.has_point(pos):
         return
     var radius: float = maxf(17.0,get_viewport_rect().size.x*0.031)
     var closest: float = radius
@@ -567,7 +646,7 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         # Empty canvas: one-finger drag pans the zoomed view.
         pan_pointer = pointer_index
         pan_last = pos
-    queue_redraw()
+    _redraw()
 
 func _drag_touch(pos: Vector2,pointer_index: int) -> void:
     if pan_pointer == pointer_index and pointer == -999:
@@ -667,27 +746,53 @@ func _update_pinch() -> void:
 
 func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO,get_viewport_rect().size),Color(0.015,0.012,0.026),true)
-    draw_rect(canvas,Color(0.062,0.049,0.093,0.92),true)
-    draw_rect(canvas,Color(1.0,0.16,0.56,0.65),false,2.0)
+
+## Map drawing lives in a clip_contents child, so a zoomed or panned road
+## can never spill under the header or the buttons.
+func _draw_map() -> void:
+    var v: Control = map_view
+    var o: Vector2 = -canvas.position
+    v.draw_rect(Rect2(Vector2.ZERO,canvas.size),Color(0.062,0.049,0.093,0.92),true)
+    # Faint 50 m grid for scale.
+    var step: float = 50.0*pixels_per_metre
+    if step > 14.0:
+        var first: Vector2 = _world_point(canvas.position)
+        var gx: float = ceil(first.x/50.0)*50.0
+        while true:
+            var sx: float = _screen_point(Vector2(gx,0)).x+o.x
+            if sx > canvas.size.x:
+                break
+            v.draw_line(Vector2(sx,0),Vector2(sx,canvas.size.y),Color(1,1,1,0.035),1.0)
+            gx += 50.0
+        var gy: float = ceil(first.y/50.0)*50.0
+        while true:
+            var sy: float = _screen_point(Vector2(0,gy)).y+o.y
+            if sy > canvas.size.y:
+                break
+            v.draw_line(Vector2(0,sy),Vector2(canvas.size.x,sy),Color(1,1,1,0.035),1.0)
+            gy += 50.0
     var n: int = _point_count()
-    if n <= 0:
-        return
-    var line := PackedVector2Array()
-    for idx in range(n):
-        line.append(_screen_point(_node_position(idx)))
-    if n >= 8:
-        line.append(line[0])
-    if n >= 2:
-        var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
-        draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
-        draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
-    # The white first node also represents start/finish.
-    var origin: Vector2 = line[0]
-    draw_arc(origin,15.0,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
-    for idx in range(n):
-        var point: Vector2 = line[idx]
-        # Selection wins orange; invalid knots otherwise red; neutral white.
-        var tint: Color = Color(1.0,0.56,0.09) if idx == selected else (
-            Color(1.0,0.12,0.17) if invalid_nodes.has(idx) else Color(0.94,0.94,0.96))
-        draw_circle(point,10.0,tint)
-        draw_circle(point,4.0,Color(0.035,0.041,0.050))
+    if n > 0:
+        var line := PackedVector2Array()
+        for idx in range(n):
+            line.append(_screen_point(_node_position(idx))+o)
+        if n >= 8:
+            line.append(line[0])
+        if n >= 2:
+            var road_px: float = float(data.get("width_m",25.0))*pixels_per_metre
+            v.draw_polyline(line,Color(0.20,0.22,0.27,0.88),road_px,true)
+            v.draw_polyline(line,Color(0.95,0.95,0.98,0.8),2.0,true)
+        # The first node also represents start/finish.
+        v.draw_arc(line[0],15.0,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
+        for idx in range(n):
+            var point: Vector2 = line[idx]
+            # Selection wins orange; invalid knots otherwise red; neutral white.
+            var tint: Color = Color(1.0,0.56,0.09) if idx == selected else (
+                Color(1.0,0.12,0.17) if invalid_nodes.has(idx) else Color(0.94,0.94,0.96))
+            v.draw_circle(point,10.0,tint)
+            v.draw_circle(point,4.0,Color(0.035,0.041,0.050))
+    # Validation frame: green = drivable, red = needs fixing.
+    var frame: Color = Color(0.25,0.92,0.48,0.95) if ready_to_play else Color(1.0,0.22,0.26,0.95)
+    var inset := Rect2(Vector2(2,2),canvas.size-Vector2(4,4))
+    v.draw_rect(inset,Color(frame.r,frame.g,frame.b,0.22),false,9.0)
+    v.draw_rect(inset,frame,false,3.0)

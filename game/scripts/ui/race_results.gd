@@ -3,7 +3,6 @@ class_name NitroRaceResults
 ## Local-only three-lap race history. No network leaderboard or fabricated ranks.
 const STORAGE: String = "user://nitro_local_runs.json"
 const STYLE = preload("res://scripts/ui/hud_style.gd")
-const PINK: Color = Color(1.0,0.16,0.56)
 const GOLD: Color = Color(1.0,0.78,0.26)
 const WHITE: Color = Color(0.97,0.97,0.99)
 const MUTED: Color = Color(0.68,0.71,0.78)
@@ -125,7 +124,7 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     var difference: String = "FIRST RECORDED RUN" if previous.is_empty() else (
         "NEW PERSONAL BEST" if seconds < prior_best else "+%.2f s VS BEST" % (seconds-prior_best))
     _label(v,difference,19,MUTED,sc)
-    _label(v,"%d DRIFT POINTS  •  THREE LAPS" % score,21,PINK,sc)
+    _label(v,"%d DRIFT POINTS  •  THREE LAPS" % score,21,STYLE.PINK,sc)
     if not stats.is_empty():
         _label(v,"BEST CHAIN %d  •  %d TRANSITIONS  •  %d KERB CLIPS  •  %d CHAINS LOST" % [
             int(stats.get("best_chain",0)),int(stats.get("transitions",0)),

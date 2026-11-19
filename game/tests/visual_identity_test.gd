@@ -43,8 +43,8 @@ func _run() -> void:
         if bool(car.get("flat_body")) != (variant == "red"):
             _fail("Red sheet must be faceted low-poly, white sheet smooth")
             return
-        if (variant == "red") != (car.find_child("NW rear screen banner",true,false) != null):
-            _fail("NW banner belongs to the red drift spec only")
+        if car.find_child("NW rear screen banner",true,false) != null:
+            _fail("Owner asked to remove the NW rear-screen banner")
             return
         if car.find_child("Soft contact shadow",true,false) == null:
             _fail("Contact shadow missing")
@@ -106,7 +106,7 @@ func _run() -> void:
     for screen in [Vector2(1280,2844),Vector2(1280,2276),Vector2(1280,720)]:
         var m: Dictionary = STYLE.metrics(screen)
         var full := Rect2(Vector2.ZERO,screen)
-        for key in ["header","total","score","chase","pause","camera","angle","speed"]:
+        for key in ["header","map","total","score","chase","pause","camera","angle","speed"]:
             if not full.encloses(Rect2(m[key])):
                 _fail("HUD element off-screen: "+key)
                 return
@@ -115,6 +115,15 @@ func _run() -> void:
                 if Rect2(m[a]).intersects(Rect2(m[b])):
                     _fail("HUD button "+a+" overlaps "+b)
                     return
+        if Rect2(m["chase"]).intersects(Rect2(m["header"])) or Rect2(m["score"]).intersects(Rect2(m["header"])):
+            _fail("Chase/live-chain readouts must sit outside the header")
+            return
+        if not Rect2(m["header"]).encloses(Rect2(m["map"])) or Rect2(m["map"]).intersects(Rect2(m["total"])):
+            _fail("Minimap must sit inside the header, left of the stats")
+            return
+        if Rect2(m["speed"]).intersects(Rect2(m["angle"])) or Rect2(m["angle"]).position.y < Rect2(m["speed"]).end.y:
+            _fail("Speedometer must sit above the drift angle")
+            return
         if Rect2(m["pause"]).intersects(Rect2(m["camera"])):
             _fail("PAUSE and CAM overlap")
             return
@@ -132,28 +141,42 @@ func _run() -> void:
         _fail("Race car must read 15% larger than the stock shell")
         return
     var hud: NitroRaceHUD = race.get("hud")
-    if hud.target_time <= 0.0:
-        _fail("HUD has no chasing time target")
+    if hud.track_points.size() < 8:
+        _fail("HUD minimap has no track outline")
         return
     race.queue_free()
     await process_frame
 
-    # --- Stars are projected from real pace with the finish-screen tiers.
+    # --- Chase pill compares the running score with the local best.
     var probe: NitroRaceHUD = HUD.new()
-    probe.track_id = "shin_kawa_v2"
-    probe.target_time = 100.0
-    probe.race_time = 30.0
-    probe.lap = 2
-    probe.track_progress = 0.0
-    var state: Dictionary = probe.chase_state()
-    if int(state["stars"]) != 1 or absf(float(state["chase"])-82.0) > 0.01:
-        _fail("Projected stars/chasing time incorrect: "+str(state))
+    probe.best_score = -1
+    if not str(probe.chase_label()["text"]).begins_with("FIRST RUN"):
+        _fail("Chase pill must invite a first run when no local score exists")
         return
-    probe.race_time = 1.0
-    probe.lap = 1
-    probe.track_progress = 0.01
-    if int(probe.chase_state()["stars"]) != 0:
-        _fail("Stars must stay empty before pace can be projected")
+    probe.best_score = 5000
+    probe.score = 1200
+    var chasing: Dictionary = probe.chase_label()
+    if bool(chasing["beating"]) or not str(chasing["text"]).contains("5,000"):
+        _fail("Chase pill must show the best score being chased: "+str(chasing))
+        return
+    probe.score = 4800
+    probe.drift_score = 200
+    probe.combo = 2.0
+    if not bool(probe.chase_label()["beating"]):
+        _fail("Banked + live chain beyond the best must read NEW BEST")
+        return
+    var screen := Vector2(1280,2844)
+    var ms: Dictionary = STYLE.metrics(screen)
+    probe.car_screen = Vector2(640,1650)
+    var anchor: Vector2 = probe.callout_anchor(ms,screen)
+    if anchor.y >= 1650.0 or anchor.y <= Rect2(ms["score"]).end.y:
+        _fail("Scoring callouts must pop above the car, below the live chain")
+        return
+    probe.lap = 2
+    probe.lap_limit = 3
+    probe.track_progress = 0.5
+    if absf(probe.overall_progress()-0.5) > 0.001:
+        _fail("Three-segment progress line mis-computed")
         return
     probe.free()
 
@@ -161,7 +184,7 @@ func _run() -> void:
     if STYLE.text_width("SHIN-KAWA 02:00.81",30.0) < 50.0:
         _fail("Exo 2 HUD font did not load")
         return
-    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD/touch agreement, projected stars, OFL font")
+    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD v2 layout/touch agreement, chase-score pill, OFL font")
     print("NOT RUN: on-device look, GPU cost of scenery/smoke on Android, human comparison with approved reference")
     quit(0)
 

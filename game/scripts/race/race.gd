@@ -66,6 +66,7 @@ var had_skid: bool = false
 var skid_clock: float = 0.0
 
 func _ready() -> void:
+    (load("res://scripts/ui/hud_style.gd")).ensure_settings()
     track = TRACK.new()
     track.track_data_path = str(ProjectSettings.get_setting(
         "nitro/selected_track",TRACK.TRACK_DATA))
@@ -176,6 +177,12 @@ func _make_tyre_marks() -> void:
     marks.material_override = skid_material
     add_child(marks)
 
+func _local_best_score(id: String) -> int:
+    var best: int = -1
+    for run in RESULTS.track_runs(id):
+        best = maxi(best,int((run as Dictionary).get("score",0)))
+    return best
+
 func _make_ui() -> void:
     # Night atmosphere: soft violet vignette under the HUD.
     var mood := CanvasLayer.new()
@@ -199,9 +206,10 @@ func _make_ui() -> void:
     overlay.add_child(hud)
     hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else (
-        "FULL CIRCUIT" if track.track_id=="shin_kawa_full_circuit" else track.display_name)
+        "SHIN-KAWA FULL" if track.track_id=="shin_kawa_full_circuit" else track.display_name)
     hud.track_points = PackedVector2Array(track.centerline)
     hud.track_id = track.track_id
+    hud.best_score = _local_best_score(track.track_id)
     # Same provisional local target as the finish screen uses, so the HUD
     # chasing-time stars and the result stars always agree.
     hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
@@ -448,6 +456,14 @@ func _camera_lead_target(real_velocity: Vector2) -> Vector3:
     return lead.limit_length(CAMERA_LEAD_MAX_METRES)
 
 func _update_camera(delta: float) -> void:
+    _update_camera_view(delta)
+    # Scoring callouts pop just above the car on screen.
+    var view_cam: Camera3D = get_viewport().get_camera_3d()
+    if hud != null and view_cam != null and car_root != null \
+            and not view_cam.is_position_behind(car_root.global_position):
+        hud.car_screen = view_cam.unproject_position(car_root.global_position)
+
+func _update_camera_view(delta: float) -> void:
     if model == null or overhead == null or chase == null:
         return
     var car_position: Vector3 = Vector3(model.position.x,0.0,model.position.y)

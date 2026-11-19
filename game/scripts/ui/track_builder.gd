@@ -120,7 +120,7 @@ func _build_grid_overlay(size: Vector2) -> void:
     for y in range(grid.rows+1):
         var py: float = -half.y+float(y)*GRID.CELL_M
         _strip(st,Vector2(-half.x,py),Vector2(half.x,py),w,col)
-    var pink := Color(1.0,0.16,0.56,0.85)
+    var pink := Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.85)
     _strip(st,Vector2(-half.x,-half.y),Vector2(half.x,-half.y),1.6,pink)
     _strip(st,Vector2(half.x,-half.y),Vector2(half.x,half.y),1.6,pink)
     _strip(st,Vector2(half.x,half.y),Vector2(-half.x,half.y),1.6,pink)
@@ -343,7 +343,7 @@ func end_stroke() -> void:
 func _flash(c: Vector2i, ok: bool) -> void:
     var w: Vector2 = grid.world_of(c)
     highlight.position = Vector3(w.x,0.2,w.y)
-    highlight_mat.albedo_color = Color(1.0,0.16,0.56,0.32) if ok else Color(1.0,0.12,0.10,0.55)
+    highlight_mat.albedo_color = Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.32) if ok else Color(1.0,0.12,0.10,0.55)
     flash_time = 0.6
 
 # ---------------------------------------------------------------- actions
@@ -523,7 +523,7 @@ func _update_status(parts: Array) -> void:
     elif parts.size() > 1:
         _status("%d PIECES • JOIN THEM INTO ONE LOOP" % parts.size(),false)
     elif not bool(parts[0]["closed"]):
-        _status("%d TILES • CONNECT THE TWO PINK ENDS TO CLOSE THE LOOP" % grid.tile_count(),false)
+        _status("%d TILES • CONNECT THE TWO GLOWING ENDS TO CLOSE THE LOOP" % grid.tile_count(),false)
     else:
         var check: Dictionary = grid.validate()
         if bool(check.get("ok",false)):

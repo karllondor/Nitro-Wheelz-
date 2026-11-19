@@ -5,6 +5,7 @@ class_name NitroRaceTouch
 ## Independent pointer IDs support steering, gas and handbrake simultaneously.
 
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const NW_INITIALS = preload("res://assets/brand/nw_initials.png")
 
 signal camera_requested
 signal pause_requested
@@ -212,20 +213,17 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
     glow_pts.append(base_pts[0])
     STYLE.glow_line(self,glow_pts,STYLE.PINK,2.4*u,1.6 if pressed else 1.0)
     draw_polygon(base_pts,base_cols)
-    draw_polyline(glow_pts,Color(1.0,0.55,0.80,0.9),1.6*u,true)
+    draw_polyline(glow_pts,STYLE.PINK.lerp(Color.WHITE,0.4),1.6*u,true)
     for side in [-1.0,1.0]:
         var bolt := Vector2(cx+side*base.size.x*0.32,base.position.y+base.size.y*0.17)
         draw_circle(bolt,w*0.045,Color(0.55,0.56,0.60))
         draw_circle(bolt+Vector2(-1,-1)*w*0.012,w*0.026,Color(0.92,0.93,0.96))
-    # "///" logo.
-    var lh: float = base.size.y*0.34
-    var lw: float = base.size.x*0.075
-    for k in range(3):
-        var lx: float = cx-base.size.x*0.20+float(k)*base.size.x*0.15
-        var ly: float = base.position.y+base.size.y*0.58
-        draw_colored_polygon(PackedVector2Array([
-            Vector2(lx+lh*0.45,ly-lh*0.5),Vector2(lx+lh*0.45+lw,ly-lh*0.5),
-            Vector2(lx-lh*0.45+lw,ly+lh*0.5),Vector2(lx-lh*0.45,ly+lh*0.5)]),STYLE.PINK)
+    # Owner's NW initials on the lever base (replaces the "///" mark).
+    var logo_h: float = base.size.y*0.44
+    var logo_w: float = logo_h*float(NW_INITIALS.get_width())/float(NW_INITIALS.get_height())
+    var logo_c := Vector2(cx,base.position.y+base.size.y*0.60)
+    draw_texture_rect(NW_INITIALS,Rect2(logo_c-Vector2(logo_w,logo_h)*0.5,Vector2(logo_w,logo_h)),false,
+        Color(1,1,1,1.0 if pressed else 0.92))
     # Chrome shaft (three vertical strips fake a cylinder).
     var shaft_top: float = y+h*0.34+pull
     var shaft_bottom: float = base.position.y+base.size.y*0.06
@@ -262,7 +260,7 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
     var cap_box := StyleBoxFlat.new()
     cap_box.bg_color = STYLE.PINK
     cap_box.set_corner_radius_all(int(w*0.10))
-    cap_box.shadow_color = Color(1.0,0.16,0.56,0.55 if pressed else 0.35)
+    cap_box.shadow_color = Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.55 if pressed else 0.35)
     cap_box.shadow_size = int(10.0*u)
     draw_style_box(cap_box,cap)
     draw_line(Vector2(cap.position.x+w*0.06,cap.position.y+cap.size.y*0.32),

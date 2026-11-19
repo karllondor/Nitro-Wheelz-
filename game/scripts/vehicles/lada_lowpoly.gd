@@ -80,8 +80,6 @@ func _ready() -> void:
     add_child(front)
     _make_wheels()
     _make_shadow()
-    if paint_variant == "red":
-        _make_badge()
 
 func _apply_style() -> void:
     if paint_variant == "white":
@@ -587,23 +585,6 @@ func _make_shadow() -> void:
     shadow.position = Vector3(0.10,shadow_height,0.12)
     shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(shadow)
-
-func _make_badge() -> void:
-    # "NW" banner on the rear screen, as on the approved gameplay render.
-    var badge := Label3D.new()
-    badge.name = "NW rear screen banner"
-    badge.text = "NW"
-    badge.font_size = 64
-    badge.outline_size = 0
-    badge.pixel_size = 0.0042
-    badge.modulate = Color(0.96,0.96,1.0)
-    badge.double_sided = false
-    badge.shaded = false
-    var slope: float = atan2(REAR_RAKE,1.0)
-    var bz: float = 0.80
-    badge.position = Vector3(0.0,_deck(bz)+(CABIN_REAR-bz)*REAR_RAKE+0.03,bz+0.02)
-    badge.rotation = Vector3(-(PI*0.5-slope),0.0,0.0)
-    add_child(badge)
 
 func set_motion(steer_rad: float, speed_mps: float, dt: float) -> void:
     # Godot +Y rotation maps local -Z to -X; invert to match +steer/right.

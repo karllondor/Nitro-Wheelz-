@@ -67,7 +67,7 @@ func _ready() -> void:
     frame.border_color = STYLE.PINK
     frame.set_border_width_all(int(maxf(2.0,2.0*sc)))
     frame.set_corner_radius_all(int(20.0*sc))
-    frame.shadow_color = Color(1.0,0.16,0.56,0.28)
+    frame.shadow_color = Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.28)
     frame.shadow_size = int(14.0*sc)
     card.add_theme_stylebox_override("panel",frame)
     add_child(card)
@@ -82,7 +82,8 @@ func _ready() -> void:
     preview.size = Vector2i(maxi(512,int(display.size.x)),maxi(320,int(display.size.y)))
     preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS
     preview.own_world_3d = true
-    preview.msaa_3d = Viewport.MSAA_4X
+    # No MSAA here: multisampled SubViewports render black on some Android
+    # GL Compatibility drivers (garage showed an empty card on device).
     display.add_child(preview)
     _build_studio()
     _build_turntable()

@@ -1,15 +1,26 @@
 extends RefCounted
 class_name NitroHudStyle
 ## Shared drawing kit for the approved Nitro Wheelz driving HUD reference:
-## dark glass parallelogram panels, hot-pink neon edge glow, bold italic
+## dark glass parallelogram panels, accent-colour neon edge glow, bold italic
 ## type (Exo 2, SIL OFL 1.1), gold stars and metal controls.
 ## Everything is drawn with CanvasItem primitives: no textures, one font.
 
 const BOLD = preload("res://assets/fonts/Exo2-ExtraBoldItalic.woff2")
 const SEMI = preload("res://assets/fonts/Exo2-SemiBoldItalic.woff2")
 
-const PINK := Color(1.0,0.16,0.56)
-const PINK_SOFT := Color(1.0,0.42,0.72)
+# Accent colour is a player setting (pause menu). Every panel edge, glow,
+# bar and highlight reads STYLE.PINK at draw time, so changing it recolours
+# the whole interface. Name kept for compatibility: it is the accent.
+static var PINK: Color = Color(1.0,0.16,0.56)
+static var PINK_SOFT: Color = Color(1.0,0.42,0.72)
+static var accent_name: String = "pink"
+static var sound_on: bool = true
+static var settings_loaded: bool = false
+const ACCENTS: Dictionary = {
+    "pink":Color(1.0,0.16,0.56),"violet":Color(0.64,0.34,1.0),"cyan":Color(0.10,0.80,1.0),
+    "lime":Color(0.56,0.94,0.18),"orange":Color(1.0,0.52,0.08),"red":Color(1.0,0.16,0.20)}
+const ACCENT_ORDER: Array[String] = ["pink","violet","cyan","lime","orange","red"]
+const SETTINGS_PATH: String = "user://nitro_settings.cfg"
 const WHITE := Color(0.985,0.985,1.0)
 const MUTED := Color(0.80,0.81,0.86)
 const DIM := Color(0.56,0.57,0.63)
@@ -20,48 +31,86 @@ const GLASS_BOTTOM := Color(0.020,0.020,0.030,0.90)
 const EDGE := Color(0.86,0.87,0.92,0.42)
 const SKEW: float = 0.20
 
+static func set_accent(name: String) -> void:
+    if not ACCENTS.has(name):
+        name = "pink"
+    accent_name = name
+    PINK = ACCENTS[name]
+    PINK_SOFT = PINK.lerp(Color.WHITE,0.35)
+
+static func set_sound(enabled: bool) -> void:
+    sound_on = enabled
+    var bus: int = AudioServer.get_bus_index("Master")
+    if bus >= 0:
+        AudioServer.set_bus_mute(bus,not enabled)
+
+static func load_settings() -> void:
+    var cfg := ConfigFile.new()
+    if cfg.load(SETTINGS_PATH) == OK:
+        set_accent(str(cfg.get_value("ui","accent","pink")))
+        set_sound(bool(cfg.get_value("audio","sound_on",true)))
+    else:
+        set_accent("pink")
+        set_sound(true)
+    settings_loaded = true
+
+static func ensure_settings() -> void:
+    if not settings_loaded:
+        load_settings()
+
+static func save_settings() -> void:
+    var cfg := ConfigFile.new()
+    cfg.load(SETTINGS_PATH)  # keep other sections (editor help flag)
+    cfg.set_value("ui","accent",accent_name)
+    cfg.set_value("audio","sound_on",sound_on)
+    cfg.save(SETTINGS_PATH)
+
 ## Layout shared by HUD drawing and touch hit-testing so visuals and
-## touch targets always coincide. Portrait sizes follow the reference image
-## proportions relative to screen WIDTH; vertical anchors stay fractions of
-## height so taller 20:9 phones keep the controls in thumb reach.
+## touch targets always coincide (HUD v2, owner sketch 2026-11-19):
+## header = big minimap + score/lap/time, full-width 3-lap progress line;
+## chase pill centred under it; live chain centred below (only while
+## scoring); round speedometer with the drift angle on the left.
 static func metrics(s: Vector2) -> Dictionary:
     var portrait: bool = s.y > s.x
     if portrait:
         var w: float = s.x
         var mx: float = w*0.022
         var top: float = maxf(s.y*0.016,w*0.03)
-        var header := Rect2(mx,top,w-2.0*mx,w*0.112)
-        var stats_y: float = header.end.y+w*0.026
-        var stats_h: float = w*0.126
-        var gap: float = w*0.012
-        var inner: float = w-2.0*mx-2.0*gap
-        var total := Rect2(mx,stats_y,inner*0.300,stats_h)
-        var score := Rect2(total.end.x+gap,stats_y,inner*0.255,stats_h)
-        var chase := Rect2(score.end.x+gap,stats_y,inner-total.size.x-score.size.x,stats_h)
-        var buttons_y: float = stats_y+stats_h+w*0.028
+        var header := Rect2(mx,top,w-2.0*mx,w*0.205)
+        var map := Rect2(header.position.x+w*0.018,header.position.y+w*0.014,w*0.34,w*0.150)
+        var stats := Rect2(map.end.x+w*0.03,header.position.y,header.end.x-map.end.x-w*0.05,w*0.175)
+        var chase := Rect2(w*0.30,header.end.y+w*0.014,w*0.40,w*0.064)
+        var buttons_y: float = header.end.y+w*0.014
+        var gauge_r: float = w*0.135
+        var gauge_c := Vector2(mx+gauge_r+w*0.012,s.y*0.585)
         return {
-            "portrait":true,"header":header,"total":total,"score":score,"chase":chase,
-            "pause":Rect2(w*0.690,buttons_y,w*0.126,w*0.074),
-            "camera":Rect2(w*0.840,buttons_y,w*0.134,w*0.074),
-            "angle":Rect2(mx*1.6,s.y*0.596,w*0.152,w*0.066),
-            "speed":Rect2(mx*1.1,s.y*0.596+w*0.088,w*0.318,w*0.094),
+            "portrait":true,"header":header,"map":map,"total":stats,"chase":chase,
+            "score":Rect2(w*0.5-w*0.24,chase.end.y+w*0.030,w*0.48,w*0.120),
+            "callout":Vector2(w*0.5,s.y*0.40),
+            "pause":Rect2(w*0.735,buttons_y,w*0.110,w*0.070),
+            "camera":Rect2(w*0.862,buttons_y,w*0.116,w*0.070),
+            "gauge_centre":gauge_c,"gauge_radius":gauge_r,
+            "speed":Rect2(gauge_c-Vector2(gauge_r,gauge_r),Vector2(gauge_r,gauge_r)*2.0),
+            "angle":Rect2(gauge_c.x-w*0.075,gauge_c.y+gauge_r+w*0.020,w*0.150,w*0.058),
             "unit":w/700.0
         }
     var h: float = s.y
     var m: float = s.x*0.016
-    var header_l := Rect2(m,h*0.016,s.x*0.46,h*0.150)
-    var sy: float = header_l.end.y+h*0.022
-    var sh: float = h*0.142
-    var g: float = s.x*0.008
-    var total_l := Rect2(m,sy,s.x*0.14,sh)
-    var score_l := Rect2(total_l.end.x+g,sy,s.x*0.12,sh)
-    var chase_l := Rect2(score_l.end.x+g,sy,header_l.end.x-score_l.end.x-g,sh)
+    var header_l := Rect2(m,h*0.016,s.x*0.40,h*0.215)
+    var map_l := Rect2(header_l.position.x+h*0.02,header_l.position.y+h*0.02,s.x*0.15,h*0.155)
+    var stats_l := Rect2(map_l.end.x+s.x*0.015,header_l.position.y,header_l.end.x-map_l.end.x-s.x*0.025,h*0.19)
+    var chase_l := Rect2(s.x*0.44,h*0.03,s.x*0.20,h*0.075)
+    var gr: float = h*0.15
+    var gc := Vector2(m+gr+h*0.02,h*0.53)
     return {
-        "portrait":false,"header":header_l,"total":total_l,"score":score_l,"chase":chase_l,
+        "portrait":false,"header":header_l,"map":map_l,"total":stats_l,"chase":chase_l,
+        "score":Rect2(s.x*0.54-s.x*0.12,h*0.13,s.x*0.24,h*0.14),
+        "callout":Vector2(s.x*0.5,h*0.36),
         "pause":Rect2(s.x*0.921,h*0.030,s.x*0.057,h*0.125),
         "camera":Rect2(s.x*0.846,h*0.030,s.x*0.062,h*0.125),
-        "angle":Rect2(m*1.5,h*0.545,s.x*0.085,h*0.088),
-        "speed":Rect2(m,h*0.645,s.x*0.180,h*0.118),
+        "gauge_centre":gc,"gauge_radius":gr,
+        "speed":Rect2(gc-Vector2(gr,gr),Vector2(gr,gr)*2.0),
+        "angle":Rect2(gc.x-h*0.06,gc.y+gr+h*0.015,h*0.12,h*0.06),
         "unit":h/700.0
     }
 
