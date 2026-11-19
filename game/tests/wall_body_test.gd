@@ -16,20 +16,23 @@ func _corner_depth(t: NitroDriftTrack, pos: Vector2, heading: float) -> float:
     var hint: int = int(t.sample_info(pos)["index"])
     var worst: float = -INF
     for o in t.BODY_PROBES:
-        var q: Vector2 = pos+fwd*(o.x*t.BODY_HALF_LENGTH)+rgt*(o.y*t.BODY_HALF_WIDTH)
+        var q: Vector2 = pos+fwd*(o.x*t.body_half_length)+rgt*(o.y*t.body_half_width)
         worst = maxf(worst,t._probe_penetration(q,hint).z)
     return worst
 
 func _run() -> void:
     var tested: int = 0
-    for path in TRACKS:
+    # Lada footprint, then the longer RYU-32 coupe footprint.
+    for half_len in [2.30,2.52]:
+      for path in TRACKS:
         var t: NitroDriftTrack = TRACK.new()
         t.track_data_path = path
         t.with_environment = false
+        t.body_half_length = half_len
         root.add_child(t)
         await process_frame
         var n: int = t.centerline.size()
-        for i in range(0,n,maxi(1,int(n/14))):
+        for i in range(0,n,maxi(1,int(n/10))):
             var a: Vector2 = t.centerline[i]
             var tangent: Vector2 = (t.centerline[(i+1)%n]-a).normalized()
             var across := Vector2(-tangent.y,tangent.x)
@@ -42,7 +45,7 @@ func _run() -> void:
                     var pos: Vector2 = a
                     var vel: Vector2 = out*16.0
                     var dt: float = 1.0/120.0
-                    for step in range(240):
+                    for step in range(150):
                         pos += vel*dt
                         var c: Dictionary = t.resolve_body(pos,heading,vel)
                         pos = c["position"]
@@ -75,7 +78,7 @@ func _run() -> void:
             return
         t.queue_free()
         await process_frame
-    print("PASS: whole car body stays inside the barriers (%d nose/tail-first impacts on 4 tracks)" % tested)
+    print("PASS: whole car body stays inside the barriers (%d nose/tail-first impacts on 4 tracks, Lada + RYU-32 footprints)" % tested)
     print("NOT RUN: on-device feel of the new wall yaw kick")
     quit(0)
 

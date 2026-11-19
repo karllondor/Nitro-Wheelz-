@@ -21,6 +21,14 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.17 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 17 Godot tests) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| RYU-32 stills: garage 5 angles, race top-down + chase, garage UI with 3 cars | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd race_blue / garage_blue |
+| COMBO / BANKING / bank flight HUD still | Xvfb + llvmpipe | RENDERED, NOT DEVICE | scratch capture |
+| Star thresholds feel on real laps, coupe look on the phone | Physical Android | NOT RUN | owner to confirm |
+
 ## v0.1.16 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

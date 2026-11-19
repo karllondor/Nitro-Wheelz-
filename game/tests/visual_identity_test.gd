@@ -56,6 +56,36 @@ func _run() -> void:
         car.queue_free()
         await process_frame
 
+    # --- RYU-32 coupe (owner's blue reference sheet): true sheet proportions,
+    # wing, open engine bay with ITB trumpets, four rolling wheels.
+    var coupe: NitroCoupeLowPoly = load("res://scripts/vehicles/coupe_lowpoly.gd").new()
+    root.add_child(coupe)
+    await process_frame
+    var cshell: MeshInstance3D = coupe.find_child("Diecast body shell",true,false) as MeshInstance3D
+    if cshell == null or not (cshell.mesh.surface_get_material(0) is ShaderMaterial):
+        _fail("Coupe die-cast shell missing")
+        return
+    var cbox: AABB = cshell.mesh.get_aabb()
+    if absf(cbox.size.z-coupe.BODY_LENGTH_M) > 0.10 or cbox.end.y < 1.22 or cbox.end.y > 1.36:
+        _fail("Coupe shell %.3f m long / %.3f m high diverges from 4.545 / 1.29" % [cbox.size.z,cbox.end.y])
+        return
+    for part in ["Fixed rear wing","Exposed inline engine bay","Soft contact shadow"]:
+        if coupe.find_child(part,true,false) == null:
+            _fail("Coupe part missing: "+part)
+            return
+    if coupe.rolling_wheels.size() != 4 or absf(coupe.FRONT_AXLE_Z-coupe.REAR_AXLE_Z+2.615) > 0.001:
+        _fail("Coupe wheelbase/wheels wrong")
+        return
+    var cat = load("res://scripts/vehicles/car_catalog.gd")
+    var made: Node3D = cat.make("blue")
+    var is_coupe: bool = made is NitroCoupeLowPoly
+    made.free()
+    if not is_coupe or cat.valid("nope") != "red":
+        _fail("Car catalog must build the coupe for 'blue' and fall back to red")
+        return
+    coupe.queue_free()
+    await process_frame
+
     # --- Track art: even kerb blocks (seamless loop) and clear scenery.
     for path in TRACKS:
         var t: NitroDriftTrack = TRACK.new()
@@ -229,7 +259,7 @@ func _run() -> void:
     if STYLE.text_width("SHIN-KAWA 02:00.81",30.0) < 50.0:
         _fail("Exo 2 HUD font did not load")
         return
-    print("PASS: die-cast car proportions/styles, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD v3 layout (camera keep-out, chase in header), minimap orientation + on-line dot, touch agreement, chase-score pill, OFL font")
+    print("PASS: die-cast car proportions/styles, RYU-32 coupe, x1.15 race car, sky + cloud shadows, seamless kerbs, scenery clearance, HUD v3 layout (camera keep-out, chase in header), minimap orientation + on-line dot, touch agreement, chase-score pill, OFL font")
     print("NOT RUN: on-device look, GPU cost of scenery/smoke on Android, human comparison with approved reference")
     quit(0)
 

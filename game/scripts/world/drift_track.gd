@@ -224,6 +224,9 @@ func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
 const BODY_HALF_LENGTH: float = 2.30   # 4.166 m shell x1.15 race scale, rounded bumpers
 const BODY_HALF_WIDTH: float = 1.05
 const BODY_SKIN: float = 0.05
+# Per-car footprint (set by the race from the chosen car); Lada defaults.
+var body_half_length: float = BODY_HALF_LENGTH
+var body_half_width: float = BODY_HALF_WIDTH
 const BODY_PROBES: Array[Vector2] = [Vector2(1,1),Vector2(1,-1),Vector2(-1,1),Vector2(-1,-1),
     Vector2(1,0),Vector2(-1,0),Vector2(0.45,1),Vector2(0.45,-1),Vector2(-0.45,1),Vector2(-0.45,-1)]
 const PROBE_WINDOW: int = 24
@@ -244,7 +247,7 @@ func resolve_body(pos: Vector2, heading: float, travel_velocity: Vector2) -> Dic
         var worst_out: Vector2 = Vector2.ZERO
         var worst_arm: Vector2 = Vector2.ZERO
         for o in BODY_PROBES:
-            var arm: Vector2 = fwd*(o.x*BODY_HALF_LENGTH)+rgt*(o.y*BODY_HALF_WIDTH)
+            var arm: Vector2 = fwd*(o.x*body_half_length)+rgt*(o.y*body_half_width)
             var c: Vector3 = _probe_penetration(p+arm,hint)
             if c.z > worst:
                 worst = c.z

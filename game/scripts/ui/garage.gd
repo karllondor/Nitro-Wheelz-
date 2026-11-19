@@ -2,11 +2,12 @@ extends Control
 ## Nitro Wheelz garage: collectible-card style studio preview of the
 ## die-cast Lada 2106 drift spec on a slowly turning (draggable) platform.
 const CAR = preload("res://scripts/vehicles/lada_lowpoly.gd")
+const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const LOGO = preload("res://assets/brand/nitro_wheelz_logo.svg")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const BACKDROP_SHADER = preload("res://assets/shaders/studio_backdrop.gdshader")
 var preview: SubViewport
-var car: NitroLadaLowPoly
+var car: Node3D
 var turntable: Node3D
 var active_variant: String = "red"
 var version_label: Label
@@ -14,6 +15,8 @@ var display: SubViewportContainer
 var spin_speed: float = 0.35
 var dragging: bool = false
 var paint_buttons: Dictionary = {}
+var title_label: Label
+var info_label: Label
 var ui_unit: float = 1.0
 var studio_env: Environment
 var studio_key: DirectionalLight3D
@@ -29,8 +32,7 @@ func _ready() -> void:
     var garage_cfg := ConfigFile.new()
     if garage_cfg.load("user://nitro_garage.cfg") == OK:
         active_variant = str(garage_cfg.get_value("garage","paint",active_variant))
-    if active_variant != "white":
-        active_variant = "red"
+    active_variant = CARS.valid(active_variant)
     ProjectSettings.set_setting("nitro/car_variant",active_variant)
     var back := ColorRect.new()
     back.color = Color(0.018,0.016,0.026)
@@ -48,7 +50,8 @@ func _ready() -> void:
     add_child(brand)
 
     var title := Label.new()
-    title.text = "GARAGE  /  LADA 2106 DRIFT SPEC"
+    title.name = "Garage title"
+    title_label = title
     title.position = Vector2(s.x*0.05,s.y*0.122)
     title.size = Vector2(s.x*0.90,s.y*0.045)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -90,7 +93,7 @@ func _ready() -> void:
     _spawn_car()
 
     var info := Label.new()
-    info.text = "BODY 4.166 m   •   WHEELBASE 2.424 m   •   WIDEBODY"
+    info_label = info
     info.position = Vector2(s.x*0.05,s.y*0.695)
     info.size = Vector2(s.x*0.90,s.y*0.035)
     info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -107,10 +110,15 @@ func _ready() -> void:
     version_label.add_theme_color_override("font_color",STYLE.PINK_SOFT)
     add_child(version_label)
 
-    paint_buttons["red"] = _action("RED  •  EXPOSED ENGINE",0.05,0.782,0.44,0.072,
-        Callable(self,"_choose_red"),sc)
-    paint_buttons["white"] = _action("WHITE  •  CLEAN HOOD",0.51,0.782,0.44,0.072,
-        Callable(self,"_choose_white"),sc)
+    # One button per car in the collection.
+    var n: int = CARS.ORDER.size()
+    var gap: float = 0.02
+    var bw: float = (0.90-gap*float(n-1))/float(n)
+    for i in range(n):
+        var v: String = CARS.ORDER[i]
+        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.782,bw,0.072,
+            _choose.bind(v),sc)
+        paint_buttons[v].name = "Car "+v
     _action("BACK TO MENU",0.05,0.885,0.43,0.072,Callable(self,"_back"),sc)
     _action("DRIVE",0.52,0.885,0.43,0.072,Callable(self,"_drive"),sc)
     _set_status()
@@ -211,7 +219,12 @@ func _drive() -> void:
     get_tree().change_scene_to_file("res://scenes/race.tscn")
 
 func _set_status() -> void:
-    version_label.text = "SELECTED: "+("PEARL WHITE" if active_variant=="white" else "RACING RED")
+    var info: Dictionary = CARS.info(active_variant)
+    version_label.text = "SELECTED: "+str(info["paint"])+"  •  "+str(info["note"])
+    if title_label != null:
+        title_label.text = "GARAGE  /  "+str(info["name"])
+    if info_label != null:
+        info_label.text = "BODY %.3f m   •   WHEELBASE %.3f m   •   WIDEBODY" % [float(info["length"]),float(info["wheelbase"])]
     for key in paint_buttons.keys():
         STYLE.style_button(paint_buttons[key],ui_unit,key == active_variant)
 
@@ -220,16 +233,16 @@ func _spawn_car() -> void:
         turntable.remove_child(car)
         car.queue_free()
         car = null
-    car = CAR.new()
-    car.paint_variant = active_variant
-    car.shadow_height = 0.012
-    car.name = "Lada 2106 "+active_variant
+    car = CARS.make(active_variant)
+    car.set("shadow_height",0.012)
+    car.name = str(CARS.info(active_variant)["name"])+" "+active_variant
     turntable.add_child(car)
 
 func _choose(chosen: String) -> void:
     if chosen == active_variant:
         return
-    active_variant = chosen
+    active_variant = CARS.valid(chosen)
+    chosen = active_variant
     ProjectSettings.set_setting("nitro/car_variant",chosen)
     var garage_cfg := ConfigFile.new()
     garage_cfg.set_value("garage","paint",chosen)

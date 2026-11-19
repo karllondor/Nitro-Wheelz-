@@ -169,11 +169,17 @@ func _run() -> void:
     editor.queue_free()
     await process_frame
 
-    if RESULTS.star_count("benchmark_oval",46.77,75.0) != 3:
-        _fail("Reference Oval 3-star threshold incorrect")
+    # Stars are earned with drift points (scaled by distance), not time.
+    var tiers: Array[int] = RESULTS.star_tiers(295.0)
+    if tiers.size() != 3 or not (tiers[0] < tiers[1] and tiers[1] < tiers[2]):
+        _fail("Star tiers must rise")
         return
-    if RESULTS.star_count("benchmark_oval",52.0,75.0) != 1:
-        _fail("Reference Oval 1-star threshold incorrect")
+    if RESULTS.star_count(7259,295.0) != 3 or RESULTS.star_count(3588,295.0) != 1 \
+            or RESULTS.star_count(1407,295.0) != 0 or RESULTS.star_count(tiers[1],295.0) != 2:
+        _fail("Points-based star tiers incorrect: "+str(tiers))
+        return
+    if RESULTS.star_tiers(590.0)[2] <= tiers[2]:
+        _fail("A longer track must need more points per star")
         return
     if RESULTS.clock(46.77)!="0:46.77":
         _fail("Finish clock formatting incorrect")

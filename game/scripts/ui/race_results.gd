@@ -24,17 +24,24 @@ var data: Dictionary = {}
 var canvas: Control
 var buttons: Array[Button] = []
 
-static func star_count(track_id: String,seconds: float,target: float) -> int:
-    var times: Array[float] = []
-    if track_id == "benchmark_oval":
-        # Local tiers matching the three Oval thresholds in supplied reference.
-        times = [75.0,51.0,47.31]
-    else:
-        # Provisional local practice tiers, not official DRIFTIT timings.
-        times = [target,target*0.82,target*0.68]
+## Stars reward DRIFT QUALITY, not lap time (v0.1.17, owner audit): the
+## thresholds scale with the distance driven (3 laps x track length), so a
+## longer circuit needs proportionally more points. Provisional rates in
+## points per metre, calibrated on the owner's first local runs
+## (Sweepers best 7,259 pts -> 3 stars; 1,407 pts -> no star).
+const STAR_RATES: Array[float] = [2.0,4.5,7.5]
+const LAPS: int = 3
+
+static func star_tiers(length_m: float) -> Array[int]:
+    var tiers: Array[int] = []
+    for rate in STAR_RATES:
+        tiers.append(int(round(maxf(length_m,50.0)*float(LAPS)*rate/50.0))*50)
+    return tiers
+
+static func star_count(score: int, length_m: float) -> int:
     var count: int = 0
-    for threshold in times:
-        if seconds <= threshold:
+    for tier in star_tiers(length_m):
+        if score >= tier:
             count += 1
     return count
 
@@ -107,6 +114,12 @@ static func clock(seconds: float) -> String:
     var mins: int = int(seconds/60.0)
     return "%d:%05.2f" % [mins,fmod(seconds,60.0)]
 
+## Compact star threshold label: 6,650 -> "6.6K".
+static func _short_points(value: int) -> String:
+    if value >= 1000:
+        return "%.1fK" % (float(value)/1000.0)
+    return str(value)
+
 static func points(value: int) -> String:
     var digits: String = str(absi(value))
     var out: String = ""
@@ -158,11 +171,18 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     STYLE.ensure_settings()
     mouse_filter = Control.MOUSE_FILTER_STOP
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var stars: int = star_count(track_id,seconds,target)
+    var length_m: float = float(stats.get("length_m",0.0))
+    if length_m <= 0.0:
+        length_m = maxf(target*14.0/3.0,100.0)  # legacy callers: time target
+    var stars: int = star_count(score,length_m)
     var previous: Array = track_runs(track_id)
     var stamp: String = Time.get_datetime_string_from_system()
     var stored: bool = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp)
     data = summarize(track_id,track_name,seconds,score,stars,previous,track_runs(track_id),stamp,stats)
+    data["tiers"] = star_tiers(length_m)
+    # Older stored runs were starred by time: re-star every row by points.
+    for run in data["top"]:
+        run["stars"] = star_count(int(run["score"]),length_m)
     data["stored"] = stored
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/720.0,0.85,1.85)
@@ -244,7 +264,7 @@ func _draw_board() -> void:
     _laps(Rect2(lay["laps"]),k,u)
     _chips(Rect2(lay["chips"]),k,u)
     _top_runs(Rect2(lay["top"]),k,u)
-    var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS: PRACTICE TIME TARGETS  •  v"+str(
+    var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS = DRIFT POINTS  •  v"+str(
         ProjectSettings.get_setting("application/config/version","?"))
     if not bool(data.get("stored",true)):
         foot = "WARNING: THIS RUN COULD NOT BE SAVED ON THIS DEVICE"
@@ -262,8 +282,13 @@ func _title(r: Rect2, k: float, u: float) -> void:
     STYLE.text(c,Vector2(r.position.x,r.position.y+122.0*k),headline,78.0*k,
         STYLE.GOLD if headline == "NEW BEST!" else STYLE.WHITE)
     var stars: int = int(data["stars"])
+    var tiers: Array = data.get("tiers",[])
     for i in range(3):
-        STYLE.star(c,Vector2(r.end.x-(3-i)*92.0*k+40.0*k,r.position.y+82.0*k),38.0*k,i < stars,u)
+        var sc := Vector2(r.end.x-(3-i)*92.0*k+40.0*k,r.position.y+72.0*k)
+        STYLE.star(c,sc,38.0*k,i < stars,u)
+        if i < tiers.size():
+            STYLE.text(c,Vector2(sc.x-46.0*k,sc.y+68.0*k),_short_points(int(tiers[i])),19.0*k,
+                STYLE.GOLD if i < stars else STYLE.DIM,HORIZONTAL_ALIGNMENT_CENTER,92.0*k,false)
 
 func _hero(r: Rect2, k: float, u: float) -> void:
     var c: Control = canvas

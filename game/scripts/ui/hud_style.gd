@@ -95,7 +95,7 @@ static func metrics(s: Vector2) -> Dictionary:
         return {
             "portrait":true,"header":header,"dead":dead,"map":map,"lap":lap,
             "total_label":total_label,"total":total,"name":name,"chase":chase,
-            "score":Rect2(w*0.5-w*0.22,header.end.y+w*0.014,w*0.44,w*0.105),
+            "score":Rect2(w*0.5-w*0.22,header.end.y+w*0.014,w*0.44,w*0.13),
             "callout":Vector2(w*0.5,s.y*0.36),
             "pause":Rect2(w*0.735,buttons_y,w*0.110,w*0.070),
             "camera":Rect2(w*0.862,buttons_y,w*0.116,w*0.070),

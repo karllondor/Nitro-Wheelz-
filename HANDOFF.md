@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.16 finish screen redesign (not released)
+# Nitro Wheelz — v0.1.17 new RYU-32 coupe, scoring clarity, points stars (not released)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -56,7 +56,13 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - race_touch.gd: smaller, subtle NW engraving.
 - New game/tests/results_screen_test.gd registered; capture_visuals.gd `results` shot (seeded capture-only history, cleaned up afterwards).
 
+## OWNER FEEDBACK PASS 5 (v0.1.17) — audit plan + new car
+- New car: scripts/vehicles/coupe_lowpoly.gd (NitroCoupeLowPoly, same API as the Lada), scripts/vehicles/car_catalog.gd (variants red/white/blue; make(), info(), valid()). race.gd spawns via the catalog and sets track.body_half_length/width; garage.gd has one button per car.
+- Scoring: race_hud.gd COMBO box (bank_progress from scorer.idle_time/CHAIN_GRACE), BANKED SCORE label, bank flights + pulse.
+- Stars: race_results.gd star_tiers(length_m)/star_count(score,length_m), STAR_RATES; race passes stats["length_m"].
+- Remaining from the audit plan (next): editor auto-smooth of tight corners, separate engine/tyre/effects volumes, simplified main menu. Garage collection beyond three cars.
+
 ## NEXT ACTION
-1. Owner installs the v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

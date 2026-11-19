@@ -8,7 +8,7 @@ extends SceneTree
 ##       --rendering-driver opengl3 --resolution 720x1600 \
 ##       --script res://tests/capture_visuals.gd -- /abs/output/dir [shots...]
 ## Shots: race_drift race_start race_chase garage_red garage_white menu editor
-##        editor_help race_pause race_accent results builder_partial builder_loop race_built
+##        editor_help race_pause race_accent results race_blue race_blue_chase garage_blue builder_partial builder_loop race_built
 
 var out_dir: String = "user://captures"
 var shots: PackedStringArray = PackedStringArray([
@@ -36,6 +36,16 @@ func _run() -> void:
                 ProjectSettings.set_setting("nitro/car_variant","white")
                 await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,true)
                 ProjectSettings.set_setting("nitro/car_variant","red")
+            "race_blue":
+                ProjectSettings.set_setting("nitro/car_variant","blue")
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",0,true)
+                ProjectSettings.set_setting("nitro/car_variant","red")
+            "race_blue_chase":
+                ProjectSettings.set_setting("nitro/car_variant","blue")
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",1,true)
+                ProjectSettings.set_setting("nitro/car_variant","red")
+            "garage_blue":
+                await _garage_shot(shot,"blue")
             "garage_red":
                 await _garage_shot(shot,"red")
             "garage_white":

@@ -1,7 +1,7 @@
 {
   "game_name": "Nitro Wheelz",
   "game_slug": "nitro-wheelz",
-  "game_version": "0.1.16",
+  "game_version": "0.1.17",
   "starter_version": "0.1.0",
   "profile": "3d-production",
   "targets": [

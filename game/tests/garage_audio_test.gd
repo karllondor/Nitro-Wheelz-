@@ -60,6 +60,13 @@ func _run() -> void:
     if ProjectSettings.get_setting("nitro/car_variant","") != "white":
         _fail("White variant not persisted for race")
         return
+    garage.call("_choose","blue")
+    if garage.get("active_variant") != "blue" or not (garage.get("car") is NitroCoupeLowPoly):
+        _fail("Garage cannot select the RYU-32 coupe")
+        return
+    if ProjectSettings.get_setting("nitro/car_variant","") != "blue":
+        _fail("Coupe selection not persisted for race")
+        return
     garage.call("_choose_red")
     if garage.get("active_variant")!="red":
         _fail("Garage cannot return to red")

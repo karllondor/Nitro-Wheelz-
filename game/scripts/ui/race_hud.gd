@@ -31,6 +31,10 @@ var track_progress: float = 0.0
 var target_time: float = 0.0
 var best_score: int = -1        # local best on this track, -1 = none yet
 var car_screen: Vector2 = Vector2(-1,-1)  # car on screen; callouts pop above it
+var bank_progress: float = 0.0  # 0..1 while a finished combo waits to bank
+var _last_score: int = 0
+var _score_pulse: float = 0.0
+var _flights: Array[Dictionary] = []   # banked combos flying into the score
 var score_events: Array[Dictionary] = []
 
 var chain_alpha: float = 0.0
@@ -50,6 +54,15 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     if drift_score > 0:
         _shown_chain = drift_score
+    # A combo was banked: fly its points from the COMBO box into the score.
+    if score > _last_score:
+        _flights.append({"amount":score-_last_score,"t":0.0})
+        _score_pulse = 1.0
+    _last_score = score
+    for f in _flights:
+        f["t"] = float(f["t"])+delta/0.75
+    _flights = _flights.filter(func(f: Dictionary) -> bool: return float(f["t"]) < 1.0)
+    _score_pulse = maxf(0.0,_score_pulse-delta*1.6)
     var target: float = 1.0 if drift_score > 0 else 0.0
     chain_alpha = move_toward(chain_alpha,target,delta*(6.0 if target > chain_alpha else 2.5))
     queue_redraw()
@@ -75,6 +88,7 @@ func _draw() -> void:
     _draw_gauge(Vector2(m["gauge_centre"]),float(m["gauge_radius"]),u)
     _draw_angle(Rect2(m["angle"]),u)
     _draw_callouts(callout_anchor(m,s),s,u)
+    _draw_flights(m,u)
 
 # ------------------------------------------------------------------ header
 
@@ -89,13 +103,15 @@ func _draw_header(m: Dictionary, u: float) -> void:
     STYLE.text(self,Vector2(lp.position.x,lp.end.y-lp.size.y*0.16),lap_txt,
         STYLE.fit_size(lap_txt,hh*0.16,lp.size.x),STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
     var tl: Rect2 = m["total_label"]
-    STYLE.text(self,Vector2(tl.position.x,tl.end.y-tl.size.y*0.22),"TOTAL SCORE",hh*0.075,STYLE.MUTED,
+    STYLE.text(self,Vector2(tl.position.x,tl.end.y-tl.size.y*0.22),"BANKED SCORE",hh*0.075,STYLE.MUTED,
         HORIZONTAL_ALIGNMENT_RIGHT,tl.size.x,false)
     # Right: the most important number, clock under it.
     var st: Rect2 = m["total"]
     var score_txt: String = _score_string(score)
+    var pulse: float = _score_pulse*_score_pulse
     STYLE.text(self,Vector2(st.position.x,st.position.y+st.size.y*0.56),score_txt,
-        STYLE.fit_size(score_txt,hh*0.31,st.size.x),STYLE.WHITE,HORIZONTAL_ALIGNMENT_RIGHT,st.size.x)
+        STYLE.fit_size(score_txt,hh*0.31*(1.0+0.10*pulse),st.size.x),STYLE.WHITE.lerp(STYLE.GOLD,pulse),
+        HORIZONTAL_ALIGNMENT_RIGHT,st.size.x)
     STYLE.text(self,Vector2(st.position.x,st.end.y-st.size.y*0.02),STYLE.time_string(race_time),hh*0.115,
         STYLE.MUTED,HORIZONTAL_ALIGNMENT_RIGHT,st.size.x,false)
     # Centre, under the keep-out: track name (light) and the chase pill.
@@ -207,25 +223,28 @@ func _draw_chase(r: Rect2, u: float) -> void:
     STYLE.text(self,Vector2(r.position.x+r.size.x*0.18,r.position.y+r.size.y*0.67),txt,
         STYLE.fit_size(txt,r.size.y*0.40,r.size.x*0.76),col,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.78,true)
 
+## COMBO box: the running chain (raw points x multiplier) and what it will
+## add to the BANKED SCORE. Banks when you straighten up; the bar shows the
+## grace time before it banks. Only visible while a combo is running.
 func _draw_chain(r: Rect2, u: float) -> void:
     if chain_alpha <= 0.01:
         return
     var a: float = chain_alpha
-    var big: float = r.size.y*0.56
+    var big: float = r.size.y*0.44
     var txt: String = "+"+_score_string(_shown_chain)
-    var mult: String = "x%.1f" % combo
+    var mult: String = "×%.1f" % combo
+    var to_bank: int = int(round(float(_shown_chain)*combo))
     var w_txt: float = STYLE.text_width(txt,big)
-    var w_mult: float = STYLE.text_width(mult,big*0.45)
-    var content: float = w_txt+w_mult+r.size.y*0.15
-    # Subtle glass frame with a soft accent edge, sized to the number.
-    var fw: float = clampf(content+r.size.y*0.75,r.size.x*0.50,r.size.x)
+    var w_mult: float = STYLE.text_width(mult,big*0.55)
+    var content: float = w_txt+w_mult+r.size.y*0.12
+    var fw: float = clampf(content+r.size.y*0.9,r.size.x*0.55,r.size.x)
     var frame := Rect2(r.get_center().x-fw*0.5,r.position.y,fw,r.size.y)
     var pts: PackedVector2Array = STYLE.shape(frame,14.0*u,STYLE.SKEW)
     var cols := PackedColorArray()
     for p in pts:
         var t: float = clampf((p.y-frame.position.y)/frame.size.y,0.0,1.0)
         var g: Color = STYLE.GLASS_TOP.lerp(STYLE.GLASS_BOTTOM,t)
-        g.a *= 0.62*a
+        g.a *= 0.66*a
         cols.append(g)
     draw_polygon(pts,cols)
     var outline: PackedVector2Array = pts.duplicate()
@@ -233,14 +252,42 @@ func _draw_chain(r: Rect2, u: float) -> void:
     draw_polyline(outline,Color(1,1,1,0.16*a),maxf(1.0,1.2*u),true)
     STYLE.glow_line(self,STYLE.glow_path(frame,14.0*u,STYLE.SKEW),
         Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.75*a),1.8*u,0.8)
+    var banking: bool = bank_progress > 0.001
+    STYLE.text(self,Vector2(frame.position.x,frame.position.y+frame.size.y*0.20),
+        "BANKING…" if banking else "COMBO",r.size.y*0.14,
+        Color(STYLE.GOLD.r,STYLE.GOLD.g,STYLE.GOLD.b,a) if banking else Color(STYLE.MUTED.r,STYLE.MUTED.g,STYLE.MUTED.b,a),
+        HORIZONTAL_ALIGNMENT_CENTER,frame.size.x,false)
     var x: float = frame.get_center().x-content*0.5
-    var base: float = frame.position.y+frame.size.y*0.80
+    var base: float = frame.position.y+frame.size.y*0.62
     STYLE.text(self,Vector2(x,base),txt,big,Color(1,1,1,a))
     var mc: Color = STYLE.PINK_SOFT
     mc.a = a
-    STYLE.text(self,Vector2(x+w_txt+r.size.y*0.15,base),mult,big*0.45,mc)
-    STYLE.text(self,Vector2(frame.position.x,frame.position.y+frame.size.y*0.25),"DRIFT",r.size.y*0.17,
-        Color(STYLE.MUTED.r,STYLE.MUTED.g,STYLE.MUTED.b,a),HORIZONTAL_ALIGNMENT_CENTER,frame.size.x,false)
+    STYLE.text(self,Vector2(x+w_txt+r.size.y*0.12,base),mult,big*0.55,mc)
+    var gold := Color(STYLE.GOLD.r,STYLE.GOLD.g,STYLE.GOLD.b,a)
+    STYLE.text(self,Vector2(frame.position.x,frame.position.y+frame.size.y*0.84),
+        "= %s PTS TO BANK" % _score_string(to_bank),r.size.y*0.13,gold,HORIZONTAL_ALIGNMENT_CENTER,frame.size.x,false)
+    if banking:
+        var bar := Rect2(frame.position.x+frame.size.x*0.12,frame.end.y-r.size.y*0.09,frame.size.x*0.76,maxf(2.0,r.size.y*0.035))
+        draw_rect(bar,Color(1,1,1,0.12*a))
+        draw_rect(Rect2(bar.position,Vector2(bar.size.x*clampf(bank_progress,0.0,1.0),bar.size.y)),gold)
+
+## Banked points travel from the COMBO box into the BANKED SCORE.
+func _draw_flights(m: Dictionary, u: float) -> void:
+    if _flights.is_empty():
+        return
+    var from: Vector2 = Rect2(m["score"]).get_center()
+    var st: Rect2 = m["total"]
+    var to: Vector2 = Vector2(st.end.x-st.size.x*0.35,st.position.y+st.size.y*0.35)
+    var hh: float = Rect2(m["header"]).size.y
+    for f in _flights:
+        var t: float = float(f["t"])
+        var e: float = 1.0-pow(1.0-t,3.0)
+        var p: Vector2 = from.lerp(to,e)+Vector2(0,-sin(t*PI)*hh*0.25)
+        var col: Color = STYLE.GOLD
+        col.a = 1.0-pow(t,4.0)
+        var txt: String = "+"+_score_string(int(f["amount"]))
+        var size: float = hh*lerpf(0.26,0.14,e)
+        STYLE.text(self,p-Vector2(STYLE.text_width(txt,size)*0.5,-size*0.35),txt,size,col)
 
 # --------------------------------------------------------------- callouts
 

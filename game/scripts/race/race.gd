@@ -9,6 +9,7 @@ const RESULTS = preload("res://scripts/ui/race_results.gd")
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
 const PAUSE_VIEW = preload("res://scripts/ui/race_pause.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
+const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
 const SCORER = preload("res://scripts/race/drift_scorer.gd")
 
@@ -92,12 +93,15 @@ func _ready() -> void:
 
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
-    car_root = LADA.new()
-    car_root.name = "Nitro Wheelz VAZ-2106 drift spec"
-    (car_root as NitroLadaLowPoly).paint_variant = str(ProjectSettings.get_setting(
-        "nitro/car_variant","red"))
+    var variant: String = CARS.valid(str(ProjectSettings.get_setting("nitro/car_variant","red")))
+    car_root = CARS.make(variant)
+    car_root.name = "Nitro Wheelz "+str(CARS.info(variant)["name"])
     car_root.scale = Vector3.ONE*RACE_CAR_SCALE
     add_child(car_root)
+    # Wall footprint follows the chosen car's size at race scale.
+    var info: Dictionary = CARS.info(variant)
+    track.body_half_length = float(info["length"])*RACE_CAR_SCALE*0.5-0.095
+    track.body_half_width = float(info["width"])*RACE_CAR_SCALE*0.5-0.048
     _make_tyre_smoke()
 
 func _make_tyre_smoke() -> void:
@@ -318,7 +322,7 @@ func _show_results() -> void:
         Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
         {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
         "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
-        "laps":lap_splits.duplicate(true)})
+        "laps":lap_splits.duplicate(true),"length_m":track.length_metres})
 
 func _wall_feedback(impact_speed: float) -> void:
     if collision_cooldown > 0.0:
@@ -411,8 +415,8 @@ func _update_visuals() -> void:
     var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished
     for smoke in tyre_smoke:
         smoke.emitting = smoking
-    if car_root is NitroLadaLowPoly:
-        (car_root as NitroLadaLowPoly).set_motion(model.steering_angle, model.signed_forward_speed_mps(), get_physics_process_delta_time())
+    if car_root.has_method("set_motion"):
+        car_root.call("set_motion",model.steering_angle,model.signed_forward_speed_mps(),get_physics_process_delta_time())
     if hud != null:
         hud.race_time = time_elapsed
         hud.car_world_position = model.position
@@ -424,6 +428,8 @@ func _update_visuals() -> void:
         hud.score = lap_score
         hud.drift_score = active_drift_points
         hud.combo = combo
+        hud.bank_progress = clampf(scorer.idle_time/scorer.CHAIN_GRACE,0.0,1.0) \
+            if scorer.in_chain and scorer.idle_time > 0.0 else 0.0
         hud.score_events = scorer.events
         hud.mode = "TOP-DOWN" if camera_mode == 0 else "CHASE"
         hud.paused = paused

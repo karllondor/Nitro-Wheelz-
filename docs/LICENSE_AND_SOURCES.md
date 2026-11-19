@@ -12,6 +12,7 @@ Track every external asset/dependency with URL, author, version, license, modifi
 - game/assets/shaders/*.gdshader and all car/track/scenery geometry: written for Nitro Wheelz, procedural, no third-party meshes.
 - game/assets/brand/nw_initials.png: the owner's NW initials logo, supplied in chat 2026-11-19 (cropped to the initials, transparent background). Owner artwork, not third-party. nw_initials_mask.png is a white silhouette of the same file (alpha kept) used for the engraved handbrake mark.
 - game/assets/shaders/studio_backdrop.gdshader: original garage backdrop shader.
+- RYU-32 coupe (scripts/vehicles/coupe_lowpoly.gd): original procedural model made from the owner's blue reference sheet (chat 2026-11-19); fictional name, no manufacturer badges or third-party meshes.
 - asphalt.webp and sand.webp remain the owner-supplied, source-derived textures from v0.1.11.
 
 The starter intentionally has no blanket license. Choose an explicit license for code and a distinct policy for proprietary art before publication; no secrets/keystores in commits.
