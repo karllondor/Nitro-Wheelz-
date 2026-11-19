@@ -53,6 +53,12 @@ var track_id: String = ""
 ## drawn without wrap-around, start line, ground or lights.
 var closed_loop: bool = true
 var with_environment: bool = true
+## Roadside trees and verge flowers. Off when a procedural world (3D builder
+## tracks, v0.1.23) provides the scenery, so builder and race match.
+var with_props: bool = true
+var world: Node3D = null
+const PROC_WORLD = preload("res://scripts/world/procedural_world.gd")
+const BUILD_GRID = preload("res://scripts/world/track_grid.gd")
 
 func _ready() -> void:
     if centerline.is_empty():
@@ -60,7 +66,49 @@ func _ready() -> void:
 
 func build() -> void:
     var compiled: Dictionary = DNA.read_track(track_data_path)
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(track_data_path)) if FileAccess.file_exists(track_data_path) else null
+    var grid: RefCounted = world_grid(raw) if raw is Dictionary else null
+    if grid != null:
+        with_props = false
     _apply_compiled(compiled)
+    if grid != null and track_valid:
+        world = PROC_WORLD.new()
+        world.name = "Procedural world"
+        add_child(world)
+        world.generate(grid.links,grid.cols,grid.rows,int(raw["world"].get("seed",1)))
+
+## The builder grid behind a saved track that carries a procedural world,
+## or null. The tiles must reproduce the saved road exactly (a track reshaped
+## in the node editor keeps no world).
+static func world_grid(raw: Dictionary) -> RefCounted:
+    if not (raw.get("world",null) is Dictionary) or not (raw.get("builder",null) is Dictionary):
+        return null
+    if str(raw["world"].get("theme","")) != PROC_WORLD.THEME:
+        return null
+    var builder: Dictionary = raw["builder"]
+    var grid = BUILD_GRID.new(int(builder.get("cols",8)),int(builder.get("rows",12)))
+    if not grid.load_builder_data(raw):
+        return null
+    # Same closed road, whatever tile the loop walk starts on / its direction.
+    var cps: Array = grid.to_track_data("check","check")["control_points"]
+    var saved: Array = raw.get("control_points",[])
+    if cps.size() != saved.size() or saved.is_empty():
+        return null
+    var n: int = cps.size()
+    var first := Vector2(float(saved[0][0]),float(saved[0][1]))
+    for k in range(n):
+        if Vector2(float(cps[k][0]),float(cps[k][1])).distance_to(first) > 0.01:
+            continue
+        for dir in [1,-1]:
+            var same: bool = true
+            for i in range(n):
+                var q: Array = cps[posmod(k+dir*i,n)]
+                if Vector2(float(q[0]),float(q[1])).distance_to(Vector2(float(saved[i][0]),float(saved[i][1]))) > 0.01:
+                    same = false
+                    break
+            if same:
+                return grid
+    return null
 
 func rebuild_from_data(data: Dictionary) -> bool:
     # Future editor entrypoint: reject invalid data without replacing the
@@ -148,7 +196,8 @@ func _build_visuals() -> void:
     if closed_loop:
         _build_start_line()
     _build_barriers()
-    _build_track_props()
+    if with_props:
+        _build_track_props()
     if with_environment:
         _build_cloud_shadows()
 
@@ -643,84 +692,8 @@ func _multimesh(label: String,mesh: Mesh,material: Material,transforms: Array[Tr
     add_child(node)
 
 func _build_trees(trees: Array[Dictionary]) -> void:
-    var voxel_xf: Array[Transform3D] = []
-    var voxel_col: Array[Color] = []
-    var cone_xf: Array[Transform3D] = []
-    var cone_col: Array[Color] = []
-    var trunk_xf: Array[Transform3D] = []
-    var shadow_xf: Array[Transform3D] = []
-    var shadow_dir := Vector2(0.55,0.75)
-    for tree in trees:
-        var pos: Vector2 = tree["pos"]
-        var radius: float = tree["radius"]
-        var h: float = tree["height"]
-        var local := RandomNumberGenerator.new()
-        local.seed = int(tree["seed"])
-        var shadow_len: float = 2.6*h
-        var shadow_basis := Basis.from_scale(Vector3(radius*2.5,1.0,radius*2.9))
-        shadow_basis = Basis(Vector3.UP,local.randf_range(0.0,TAU))*shadow_basis
-        shadow_xf.append(Transform3D(shadow_basis,
-            Vector3(pos.x+shadow_dir.x*shadow_len,0.088,pos.y+shadow_dir.y*shadow_len)))
-        if bool(tree["cherry"]):
-            var trunk_h: float = 2.6*h
-            trunk_xf.append(Transform3D(Basis.from_scale(Vector3(0.42,trunk_h,0.42)),
-                Vector3(pos.x,trunk_h*0.5,pos.y)))
-            # Pixel/voxel blossom canopy (approved reference: pink "pixel"
-            # cherry trees). Voxels are snapped to a 0.62 m lattice.
-            var vs: float = 0.62
-            var centre := Vector3(pos.x,trunk_h+radius*0.55,pos.y)
-            var used: Dictionary = {}
-            for k in range(int(radius*22.0)):
-                var dir := Vector3(local.randf_range(-1,1),local.randf_range(-0.55,1),local.randf_range(-1,1))
-                if dir.length() > 1.0:
-                    continue
-                var p: Vector3 = centre+Vector3(dir.x*radius,dir.y*radius*0.72,dir.z*radius)
-                var snapped := Vector3i(int(round(p.x/vs)),int(round(p.y/vs)),int(round(p.z/vs)))
-                if used.has(snapped):
-                    continue
-                used[snapped] = true
-                var size: float = vs*local.randf_range(0.92,1.18)
-                voxel_xf.append(Transform3D(Basis.from_scale(Vector3.ONE*size),Vector3(snapped)*vs))
-                var height_t: float = clampf((p.y-centre.y)/radius*0.8+0.5,0.0,1.0)
-                var pink := Color(0.80,0.24,0.50).lerp(Color(1.0,0.60,0.82),height_t)
-                pink = pink.lerp(Color(1.0,0.86,0.93),local.randf()*0.22)
-                voxel_col.append(pink)
-        else:
-            var base_h: float = 0.6
-            for tier in range(3):
-                var s: float = (1.0-float(tier)*0.24)*radius
-                cone_xf.append(Transform3D(Basis.from_scale(Vector3(s,h*1.25,s)),
-                    Vector3(pos.x,base_h+1.7*h+float(tier)*1.55*h,pos.y)))
-                cone_col.append(Color(0.06,0.15,0.11).lerp(Color(0.12,0.24,0.16),float(tier)/2.0))
-            trunk_xf.append(Transform3D(Basis.from_scale(Vector3(0.38,base_h+1.2,0.38)),
-                Vector3(pos.x,(base_h+1.2)*0.5,pos.y)))
-    var foliage := StandardMaterial3D.new()
-    foliage.vertex_color_use_as_albedo = true
-    foliage.roughness = 0.9
-    var voxel := BoxMesh.new()
-    voxel.size = Vector3.ONE
-    _multimesh("Cherry blossom voxels",voxel,foliage,voxel_xf,voxel_col)
-    var cone := CylinderMesh.new()
-    cone.top_radius = 0.04
-    cone.bottom_radius = 1.0
-    cone.height = 2.6
-    cone.radial_segments = 7
-    cone.rings = 1
-    _multimesh("Night pines",cone,foliage,cone_xf,cone_col)
-    var bark := StandardMaterial3D.new()
-    bark.albedo_color = Color(0.20,0.13,0.11)
-    var trunk := BoxMesh.new()
-    trunk.size = Vector3.ONE
-    _multimesh("Tree trunks",trunk,bark,trunk_xf)
-    var shade := ShaderMaterial.new()
-    shade.shader = SHADOW_SHADER
-    shade.set_shader_parameter("core",Vector2(0.16,0.16))
-    shade.set_shader_parameter("softness",0.30)
-    shade.set_shader_parameter("corner",0.16)
-    shade.set_shader_parameter("opacity",0.50)
-    var quad := PlaneMesh.new()
-    quad.size = Vector2.ONE
-    _multimesh("Soft tree shadows",quad,shade,shadow_xf)
+    # Same tree art as the procedural world (moved to NitroSceneryModules).
+    PROC_WORLD.MODS.build_trees(self,trees)
 
 func _build_verge_flowers(rng: RandomNumberGenerator) -> void:
     var n: int = centerline.size()

@@ -140,9 +140,81 @@ func _run() -> void:
     if not bool(DNA.read_track("user://nitro_track_qa_builder.json").get("ok",false)):
         _fail("Saved builder track fails Track DNA")
         return
+    var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("user://nitro_track_qa_builder.json"))
+    if not (saved.get("world",null) is Dictionary) or str(saved["world"]["theme"]) != "japan_drift_town":
+        _fail("Saved builder track must carry its world theme + seed")
+        return
+    # v0.1.23 layout: all eight actions, two bottom rows, compact bar, FIT.
+    var view: Vector2 = scene.get_viewport().get_visible_rect().size
+    var names: Array = ["DRAW","ERASE","↶ UNDO","CLEAR","GENERATE","SAVE","DRIVE","BACK"]
+    var buttons: Dictionary = scene.get("buttons")
+    var ys: Dictionary = {}
+    for n in names:
+        var b: Button = buttons.get(n)
+        if b == null:
+            _fail("Builder lost the "+n+" button")
+            return
+        if b.position.y < view.y*0.78 or b.size.y < view.y*0.06:
+            _fail(n+" must stay a large button in the bottom rows")
+            return
+        ys[int(round(b.position.y))] = true
+    if ys.size() != 2:
+        _fail("The eight buttons must sit in exactly two rows")
+        return
+    var map: Rect2 = scene.get("map_rect")
+    var header: Rect2 = scene.get("header_rect")
+    if header.size.y > maxf(view.y*0.07,66.0*float(scene.get("ui_unit"))) or map.position.y < header.end.y or map.end.y > (buttons["DRAW"] as Button).position.y:
+        _fail("Compact bar / paint area / button rows overlap")
+        return
+    if scene.find_child("FIT",true,false) == null:
+        _fail("FIT camera button missing")
+        return
+    # FIT frames the occupied road, not the whole grid.
+    builder_grid.clear()
+    for x in range(2,5):
+        builder_grid.add_tile(Vector2i(x,4))
+    for x in range(2,4):
+        builder_grid.link(Vector2i(x,4),Vector2i(x+1,4))
+    scene.call("_fit_camera",true)
+    var small: float = float(scene.get("cam_size"))
+    builder_grid.clear()
+    scene.call("_fit_camera",true)
+    var whole: float = float(scene.get("cam_size"))
+    if small > whole*0.75:
+        _fail("FIT must frame the occupied track (%.0f vs whole grid %.0f)" % [small,whole])
+        return
+    # Two fingers never paint: the first finger's tile is withdrawn.
+    var centre: Vector2 = map.get_center()
+    var t0 := InputEventScreenTouch.new()
+    t0.index = 0
+    t0.position = centre
+    t0.pressed = true
+    scene.call("_unhandled_input",t0)
+    var t1 := InputEventScreenTouch.new()
+    t1.index = 1
+    t1.position = centre+Vector2(120,80)
+    t1.pressed = true
+    scene.call("_unhandled_input",t1)
+    var size_before: float = float(scene.get("cam_size"))
+    var d1 := InputEventScreenDrag.new()
+    d1.index = 1
+    d1.position = centre+Vector2(240,160)
+    scene.call("_unhandled_input",d1)
+    if builder_grid.tile_count() != 0:
+        _fail("A two-finger gesture painted road")
+        return
+    if float(scene.get("cam_size")) >= size_before:
+        _fail("Pinching out must zoom in")
+        return
+    for idx in [0,1]:
+        var up := InputEventScreenTouch.new()
+        up.index = idx
+        up.position = centre
+        up.pressed = false
+        scene.call("_unhandled_input",up)
     scene.queue_free()
     await process_frame
-    print("PASS: tile links/junction refusal, hairpins, deterministic generator, tap-extend/drag/undo/erase, save -> race geometry")
+    print("PASS: tile links/junction refusal, hairpins, deterministic generator, tap-extend/drag/undo/erase, save -> race geometry (+ world theme/seed), eight buttons in two bottom rows, compact bar, FIT to the occupied track, pinch zoom without painting")
     print("NOT RUN: finger feel on a phone, preview rebuild time on Android")
     quit(0)
 

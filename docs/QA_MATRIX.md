@@ -21,6 +21,19 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.23 local evidence — procedural world Phase A (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 24 Godot tests incl. new procedural_world_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI on push |
+| Garage joins into 2x1 workshop on road growth, splits on removal / UNDO | Linux container | PASS | procedural_world_test |
+| Builder world == race world (saved theme + seed), deterministic, different seed differs | Linux container | PASS | procedural_world_test |
+| No scenery within setback of the compiled race road (12 circuits, 3698 items), no building overlaps | Linux container | PASS (min margin +0.19 m) | procedural_world_test |
+| Incremental edit: 4 of 14 chunks rebuilt, untouched chunk nodes kept | Linux container | PASS | procedural_world_test |
+| Builder: 8 buttons two rows, compact bar, FIT, occupied-bounds framing, pinch without painting | Linux container | PASS | track_builder_test |
+| World build / edit time | Linux container CPU | ~225 ms full, ~76 ms one-tile edit; 77.7 k verts / 38.9 k tris (24-tile loop) | procedural_world_test |
+| Screenshots BEFORE/AFTER, adjacency, builder vs race same camera | Xvfb + llvmpipe | DONE | docs/research/procedural_world/phase_a/ |
+| **Android / Web FPS, spikes, load time, memory with the world** | devices | **NOT RUN** | owner |
+
 ## v0.1.21 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

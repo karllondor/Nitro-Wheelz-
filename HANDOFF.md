@@ -1,4 +1,10 @@
-# Nitro Wheelz — v0.1.22 owner screenshot feedback on top of v0.1.21 (test build, sound not approved)
+# Nitro Wheelz — v0.1.23 procedural world Phase A (test build, awaiting visual review)
+
+## PROCEDURAL WORLD PHASE A (v0.1.23)
+- Read docs/research/procedural_world/PHASE_A_REPORT.md first (architecture, evidence, measurements, limits).
+- Code: game/scripts/world/scenery_rules.gd, scenery_modules.gd, procedural_world.gd; drift_track.gd (world from saved track, with_props, world_grid()); track_builder.gd (world, compact bar, FIT, occupied-bounds camera, pinch/pan).
+- Tests: procedural_world_test.gd (new), track_builder_test.gd (extended). Capture: tests/capture_world.gd.
+- STOP POINT: owner reviews the first fragment before Phase B / full town / other themes.
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.

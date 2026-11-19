@@ -1,3 +1,13 @@
+## [0.1.23] — Procedural world, Phase A: Japan Drift Town vertical slice  — TEST BUILD for visual review
+- Per docs/research/procedural_world/NITRO_PROCEDURAL_WORLD_BIBLE.md, **Phase A only** (report: docs/research/procedural_world/PHASE_A_REPORT.md).
+- New shared generator (builder + race): `scenery_rules.gd` (analytic road field from the builder tiles, lots, fences, greenery, rows, module keys, deterministic hash), `scenery_modules.gd` (hand-modelled stand-alone garage, joining workshop row pieces with a continuous roof and fascia, 2x1 workshop roof sign, fence runs, rounded concrete aprons, street lamps; tree art shared with the race), `procedural_world.gd` (incremental chunk rebuilds).
+- Adjacency: a stand-alone garage becomes one 2x1 workshop when the road grows next to it and goes back when the tile is removed / UNDOne.
+- Race: a built track saves `world: {theme, seed, version}`; the race rebuilds exactly the same world from the tiles (no extra roadside trees). Track DNA, road geometry, walls, physics and scoring unchanged; a road reshaped in the node editor keeps no tile world.
+- Track Builder: compact floating bar with FIT, camera framed on the occupied track, pinch zoom + two-finger pan (no accidental painting), same eight buttons in the same order in two bottom rows.
+- Tests: new procedural_world_test; track_builder_test extended. Whole suite PASS, physics golden unchanged.
+- NOT RUN: Android / Web frame rate and memory with the world.
+- Android versionCode 23 / versionName 0.1.23.
+
 ## [0.1.22] — Owner screenshot feedback: HUD header, handbrake, results, camera 0  — TEST BUILD
 - results: this run's TIME in yellow, and this run's row in YOUR TOP RUNS highlighted yellow (points, time, THIS RUN) instead of the accent colour;
 - HUD: LAP moved beside the minimap ("LAP" over "1/3", left of the camera keep-out); track name larger (hh x 0.15, fitted); chase line (FIRST RUN / CHASING / BEATING) drawn straight on the header, no frame inside the frame; race clock larger; speedometer lower (0.585 h -> 0.63 h, still clear of the joystick);

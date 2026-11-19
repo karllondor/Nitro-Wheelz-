@@ -16,6 +16,10 @@ const BUILT: String = "user://nitro_track_built.json"
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 const TILT_DEG: float = 68.0
 const REBUILD_INTERVAL: float = 0.35
+const PROC_WORLD = preload("res://scripts/world/procedural_world.gd")
+const DEFAULT_WORLD_SEED: int = 2106
+const ZOOM_MIN: float = 70.0      # ortho size limits (metres on screen)
+const ZOOM_MAX: float = 1400.0
 
 var grid: NitroTrackGrid
 var camera: Camera3D
@@ -42,13 +46,27 @@ var loop_ok: bool = false
 var loop_length: float = 0.0
 var seed_counter: int = 0
 var ui_unit: float = 1.0
+## Procedural Japan Drift Town around the road (same world in the race).
+var world: NitroProceduralWorld
+var world_seed: int = DEFAULT_WORLD_SEED
+# Camera: target on the ground + orthographic size, eased toward the goal.
+var cam_target: Vector3 = Vector3.ZERO
+var cam_size: float = 600.0
+var cam_goal_target: Vector3 = Vector3.ZERO
+var cam_goal_size: float = 600.0
+var touches: Dictionary = {}
+var pinch_active: bool = false
+var pinch_start_dist: float = 1.0
+var pinch_start_size: float = 600.0
+var pinch_anchor: Vector3 = Vector3.ZERO
+var header_rect: Rect2 = Rect2()
 
 func _ready() -> void:
     grid = GRID.new(8,12)
     _load_draft()
     _build_world()
     _build_ui()
-    _fit_camera()
+    _fit_camera(true)
     get_viewport().size_changed.connect(_on_resize)
     _rebuild()
 
@@ -87,6 +105,9 @@ func _build_world() -> void:
     road_root = Node3D.new()
     road_root.name = "Built road preview"
     add_child(road_root)
+    world = PROC_WORLD.new()
+    world.name = "Procedural world"
+    add_child(world)
     marker_root = Node3D.new()
     marker_root.name = "Open end markers"
     add_child(marker_root)
@@ -163,28 +184,43 @@ func _build_ui() -> void:
     root.theme = STYLE.screen_theme(ui_unit)
     ui_layer.add_child(root)
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    # Compact floating title / status bar (owner brief: world full screen).
+    var safe_top: float = maxf(0.0,float(DisplayServer.get_display_safe_area().position.y)) if DisplayServer.get_name() != "headless" else 0.0
+    header_rect = Rect2(s.x*0.022,s.y*0.010+safe_top,s.x*0.956,maxf(s.y*0.056,62.0*ui_unit))
     var header := Panel.new()
-    header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    header.position = Vector2(s.x*0.022,s.y*0.012)
-    header.size = Vector2(s.x*0.956,s.y*0.088)
-    header.add_theme_stylebox_override("panel",STYLE.modal_box(ui_unit))
+    header.name = "Compact header"
+    header.mouse_filter = Control.MOUSE_FILTER_STOP
+    header.position = header_rect.position
+    header.size = header_rect.size
+    var hb: StyleBoxFlat = STYLE.modal_box(ui_unit)
+    hb.bg_color.a = 0.72
+    header.add_theme_stylebox_override("panel",hb)
     root.add_child(header)
     title_label = Label.new()
-    title_label.text = "TRACK BUILDER  /  3D"
-    title_label.position = header.position+Vector2(s.x*0.035,s.y*0.008)
-    title_label.size = Vector2(header.size.x*0.9,s.y*0.035)
+    title_label.text = "TRACK BUILDER 3D • JAPAN DRIFT TOWN"
+    title_label.position = header_rect.position+Vector2(s.x*0.03,header_rect.size.y*0.06)
+    title_label.size = Vector2(header_rect.size.x*0.78,header_rect.size.y*0.46)
     title_label.add_theme_font_override("font",STYLE.BOLD)
-    title_label.add_theme_font_size_override("font_size",int(26.0*ui_unit))
+    title_label.add_theme_font_size_override("font_size",int(17.0*ui_unit))
     title_label.add_theme_color_override("font_color",STYLE.WHITE)
     title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(title_label)
     status_label = Label.new()
-    status_label.position = header.position+Vector2(s.x*0.035,s.y*0.046)
-    status_label.size = Vector2(header.size.x*0.92,s.y*0.036)
-    status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    status_label.add_theme_font_size_override("font_size",int(16.0*ui_unit))
+    status_label.position = header_rect.position+Vector2(s.x*0.03,header_rect.size.y*0.50)
+    status_label.size = Vector2(header_rect.size.x*0.78,header_rect.size.y*0.44)
+    status_label.clip_text = true
+    status_label.add_theme_font_size_override("font_size",int(13.0*ui_unit))
     status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(status_label)
+    var fit := Button.new()
+    fit.name = "FIT"
+    fit.text = "FIT"
+    fit.position = Vector2(header_rect.end.x-header_rect.size.y*1.55,header_rect.position.y+header_rect.size.y*0.12)
+    fit.size = Vector2(header_rect.size.y*1.45,header_rect.size.y*0.76)
+    fit.add_theme_font_size_override("font_size",int(15.0*ui_unit))
+    STYLE.style_button(fit,ui_unit)
+    fit.pressed.connect(func(): _fit_camera(false))
+    root.add_child(fit)
     hint_label = Label.new()
     hint_label.text = "TAP THE GRASS TO PLACE ROAD\nTAP NEXT TO AN END TO EXTEND IT\nDRAG TO LAY A WHOLE STRIP"
     hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -200,6 +236,13 @@ func _build_ui() -> void:
     var rows: Array = [
         [["DRAW","_set_draw"],["ERASE","_set_erase"],["↶ UNDO","_undo"],["CLEAR","_clear"]],
         [["GENERATE","_generate"],["SAVE","_save"],["DRIVE","_drive"],["BACK","_back"]]]
+    # Two bottom rows (same eight actions, same order), above the system
+    # gesture bar.
+    var safe_bottom: float = 0.0
+    if DisplayServer.get_name() != "headless":
+        var sa: Rect2i = DisplayServer.get_display_safe_area()
+        if sa.size.y > 0:
+            safe_bottom = clampf(s.y-float(sa.end.y),0.0,s.y*0.05)
     for r in range(rows.size()):
         var row: Array = rows[r]
         var gap: float = s.x*0.018
@@ -208,14 +251,18 @@ func _build_ui() -> void:
             var item: Array = row[k]
             var button := Button.new()
             button.text = str(item[0])
-            button.position = Vector2(s.x*0.022+float(k)*(bw+gap),s.y*(0.815+0.088*float(r)))
-            button.size = Vector2(bw,s.y*0.072)
+            button.name = str(item[0])
+            button.position = Vector2(s.x*0.022+float(k)*(bw+gap),s.y*(0.832+0.081*float(r))-safe_bottom)
+            button.size = Vector2(bw,s.y*0.070)
             button.add_theme_font_size_override("font_size",int(19.0*ui_unit))
             button.pressed.connect(Callable(self,str(item[1])))
             STYLE.style_button(button,ui_unit)
             root.add_child(button)
             buttons[str(item[0])] = button
-    map_rect = Rect2(s.x*0.0,s.y*0.105,s.x,s.y*0.70)
+    # Paintable area: everything between the bar and the buttons (the world
+    # also renders behind both; the controls swallow their own touches).
+    var top: float = header_rect.end.y+s.y*0.006
+    map_rect = Rect2(0.0,top,s.x,s.y*0.826-safe_bottom-top)
     _refresh_mode_buttons()
 
 func _refresh_mode_buttons() -> void:
@@ -224,22 +271,56 @@ func _refresh_mode_buttons() -> void:
     STYLE.style_button(buttons["DRIVE"],ui_unit,loop_ok)
 
 func _on_resize() -> void:
-    _fit_camera()
+    _fit_camera(true)
 
-func _fit_camera() -> void:
+## Occupied road bounds (+ one tile of scenery) or the whole grid when empty.
+func occupied_bounds() -> Rect2:
+    if grid.tile_count() == 0:
+        var size: Vector2 = grid.size_metres()+Vector2(24,24)
+        return Rect2(-size*0.5,size)
+    var lo := Vector2(INF,INF)
+    var hi := Vector2(-INF,-INF)
+    for c in grid.links.keys():
+        var w: Vector2 = grid.world_of(c)
+        lo = lo.min(w)
+        hi = hi.max(w)
+    var margin: float = GRID.CELL_M*1.15
+    return Rect2(lo-Vector2(margin,margin),(hi-lo)+Vector2(margin,margin)*2.0)
+
+## FIT: frame the occupied track (not the whole grid) in the paint area.
+func _fit_camera(instant: bool = false) -> void:
     var s: Vector2 = get_viewport().get_visible_rect().size
     if map_rect.size == Vector2.ZERO:
-        map_rect = Rect2(0,s.y*0.105,s.x,s.y*0.70)
-    var size: Vector2 = grid.size_metres()+Vector2(24,24)
+        map_rect = Rect2(0,s.y*0.07,s.x,s.y*0.75)
+    var b: Rect2 = occupied_bounds()
     var tilt: float = deg_to_rad(TILT_DEG)
-    var need_h: float = size.y*sin(tilt)*s.y/map_rect.size.y
-    var need_w: float = size.x*s.y/map_rect.size.x
-    camera.size = maxf(need_h,need_w)
+    var need_h: float = b.size.y*sin(tilt)*s.y/map_rect.size.y
+    var need_w: float = b.size.x*s.y/map_rect.size.x
+    cam_goal_size = clampf(maxf(need_h,need_w),ZOOM_MIN,ZOOM_MAX)
+    var c: Vector2 = b.get_center()
+    cam_goal_target = Vector3(c.x,0.0,c.y)
+    if instant:
+        cam_size = cam_goal_size
+        cam_target = cam_goal_target
+    _apply_camera()
+
+func _apply_camera() -> void:
+    var s: Vector2 = get_viewport().get_visible_rect().size
+    var tilt: float = deg_to_rad(TILT_DEG)
+    camera.size = cam_size
     var distance: float = 1500.0
-    camera.position = Vector3(0.0,distance*sin(tilt),distance*cos(tilt))
-    camera.look_at(Vector3.ZERO,Vector3.UP)
-    # Negative v_offset lifts the content so the grid centres in the map area.
-    camera.v_offset = (map_rect.get_center().y-s.y*0.5)/s.y*camera.size
+    camera.position = cam_target+Vector3(0.0,distance*sin(tilt),distance*cos(tilt))
+    camera.look_at(cam_target,Vector3.UP)
+    # Negative v_offset lifts the content so the target centres in the map area.
+    camera.v_offset = (map_rect.get_center().y-s.y*0.5)/s.y*cam_size
+
+## Ground point under a screen position.
+func _ground(screen: Vector2) -> Vector3:
+    var origin: Vector3 = camera.project_ray_origin(screen)
+    var dir: Vector3 = camera.project_ray_normal(screen)
+    if absf(dir.y) < 0.0001:
+        return cam_target
+    return origin+dir*(-origin.y/dir.y)
 
 # ------------------------------------------------------------------ input
 
@@ -255,18 +336,33 @@ func _pick(screen: Vector2) -> Vector2i:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         var touch: InputEventScreenTouch = event
-        if touch.pressed and stroke_pointer == -1 and map_rect.has_point(touch.position):
+        if touch.pressed and map_rect.has_point(touch.position):
+            touches[touch.index] = touch.position
+        else:
+            touches.erase(touch.index)
+        if touch.pressed and touches.size() == 2:
+            _begin_pinch()
+        elif touch.pressed and stroke_pointer == -1 and not pinch_active and map_rect.has_point(touch.position):
             stroke_pointer = touch.index
             begin_stroke(_pick(touch.position))
         elif not touch.pressed and touch.index == stroke_pointer:
             stroke_pointer = -1
             end_stroke()
+        if pinch_active and touches.size() < 2:
+            pinch_active = false
     elif event is InputEventScreenDrag:
         var drag: InputEventScreenDrag = event
-        if drag.index == stroke_pointer:
+        if touches.has(drag.index):
+            touches[drag.index] = drag.position
+        if pinch_active:
+            _update_pinch()
+        elif drag.index == stroke_pointer:
             move_stroke(_pick(drag.position))
     elif event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
         var mb: InputEventMouseButton = event
+        if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+            zoom_at(mb.position,cam_size*(0.85 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.18))
+            return
         if mb.button_index != MOUSE_BUTTON_LEFT:
             return
         if mb.pressed and map_rect.has_point(mb.position):
@@ -278,6 +374,48 @@ func _unhandled_input(event: InputEvent) -> void:
             move_stroke(_pick((event as InputEventMouseMotion).position))
     elif event.is_action_pressed("ui_cancel"):
         _back()
+
+## Two fingers: any half-painted stroke is undone (no accidental road), then
+## pinch zooms and the midpoint pans, anchored to the ground under it.
+func _begin_pinch() -> void:
+    if stroke_active:
+        stroke_active = false
+        stroke_pointer = -1
+        if stroke_changed and not undo_stack.is_empty():
+            grid.restore(undo_stack.pop_back())
+            dirty = true
+            _rebuild()
+        elif not stroke_changed and not undo_stack.is_empty():
+            undo_stack.pop_back()
+    var pts: Array = touches.values()
+    pinch_active = true
+    pinch_start_dist = maxf((pts[0] as Vector2).distance_to(pts[1]),1.0)
+    pinch_start_size = cam_size
+    pinch_anchor = _ground(((pts[0] as Vector2)+(pts[1] as Vector2))*0.5)
+
+func _update_pinch() -> void:
+    var pts: Array = touches.values()
+    if pts.size() < 2:
+        return
+    var mid: Vector2 = ((pts[0] as Vector2)+(pts[1] as Vector2))*0.5
+    cam_size = clampf(pinch_start_size*pinch_start_dist/maxf((pts[0] as Vector2).distance_to(pts[1]),1.0),ZOOM_MIN,ZOOM_MAX)
+    _apply_camera()
+    cam_target += pinch_anchor-_ground(mid)
+    cam_target.y = 0.0
+    cam_goal_size = cam_size
+    cam_goal_target = cam_target
+    _apply_camera()
+
+## Zoom keeping the ground point under screen_pos fixed (wheel / tests).
+func zoom_at(screen_pos: Vector2, new_size: float) -> void:
+    var anchor: Vector3 = _ground(screen_pos)
+    cam_size = clampf(new_size,ZOOM_MIN,ZOOM_MAX)
+    _apply_camera()
+    cam_target += anchor-_ground(screen_pos)
+    cam_target.y = 0.0
+    cam_goal_size = cam_size
+    cam_goal_target = cam_target
+    _apply_camera()
 
 ## Public for tests: start a touch on a tile.
 func begin_stroke(c: Vector2i) -> void:
@@ -376,6 +514,7 @@ func _clear() -> void:
     grid.clear()
     _save_draft()
     _rebuild()
+    _fit_camera(false)
 
 func _generate() -> void:
     _push_undo()
@@ -386,6 +525,7 @@ func _generate() -> void:
         return
     _save_draft()
     _rebuild()
+    _fit_camera(false)
 
 static func rng_target(seed: int) -> int:
     return 20+absi(seed)%9
@@ -410,6 +550,8 @@ func _save() -> bool:
 
 func _write_track(path: String, title: String, id: String) -> bool:
     var data: Dictionary = grid.to_track_data(title,id)
+    # Theme + seed: the race rebuilds exactly this world from the tiles.
+    data["world"] = world.descriptor() if world != null else {"theme":PROC_WORLD.THEME,"seed":world_seed,"version":PROC_WORLD.VERSION}
     var compiled: Dictionary = DNA.compile(data)
     if not bool(compiled.get("ok",false)):
         _status("INVALID: "+str((compiled.get("errors",PackedStringArray()) as PackedStringArray)[0]),false)
@@ -418,7 +560,7 @@ func _write_track(path: String, title: String, id: String) -> bool:
     if file == null:
         _status("STORAGE UNAVAILABLE",false)
         return false
-    file.store_string(JSON.stringify(data,"  "))
+    file.store_string(JSON.stringify(data,"  ",false,true))
     file.close()
     return bool(DNA.read_track(path).get("ok",false))
 
@@ -447,7 +589,7 @@ func _save_draft() -> void:
     var file := FileAccess.open(DRAFT,FileAccess.WRITE)
     if file != null:
         file.store_string(JSON.stringify({"version":1,"cols":grid.cols,"rows":grid.rows,
-            "tiles":tiles,"links":pairs}))
+            "tiles":tiles,"links":pairs,"world_seed":world_seed}))
         file.close()
 
 func _load_draft() -> void:
@@ -456,6 +598,7 @@ func _load_draft() -> void:
     var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(DRAFT))
     if not (raw is Dictionary) or int(raw.get("cols",0)) != grid.cols or int(raw.get("rows",0)) != grid.rows:
         return
+    world_seed = int(raw.get("world_seed",DEFAULT_WORLD_SEED))
     for t in raw.get("tiles",[]):
         grid.add_tile(Vector2i(int(t[0]),int(t[1])))
     for l in raw.get("links",[]):
@@ -465,6 +608,11 @@ func _load_draft() -> void:
 
 func _process(delta: float) -> void:
     since_rebuild += delta
+    if not pinch_active and (absf(cam_size-cam_goal_size) > 0.05 or cam_target.distance_to(cam_goal_target) > 0.05):
+        var k: float = 1.0-exp(-8.0*delta)
+        cam_size = lerpf(cam_size,cam_goal_size,k)
+        cam_target = cam_target.lerp(cam_goal_target,k)
+        _apply_camera()
     if dirty and stroke_active and since_rebuild >= REBUILD_INTERVAL:
         _rebuild()
     if flash_time > 0.0:
@@ -494,6 +642,7 @@ func _rebuild() -> void:
         var closed: bool = bool(part["closed"])
         var piece: NitroDriftTrack = TRACK.new()
         piece.name = "Road piece %d" % index
+        piece.with_props = false   # the procedural world owns the scenery
         piece.build_from_samples(grid.preview_samples(order,closed),GRID.WIDTH_M*0.5,closed,
             "builder_%d_%d" % [index,order.size()],false)
         road_root.add_child(piece)
@@ -512,6 +661,12 @@ func _rebuild() -> void:
         var w: Vector2 = grid.world_of(c)
         ring.position = Vector3(w.x,0.6,w.y)
         marker_root.add_child(ring)
+    # Scenery reacts to the road: full build once, then only what changed
+    # (at the end of a stroke, not on every intermediate preview).
+    if world.rules == null or world.world_seed != world_seed:
+        world.generate(grid.links,grid.cols,grid.rows,world_seed)
+    elif not stroke_active:
+        world.update(grid.links)
     _update_status(parts)
 
 func _update_status(parts: Array) -> void:
