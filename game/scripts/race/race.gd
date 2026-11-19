@@ -7,6 +7,7 @@ const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
+const PAUSE_VIEW = preload("res://scripts/ui/race_pause.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 
 var model: NitroDriveModel
@@ -17,6 +18,7 @@ var overhead: Camera3D
 var chase: Camera3D
 var touch: NitroRaceTouch
 var hud: NitroRaceHUD
+var pause_layer: CanvasLayer
 var results_layer: CanvasLayer
 var results_open: bool = false
 var camera_mode: int = 0
@@ -312,7 +314,7 @@ func _update_visuals() -> void:
         hud.finished = finished
         hud.road_status = "OFF TRACK" if offroad else "ON TRACK"
     if touch != null:
-        touch.overlay_visible = paused or finished
+        touch.overlay_visible = false
 
 func _process(delta: float) -> void:
     camera_shake_strength = move_toward(camera_shake_strength,0.0,delta*1.6)
@@ -414,9 +416,32 @@ func _toggle_pause() -> void:
     if finished:
         return
     paused = not paused
+    if paused:
+        if touch != null:
+            touch.release_all()
+            touch.visible = false
+            touch.set_process_input(false)
+        pause_layer = CanvasLayer.new()
+        pause_layer.name = "Exclusive Pause Menu"
+        pause_layer.layer = 24
+        add_child(pause_layer)
+        var panel: NitroPauseMenu = PAUSE_VIEW.new()
+        pause_layer.add_child(panel)
+        panel.show_pause(Callable(self,"_toggle_pause"),Callable(self,"_restart"),
+            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+    else:
+        if pause_layer != null:
+            pause_layer.queue_free()
+            pause_layer = null
+        if touch != null:
+            touch.set_process_input(true)
+            touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     _update_visuals()
 
 func _restart() -> void:
+    if pause_layer != null:
+        pause_layer.queue_free()
+        pause_layer = null
     if results_layer != null:
         results_layer.queue_free()
         results_layer = null
