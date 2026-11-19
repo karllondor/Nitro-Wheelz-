@@ -3,6 +3,8 @@ const STYLE = preload("res://scripts/ui/hud_style.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const DNA = preload("res://scripts/world/track_dna.gd")
 const SETTINGS = preload("res://scripts/ui/settings_panel.gd")
+const CARS = preload("res://scripts/vehicles/car_catalog.gd")
+const SYNTH = preload("res://scripts/audio/engine_synth.gd")
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 ## Player main menu (owner audit P2): four clear choices — DRIVE, GARAGE,
 ## TRACK BUILDER, SETTINGS — each opening its own page; tools for testing
@@ -144,6 +146,21 @@ func _settings_page() -> void:
 func _dev_page() -> void:
     _title("DEVELOPER")
     _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
+    # Way back to the old handling: every car on the Lada baseline physics.
+    var forced: bool = CARS.baseline_physics_forced()
+    var phys: Button = _big("BASELINE PHYSICS FOR ALL CARS: "+("ON" if forced else "OFF"),func():
+        CARS.set_baseline_physics_forced(not CARS.baseline_physics_forced())
+        show_page("dev"))
+    phys.name = "Baseline physics"
+    STYLE.style_button(phys,ui_unit,forced)
+    var bench_label := Label.new()
+    bench_label.name = "Benchmark result"
+    bench_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    bench_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    bench_label.add_theme_font_size_override("font_size",int(16*ui_unit))
+    bench_label.add_theme_color_override("font_color",STYLE.MUTED)
+    _big("AUDIO BENCHMARK",func(): bench_label.text = audio_benchmark()).name = "Audio benchmark"
+    page.add_child(bench_label)
     var info := Label.new()
     info.text = "Godot %s  •  %s renderer" % [Engine.get_version_info().get("string",""),
         str(ProjectSettings.get_setting("rendering/renderer/rendering_method","?"))]
@@ -155,6 +172,15 @@ func _dev_page() -> void:
     _small("◀  BACK",func(): show_page("main"))
 
 # ------------------------------------------------------------------ helpers
+
+## CPU cost of the engine synth for each car profile on THIS device.
+func audio_benchmark() -> String:
+    var lines: PackedStringArray = []
+    for v in ["red","blue"]:
+        var ms: float = SYNTH.benchmark(CARS.engine(v),1.0)
+        lines.append("%s: %.1f ms per second of audio (%.1f%% of one core)" % [
+            str(CARS.engine(v).get("layout","?")),ms,ms/10.0])
+    return "\n".join(lines)
 
 func _title(txt: String) -> void:
     var l := Label.new()

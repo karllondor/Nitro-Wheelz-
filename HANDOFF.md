@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.18 editor auto-smooth, separate volumes, player menu (not released)
+# Nitro Wheelz — v0.1.19 car profiles (Lada baseline + RYU-32 V8), owner SFX merged (not released)
 
 MODEL: Claude Code agent (model identifier intentionally not recorded in the repository; reported in chat). Date: 2026-11-19.
 BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-audio (55cf1e1). main is still v0.1.6.
@@ -68,7 +68,14 @@ No file in assets/references/approved was changed or added. The owner's chat ref
 - boot.gd rewritten as paged player menu; new game/tests/main_menu_test.gd registered.
 - Still open from the audit: COLLECTION screen / more cars, per-car handling.
 
+## OWNER FEEDBACK PASS 7 (v0.1.19) — car profiles
+- Branches: all work since v0.1.13 is on `ccr-91dad981-53kkbi`. The owner's audio commits on `agent/nitro-v0.1.12-car-garage-audio` (17 OGG + WAV masters) are now merged here (commit 182d929).
+- drive_model.gd: constants are the Lada defaults; instance parameters + TUNABLE + baseline() + apply_profile(); new optional engine_brake_decel (0 for Lada).
+- engine_synth.gd: instance engine profile (apply_profile, gear_of/rpm_of; static gear_for/rpm_for kept for the baseline), loudness, turbo flag, benchmark().
+- game/cars/lada_baseline.json, game/cars/ryu32_v8.json; car_catalog.gd profile()/handling()/engine()/baseline switch; race.gd applies both; drive_audio.gd turbo clips gated by the engine profile.
+- coupe_lowpoly.gd: V8 bay. New game/tests/car_profiles_test.gd; docs/CAR_PROFILES.md.
+
 ## NEXT ACTION
-1. Owner installs the v0.1.18 debug APK (new menu, volumes, editor AUTO-SMOOTH, RYU-32 coupe); earlier: v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
+1. Owner installs the v0.1.19 debug APK (drive Lada vs RYU-32 on the same track, DEVELOPER > AUDIO BENCHMARK on phone and Web); earlier: v0.1.18 debug APK (new menu, volumes, editor AUTO-SMOOTH, RYU-32 coupe); earlier: v0.1.17 debug APK (RYU-32 coupe in garage + race, COMBO/BANKED, points stars); earlier: v0.1.16 debug APK from CI (finish screen readability); earlier: v0.1.15 debug APK from CI (wall contacts, HUD header around the camera, garage, editor, tyre/impact sound); earlier: v0.1.14 debug APK from CI, checks the garage preview, HUD v2, pause settings, editor, engine sound; then and compares in-race look and camera distance with the reference; tune OVERHEAD_BASE_PORTRAIT if needed.
 2. Owner tries BUILD TRACK • 3D on the phone (tap/drag feel, preview rebuild time) and drives a built loop.
 3. Tune score thresholds and synth engine mix on real laps; add the recorded OGG pack to the repository; second car model.

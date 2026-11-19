@@ -80,11 +80,16 @@ func _ready() -> void:
         push_error("Selected benchmark track invalid: "+track.track_data_path)
         return
     model = DRIVE.new()
+    # Per-car handling from its profile (Lada = baseline, unchanged).
+    model.apply_profile(CARS.handling(str(ProjectSettings.get_setting("nitro/car_variant","red"))))
     model.reset(track.start_position(),track.start_heading())
     _make_car()
     sfx = AUDIO.new()
     sfx.name = "Layered WAN SFX"
     add_child(sfx)
+    # Engine sound follows the car's profile (Lada I4 / RYU-32 V8).
+    if sfx.synth != null:
+        sfx.synth.apply_profile(CARS.engine(str(ProjectSettings.get_setting("nitro/car_variant","red"))))
     _make_cameras()
     _make_tyre_marks()
     _make_ui()

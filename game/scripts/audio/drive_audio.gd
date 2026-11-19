@@ -162,11 +162,13 @@ func drive_tick(speed_kmh: float,drift_angle_deg: float,gas: float,
         _one_shot("tyre_handbrake",-6.0)
     if previous_drifting and not skidding and speed_kmh > 15.0:
         _one_shot("tyre_regrip",-11.0)
-    if gas > 0.7 and previous_gas < 0.3 and turbo_cooldown <= 0.0 and speed_kmh > 10.0:
+    var has_turbo: bool = synth == null or synth.turbo
+    if has_turbo and gas > 0.7 and previous_gas < 0.3 and turbo_cooldown <= 0.0 and speed_kmh > 10.0:
         _one_shot("turbo_spool",-12.0)
         turbo_cooldown = 3.0
     if previous_gas > 0.7 and gas < 0.2 and speed_kmh > 14.0:
-        _one_shot("turbo_bov",-10.0)
+        if has_turbo:
+            _one_shot("turbo_bov",-10.0)
         if speed_kmh > 55.0:
             _one_shot("exhaust_single",-19.0)
     # Recorded limiter / crackle clips follow the synth's own rev model.

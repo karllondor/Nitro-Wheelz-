@@ -49,6 +49,13 @@ func _run() -> void:
     if menu.find_child("Diagnostics",true,false) == null:
         _fail("Controller diagnostics must live under DEVELOPER")
         return
+    if menu.find_child("Baseline physics",true,false) == null or menu.find_child("Audio benchmark",true,false) == null:
+        _fail("DEVELOPER needs the baseline-physics switch and the audio benchmark")
+        return
+    var report: String = menu.call("audio_benchmark")
+    if not report.contains("I4") or not report.contains("V8") or not report.contains("ms per second"):
+        _fail("Audio benchmark must report both engines: "+report)
+        return
     menu.queue_free()
     await process_frame
     print("PASS: main menu DRIVE / GARAGE / TRACK BUILDER / SETTINGS, track list, builder tools, settings panel, developer section")

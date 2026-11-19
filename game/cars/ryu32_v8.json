@@ -1,0 +1,29 @@
+{
+  "id": "ryu32_v8",
+  "name": "RYU-32 COUPE",
+  "role": "Heavier V8 drift coupe: stronger exits, stable long drifts, more throttle and countersteer work, grips up sooner when you lift; harder to throw in and longer to stop. Not better at everything.",
+  "spec": "4.0 V8 ITB • 350 HP • 400 Nm (owner's reference car)",
+  "handling": {
+    "wheelbase": 2.615,
+    "drive_accel": 13.4, "top_speed_mps": 54.0, "drag_coeff": 0.0085,
+    "brake_accel": 15.6,
+    "yaw_torque_gain": 0.47, "yaw_damping": 1.36,
+    "flick_yaw_impulse": 0.47, "handbrake_grip": 0.13,
+    "rear_slide_grip": 0.64, "reattach_seconds": 0.36, "countersteer_assist": 0.58,
+    "power_loss_base": 0.90, "power_loss_per_mps": 0.022, "power_loss_max": 0.66,
+    "steer_lock_rest_deg": 38.0, "steer_lock_mid_deg": 23.5,
+    "front_grip": 6.25, "rear_grip": 6.05,
+    "slide_drive_factor": 0.95, "engine_brake_decel": 1.4
+  },
+  "engine": {
+    "layout": "V8 4.0 ITB", "cylinders": 8, "idle_rpm": 760, "limit_rpm": 7000,
+    "shift_floor_rpm": 2500, "gear_end_rpm": 6600,
+    "gear_top_kmh": [58, 98, 138, 176, 215],
+    "cylinder_gain": [1.0, 0.84, 1.0, 1.0, 0.84, 1.0, 0.84, 0.84],
+    "cylinder_timing": [0.0, 0.010, -0.006, 0.004, 0.012, -0.004, 0.008, -0.010],
+    "boom_hz": 82, "boom_bw": 80, "pipe_hz": 245, "pipe_bw": 110,
+    "rasp_hz": 640, "rasp_bw": 260, "intake_hz": 520, "intake_bw": 200,
+    "boom_gain": 1.25, "intake_gain": 1.35, "uneven_idle": 0.12, "uneven_high": 0.04,
+    "turbo": false, "loudness": 1.3
+  }
+}

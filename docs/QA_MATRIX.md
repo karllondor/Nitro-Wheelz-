@@ -21,6 +21,17 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.19 local evidence (Claude Code cloud container, 2026-11-19)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 19 Godot tests incl. new car_profiles_test) | Linux container, Godot 4.7.2 headless | PASS | local run; CI pending on push |
+| Lada physics + engine sound bit-identical to pre-profile code | Linux container | PASS | golden trace + audio fingerprint in car_profiles_test |
+| Negative controls: Lada grip 6.15 -> 6.16, RYU braking better than Lada | Linux container | PASS (test FAILs) | local run |
+| Lada vs RYU-32 scripted measurements | Linux container | MEASURED | docs/CAR_PROFILES.md |
+| Synth CPU, container | Linux container | ~24-30 ms per audio second (2.4-3% of one core) | engine_synth.benchmark |
+| Synth CPU on Android / Web | Physical devices / browser | NOT RUN | DEVELOPER > AUDIO BENCHMARK |
+| Recorded OGG playback on device | Physical Android | NOT RUN | owner |
+
 ## v0.1.18 local evidence (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

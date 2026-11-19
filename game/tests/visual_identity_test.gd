@@ -69,7 +69,7 @@ func _run() -> void:
     if absf(cbox.size.z-coupe.BODY_LENGTH_M) > 0.10 or cbox.end.y < 1.22 or cbox.end.y > 1.36:
         _fail("Coupe shell %.3f m long / %.3f m high diverges from 4.545 / 1.29" % [cbox.size.z,cbox.end.y])
         return
-    for part in ["Fixed rear wing","Exposed inline engine bay","Soft contact shadow"]:
+    for part in ["Fixed rear wing","Exposed V8 engine bay","Soft contact shadow"]:
         if coupe.find_child(part,true,false) == null:
             _fail("Coupe part missing: "+part)
             return

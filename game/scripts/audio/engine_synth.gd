@@ -34,6 +34,30 @@ const F_PIPE: Vector2 = Vector2(320.0,120.0)
 const F_RASP: Vector2 = Vector2(820.0,300.0)
 const F_INTAKE: Vector2 = Vector2(610.0,220.0)
 
+# Engine profile (defaults = the Lada's inline-four above). A car profile
+# can change the layout, firing pattern, revs, gearing and exhaust/intake
+# resonances through apply_profile(); the synthesis itself is shared.
+const SHIFT_FLOOR_RPM: float = 2600.0   # revs right after an upshift
+const GEAR_END_RPM: float = 7000.0      # revs at the end of each gear
+var layout: String = "I4 ITB"
+var cylinders: int = CYLINDERS
+var idle_rpm: float = IDLE_RPM
+var limit_rpm: float = LIMIT_RPM
+var shift_floor_rpm: float = SHIFT_FLOOR_RPM
+var gear_end_rpm: float = GEAR_END_RPM
+var gear_top: Array[float] = GEAR_TOP.duplicate()
+var cyl_gain: Array[float] = CYL_GAIN.duplicate()
+var cyl_timing: Array[float] = CYL_TIMING.duplicate()
+var f_boom: Vector2 = F_BOOM
+var f_pipe: Vector2 = F_PIPE
+var f_rasp: Vector2 = F_RASP
+var f_intake: Vector2 = F_INTAKE
+var boom_gain: float = 1.0
+var intake_gain: float = 1.0
+var uneven_idle: float = 0.24
+var uneven_high: float = 0.06
+var turbo: bool = true            # recorded turbo clips allowed for this car
+
 var rpm: float = IDLE_RPM
 var target_rpm: float = IDLE_RPM
 var load: float = 0.0          # 0 coast/overrun .. 1 full throttle
@@ -100,8 +124,11 @@ func _init() -> void:
         v += sin(6.0*x+0.4)*0.10+sin(9.0*x+2.1)*0.05
         v += 0.35*pow(maxf(sin(x),0.0),6.0)
         _table[i] = v*0.42
+    _compute_coefs()
+
+func _compute_coefs() -> void:
     for key in ["boom","pipe","rasp","intake"]:
-        var f: Vector2 = {"boom":F_BOOM,"pipe":F_PIPE,"rasp":F_RASP,"intake":F_INTAKE}[key]
+        var f: Vector2 = {"boom":f_boom,"pipe":f_pipe,"rasp":f_rasp,"intake":f_intake}[key]
         var r: float = exp(-PI*f.y/SAMPLE_RATE)
         var w: float = TAU*f.x/SAMPLE_RATE
         # [a1, a2, input gain normalised to ~unity peak]
@@ -115,6 +142,77 @@ static func gear_for(speed_kmh: float) -> int:
             return g+1
     return GEAR_TOP.size()
 
+## Engine profile from a car profile's "engine" block (see game/cars/*.json).
+func apply_profile(engine: Dictionary) -> void:
+    layout = str(engine.get("layout",layout))
+    cylinders = int(engine.get("cylinders",cylinders))
+    idle_rpm = float(engine.get("idle_rpm",idle_rpm))
+    limit_rpm = float(engine.get("limit_rpm",limit_rpm))
+    shift_floor_rpm = float(engine.get("shift_floor_rpm",shift_floor_rpm))
+    gear_end_rpm = float(engine.get("gear_end_rpm",gear_end_rpm))
+    if engine.has("gear_top_kmh"):
+        gear_top.assign(engine["gear_top_kmh"])
+    if engine.has("cylinder_gain"):
+        cyl_gain.assign(engine["cylinder_gain"])
+    if engine.has("cylinder_timing"):
+        cyl_timing.assign(engine["cylinder_timing"])
+    for pair in [["boom_hz","boom_bw","f_boom"],["pipe_hz","pipe_bw","f_pipe"],
+            ["rasp_hz","rasp_bw","f_rasp"],["intake_hz","intake_bw","f_intake"]]:
+        var cur: Vector2 = get(pair[2])
+        set(pair[2],Vector2(float(engine.get(pair[0],cur.x)),float(engine.get(pair[1],cur.y))))
+    boom_gain = float(engine.get("boom_gain",boom_gain))
+    intake_gain = float(engine.get("intake_gain",intake_gain))
+    uneven_idle = float(engine.get("uneven_idle",uneven_idle))
+    uneven_high = float(engine.get("uneven_high",uneven_high))
+    turbo = bool(engine.get("turbo",turbo))
+    if engine.has("loudness"):
+        master = 0.55*float(engine["loudness"])
+    # Firing pattern arrays must match the cylinder count.
+    while cyl_gain.size() < cylinders:
+        cyl_gain.append(1.0)
+    while cyl_timing.size() < cylinders:
+        cyl_timing.append(0.0)
+    _compute_coefs()
+    rpm = idle_rpm
+    target_rpm = idle_rpm
+    _slot = 0
+    _cycle = 0.0
+    _next_fire = cyl_timing[0]/float(cylinders)
+
+## Developer benchmark: CPU milliseconds needed to render one second of
+## audio for an engine profile (full load, mid revs, tyre squeal on). Shown
+## under DEVELOPER > AUDIO BENCHMARK so it can be read on Android and Web.
+static func benchmark(engine: Dictionary, seconds: float = 2.0) -> float:
+    var s = load("res://scripts/audio/engine_synth.gd").new()
+    s.apply_profile(engine)
+    s.rpm = 4500.0
+    s.load = 1.0
+    s.squeal = 0.5
+    var frames: int = int(SAMPLE_RATE*seconds)
+    var t0: int = Time.get_ticks_usec()
+    var done: int = 0
+    while done < frames:
+        s.render(512)
+        done += 512
+    return float(Time.get_ticks_usec()-t0)/1000.0/seconds
+
+func gear_of(speed_kmh: float) -> int:
+    for g in range(gear_top.size()):
+        if speed_kmh < gear_top[g]:
+            return g+1
+    return gear_top.size()
+
+func rpm_of(speed_kmh: float, gas: float, slip: float) -> float:
+    var g: int = gear_of(speed_kmh)
+    var low: float = 0.0 if g == 1 else gear_top[g-2]
+    var high: float = gear_top[g-1]
+    var t: float = clampf((speed_kmh-low)/maxf(high-low,1.0),0.0,1.0)
+    var base: float = lerpf(shift_floor_rpm if g > 1 else idle_rpm,gear_end_rpm,t)
+    if speed_kmh < 2.0:
+        base = idle_rpm+gas*2200.0
+    base += clampf(slip,0.0,1.0)*gas*1600.0
+    return clampf(base,idle_rpm,limit_rpm)
+
 static func rpm_for(speed_kmh: float, gas: float, slip: float) -> float:
     var g: int = gear_for(speed_kmh)
     var low: float = 0.0 if g == 1 else GEAR_TOP[g-2]
@@ -127,21 +225,21 @@ static func rpm_for(speed_kmh: float, gas: float, slip: float) -> float:
     return clampf(base,IDLE_RPM,LIMIT_RPM)
 
 func set_state(speed_kmh: float, gas: float, slip: float, dt: float) -> void:
-    var new_gear: int = gear_for(speed_kmh)
+    var new_gear: int = gear_of(speed_kmh)
     if new_gear > gear and gas > 0.3:
         # Upshift: brief ignition cut while the clutch is in.
         _cut_timer = maxf(_cut_timer,0.11)
         shifts += 1
     gear = new_gear
-    target_rpm = rpm_for(speed_kmh,gas,slip)
+    target_rpm = rpm_of(speed_kmh,gas,slip)
     _cut_timer = maxf(0.0,_cut_timer-dt)
     if _cut_timer > 0.0:
-        rpm = maxf(IDLE_RPM,rpm-2600.0*dt)
+        rpm = maxf(idle_rpm,rpm-2600.0*dt)
     else:
         # Revs chase the target quickly up, slower down (flywheel inertia).
         var rate: float = 9.0 if target_rpm > rpm else 5.0
         rpm = lerpf(rpm,target_rpm,1.0-exp(-rate*dt))
-        if gas > 0.5 and rpm >= LIMIT_RPM-30.0:
+        if gas > 0.5 and rpm >= limit_rpm-30.0:
             # Bouncing limiter: cut, drop ~200 rpm, fire again.
             _cut_timer = 0.075
             limiter_hits += 1
@@ -157,7 +255,7 @@ func set_state(speed_kmh: float, gas: float, slip: float, dt: float) -> void:
     squeal = lerpf(squeal,squeal_target,1.0-exp(-8.0*dt))
 
 func on_limiter() -> bool:
-    return _cut_timer > 0.0 and rpm > LIMIT_RPM-400.0
+    return _cut_timer > 0.0 and rpm > limit_rpm-400.0
 
 func impact(strength: float) -> void:
     _thump = maxf(_thump if _imp_t < 0.12 else 0.0,clampf(strength,0.0,1.0))
@@ -172,13 +270,13 @@ static func _reso(freq: float, bw: float) -> Vector3:
 
 ## Firing frequency: four-stroke fires CYLINDERS/2 times per crank turn.
 func firing_hz() -> float:
-    return rpm/60.0*float(CYLINDERS)*0.5
+    return rpm/60.0*float(cylinders)*0.5
 
 func _fire() -> void:
     var k: int = _slot
-    var rev_t: float = clampf((rpm-IDLE_RPM)/2500.0,0.0,1.0)
-    var uneven: float = lerpf(0.24,0.06,rev_t)
-    var strength: float = CYL_GAIN[k]*(1.0+_rng.randf_range(-uneven,uneven))
+    var rev_t: float = clampf((rpm-idle_rpm)/2500.0,0.0,1.0)
+    var uneven: float = lerpf(uneven_idle,uneven_high,rev_t)
+    var strength: float = cyl_gain[k]*(1.0+_rng.randf_range(-uneven,uneven))
     strength *= lerpf(0.42,1.0,load)
     if _cut_timer > 0.0:
         strength *= 0.08
@@ -190,8 +288,8 @@ func _fire() -> void:
             _pop = maxf(_pop,_rng.randf_range(0.5,1.0))
             strength += 0.9
     _env += strength
-    _slot = (k+1)%CYLINDERS
-    _next_fire += (1.0+CYL_TIMING[_slot]-CYL_TIMING[k])/float(CYLINDERS)
+    _slot = (k+1)%cylinders
+    _next_fire += (1.0+cyl_timing[_slot]-cyl_timing[k])/float(cylinders)
 
 func render(frames: int) -> PackedVector2Array:
     var out := PackedVector2Array()
@@ -203,12 +301,12 @@ func render(frames: int) -> PackedVector2Array:
     var pop_decay: float = exp(-1.0/(0.009*SAMPLE_RATE))
     var rasp: float = lerpf(0.12,0.55,load)
     var body_k: float = lerpf(0.10,0.22,load)
-    var rev: float = clampf(rpm/LIMIT_RPM,0.0,1.0)
+    var rev: float = clampf(rpm/limit_rpm,0.0,1.0)
     var g_body: float = 0.55
-    var g_boom: float = lerpf(1.0,0.55,rev)
+    var g_boom: float = lerpf(1.0,0.55,rev)*boom_gain
     var g_pipe: float = lerpf(0.55,0.95,load)
     var g_rasp: float = lerpf(0.12,0.60,load)*lerpf(0.6,1.4,rev)
-    var g_intake: float = lerpf(0.0,0.75,load)*rev
+    var g_intake: float = lerpf(0.0,0.75,load)*rev*intake_gain
     var amp: float = master*0.72*lerpf(0.85,1.0,load)*lerpf(0.85,1.35,rev)
     var cb: Vector3 = _coef["boom"]
     var cp: Vector3 = _coef["pipe"]

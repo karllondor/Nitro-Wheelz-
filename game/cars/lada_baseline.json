@@ -1,0 +1,29 @@
+{
+  "id": "lada_baseline",
+  "name": "LADA 2106 DRIFT SPEC",
+  "role": "Baseline benchmark. Light, agile, easy short drifts; the starter car. These values are the v0.1.12+ tune and must stay identical (physics_profile_test).",
+  "spec": "1.6 I4 ITB",
+  "handling": {
+    "front_grip": 6.15, "rear_grip": 5.95, "rear_slide_grip": 0.6, "handbrake_grip": 0.1,
+    "reattach_seconds": 0.45, "countersteer_assist": 0.66, "wheelbase": 2.424,
+    "drive_accel": 11.8, "brake_accel": 17.0, "reverse_accel": 4.8, "reverse_limit": 8.5,
+    "handbrake_decel": 2.0, "drag_coeff": 0.009, "rolling_drag": 0.45,
+    "yaw_damping": 1.22, "yaw_torque_gain": 0.522, "yaw_lateral_budget": 13.5,
+    "slide_yaw_bonus": 2.4, "low_speed_grip_start": 2.7, "top_speed_mps": 50.0,
+    "steer_lock_rest_deg": 35.5, "steer_lock_mid_deg": 22.0, "steer_lock_high_deg": 8.5,
+    "power_loss_base": 0.83, "power_loss_per_mps": 0.023, "power_loss_max": 0.6,
+    "power_entry_kick": 0.252, "flick_yaw_impulse": 0.56, "slide_drive_factor": 0.76,
+    "engine_brake_decel": 0.0
+  },
+  "engine": {
+    "layout": "I4 ITB", "cylinders": 4, "idle_rpm": 950, "limit_rpm": 7400,
+    "shift_floor_rpm": 2600, "gear_end_rpm": 7000,
+    "gear_top_kmh": [48, 82, 116, 150, 195],
+    "cylinder_gain": [1.0, 0.84, 0.95, 0.79],
+    "cylinder_timing": [0.0, 0.018, -0.010, 0.012],
+    "boom_hz": 105, "boom_bw": 95, "pipe_hz": 320, "pipe_bw": 120,
+    "rasp_hz": 820, "rasp_bw": 300, "intake_hz": 610, "intake_bw": 220,
+    "boom_gain": 1.0, "intake_gain": 1.0, "uneven_idle": 0.24, "uneven_high": 0.06,
+    "turbo": true, "loudness": 1.0
+  }
+}

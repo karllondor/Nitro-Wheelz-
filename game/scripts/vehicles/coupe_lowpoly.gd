@@ -57,7 +57,7 @@ func _ready() -> void:
     shell.mesh = _cached("shell",Callable(self,"_build_shell"))
     add_child(shell)
     var bay := MeshInstance3D.new()
-    bay.name = "Exposed inline engine bay"
+    bay.name = "Exposed V8 engine bay"
     bay.mesh = _cached("engine",Callable(self,"_build_engine_bay"))
     add_child(bay)
     var wing := MeshInstance3D.new()
@@ -379,8 +379,9 @@ func _deck_strip(st: SurfaceTool, a: Vector2, b: Vector2, width: float, lift: fl
         KIT.tri(st,q[0],q[1],q[2],Vector3.UP,Vector3.UP,Vector3.UP)
         KIT.tri(st,q[2],q[1],q[3],Vector3.UP,Vector3.UP,Vector3.UP)
 
-## Bonnet removed: dark bay, inline engine with six chrome trumpets along
-## the head, strut towers with a brace and an X-brace ahead of the engine.
+## Bonnet removed: dark bay, 4.0 V8 (owner's reference car) with two cam
+## covers and eight individual throttle trumpets standing in two rows of
+## four in the valley, strut towers with a brace and an X-brace in front.
 func _build_engine_bay() -> ArrayMesh:
     var kit := KIT.new()
     var well: SurfaceTool = kit.bucket("well",materials["well"])
@@ -393,22 +394,25 @@ func _build_engine_bay() -> ArrayMesh:
         var z1: float = lerpf(-2.10,-0.86,float(k+1)/12.0)
         _deck_strip(well,Vector2(0.0,z0),Vector2(0.0,z1),1.26,0.005)
     var top: float = deck_top(0.0,-1.45)
-    # Long inline block and cam cover.
-    KIT.superellipsoid(engine,Transform3D(Basis.IDENTITY,Vector3(0.06,top-0.03,-1.45)),
-        Vector3(0.24,0.05,0.48),0.3,16,8)
-    KIT.superellipsoid(engine,Transform3D(Basis.IDENTITY,Vector3(0.10,top+0.025,-1.45)),
-        Vector3(0.12,0.03,0.44),0.25,14,8)
-    for i in range(6):
-        KIT.superellipsoid(chrome,Transform3D(Basis.IDENTITY,Vector3(0.10,top+0.058,-1.80+float(i)*0.14)),
-            Vector3(0.02,0.008,0.02),0.6,8,6)
-    # Six throttle trumpets leaning out over the left of the bay.
-    var lean := Basis(Vector3.BACK,PI*0.5+deg_to_rad(28.0))
-    for i in range(6):
-        var at := Vector3(-0.14,top+0.03,-1.80+float(i)*0.14)
-        var bell := PackedVector2Array([Vector2(0.0,0.040),Vector2(0.10,0.042),
-            Vector2(0.15,0.050),Vector2(0.175,0.064),Vector2(0.18,0.068),Vector2(0.176,0.054)])
-        KIT.lathe(chrome,Transform3D(lean,at),bell,18,true)
-        KIT.lathe(well,Transform3D(lean,at),PackedVector2Array([Vector2(0.17,0.054),Vector2(0.16,0.0)]),14,true)
+    # V8 block and the two cylinder banks with their cam covers.
+    KIT.superellipsoid(engine,Transform3D(Basis.IDENTITY,Vector3(0,top-0.04,-1.45)),
+        Vector3(0.30,0.05,0.40),0.3,16,8)
+    for bank in [-1.0,1.0]:
+        var tilt := Basis(Vector3.BACK,bank*deg_to_rad(-30.0))
+        KIT.superellipsoid(engine,Transform3D(tilt,Vector3(bank*0.21,top+0.02,-1.45)),
+            Vector3(0.075,0.03,0.38),0.25,12,8)
+        for i in range(4):
+            KIT.superellipsoid(chrome,Transform3D(tilt,Vector3(bank*0.215,top+0.05,-1.72+float(i)*0.18)),
+                Vector3(0.018,0.007,0.018),0.6,8,6)
+    # Eight throttle trumpets: two rows of four in the valley, leaning out.
+    for bank in [-1.0,1.0]:
+        var lean := Basis(Vector3.BACK,PI*0.5-bank*deg_to_rad(12.0))
+        for i in range(4):
+            var at := Vector3(bank*0.075,top+0.03,-1.72+float(i)*0.18)
+            var bell := PackedVector2Array([Vector2(0.0,0.036),Vector2(0.10,0.038),
+                Vector2(0.15,0.046),Vector2(0.172,0.060),Vector2(0.177,0.064),Vector2(0.173,0.050)])
+            KIT.lathe(chrome,Transform3D(lean,at),bell,18,true)
+            KIT.lathe(well,Transform3D(lean,at),PackedVector2Array([Vector2(0.167,0.050),Vector2(0.157,0.0)]),14,true)
     # Strut towers (body colour) with a brace, and the front X-brace.
     for side in [-1.0,1.0]:
         KIT.superellipsoid(paint,Transform3D(Basis.IDENTITY,Vector3(side*0.60,top+0.0,-1.02)),
