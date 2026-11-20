@@ -36,6 +36,11 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | captures: 8 x 10 seed sheets; per archetype builder before / with road, paddock, race top-down + chase on the same saved track | Xvfb + llvmpipe | DONE | docs/terrain_builder/captures/ |
 | generate 446-900 ms, road adaptation 338-492 ms, race load 623-848 ms; whole world 118 k-379 k triangles, 147-209 draw calls before culling | Linux container CPU / llvmpipe | MEASURED | docs/terrain_builder/TERRAIN_BUILDER_REPORT.md |
 | owner reference packs: 12 / 12 SHA-256 verified, 10 images inspected individually + index sheets | Drive (public) | DONE | report section 5 |
+| CI on 6f2b8cf: Godot import + suite (29 tests) | GitHub Actions Linux | PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078651 |
+| CI: Android debug APK v0.1.25 (versionCode 25), artifact Nitro-Wheelz_v0.1.25_Android-debug (id 14636202383) | GitHub Actions | BUILT, NOT INSTALLED | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078638 |
+| CI: Web preview | GitHub Actions | BUILT, NOT PLAYTESTED | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078696 |
+| CI: desktop Linux + Windows | GitHub Actions | BUILT, NOT PLAYTESTED | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078957 |
+| CI: Foundation checks | GitHub Actions | PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078671 |
 | **Android / Web FPS, memory, adaptation time on a phone; owner playtest and visual approval** | devices / owner | **NOT RUN** | owner |
 
 ## v0.1.24 local evidence — Car Factory prototype E30 Blessed (Claude Code cloud container, 2026-11-20)

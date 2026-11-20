@@ -139,10 +139,24 @@ What was taken from them in this build:
 | footbridge over the track, spectator crowds, banners / sponsor boards, guard rails, chevron signs, shrines / torii | NOT done |
 | photoreal lighting / wet asphalt / volumetric mist of the renders | NOT attempted (mobile GL Compatibility, stylised die-cast look) |
 
+Honest assessment after a side-by-side sheet (reference vs builder / paddock / race chase, 6 regions, kept outside
+the repo): the **layout language** now matches the references (region kerb colours, compact 3-bay pit building with
+tower and standby vehicles, start gantry, relief type, geology and vegetation colours, landmarks). The **visual
+density and finish are far below them**: terrain surfaces are flat-shaded vertex colour, trees are sparse low-poly
+primitives, there are no crowds, banners, guard rails, signs, wet asphalt or atmospheric light. Owner visual
+approval: NOT RUN.
+
 ## 6. Whole suite and builds
 
-Local: `tools/run_godot_checks.sh` PASS (import + 29 Godot tests). CI runs (Godot checks, Android debug APK, Web,
-desktop) and their conclusions are recorded in docs/QA_MATRIX.md (v0.1.25 section) after the push.
+Local: `tools/run_godot_checks.sh` PASS (import + 29 Godot tests). CI on commit 6f2b8cf (all conclusions: success):
+
+| Workflow | Result | Link |
+|---|---|---|
+| Godot pinned import + full suite (29 tests) | PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078651 |
+| Android debug APK v0.1.25 (artifact `Nitro-Wheelz_v0.1.25_Android-debug`) | BUILT, not installed on a phone | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078638 |
+| Web preview | BUILT, not playtested | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078696 |
+| Desktop Linux + Windows | BUILT, not playtested | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078957 |
+| Foundation checks | PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44753078671 |
 
 ## 7. Known limits / next steps
 
