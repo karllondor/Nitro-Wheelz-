@@ -86,6 +86,11 @@ const ROAD_PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const TERRAIN_CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 ## Generated terrain world (v0.1.25 terrain-first tracks) or null.
 var terrain: NitroTerrainWorld = null
+## v0.1.27: the race builds the terrain itself in frame slices behind a
+## loading animation (build() only records the descriptor).
+var defer_terrain: bool = false
+var pending_terrain: Dictionary = {}
+const STEPS = preload("res://scripts/world/step_runner.gd")
 
 func _ready() -> void:
     if centerline.is_empty():
@@ -106,7 +111,10 @@ func build() -> void:
         apply_region_style(tdesc)
     _apply_compiled(compiled)
     if not tdesc.is_empty() and track_valid:
-        build_terrain(tdesc)
+        if defer_terrain:
+            pending_terrain = tdesc
+        else:
+            build_terrain(tdesc)
     if grid != null and track_valid:
         world = PROC_WORLD.new()
         world.name = "Procedural world"
@@ -117,13 +125,24 @@ func build() -> void:
 ## terrain track saved without (matching) knot heights gets its heights
 ## solved here with the same solver the builder uses.
 func build_terrain(desc: Dictionary) -> void:
-    terrain = TERRAIN_WORLD.new()
-    terrain.name = "Terrain world"
-    terrain.setup(desc)
-    terrain.field.bake()
-    terrain.scenery_range = 650.0
-    add_child(terrain)
-    terrain.build()
+    STEPS.run_now(build_terrain_steps(desc))
+
+## build_terrain() as steps (field bake, terrain + scenery chunks, road fit).
+func build_terrain_steps(desc: Dictionary) -> Array:
+    return [func():
+        terrain = TERRAIN_WORLD.new()
+        terrain.name = "Terrain world"
+        terrain.setup(desc)
+        terrain.scenery_range = 650.0
+        var more: Array = terrain.field.bake_steps()
+        more.append(func():
+            add_child(terrain)
+            var b2: Array = terrain.build_steps()
+            b2.append(func(): return _terrain_road_steps(desc))
+            return b2)
+        return more]
+
+func _terrain_road_steps(desc: Dictionary) -> Array:
     if heights.size() != centerline.size():
         var grade: float = float(TERRAIN_CAT.info(str(desc.get("archetype","")))["grade"])
         heights = ROAD_PROFILE.solve(terrain.field,centerline,halfwidths,closed_loop,grade)
@@ -133,7 +152,7 @@ func build_terrain(desc: Dictionary) -> void:
                 remove_child(child)
                 child.queue_free()
         _build_visuals()
-    terrain.set_road(centerline,halfwidths,heights,closed_loop)
+    return terrain.set_road_steps(centerline,halfwidths,heights,closed_loop)
 
 ## Grade (rise / run) of the road along the centreline direction at a
 ## sample_info() result; 0 on flat tracks.

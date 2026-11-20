@@ -53,8 +53,14 @@ func _run() -> void:
         await _shot("%s_1_terrain" % a)
         b._enter_build()
         var t1: int = Time.get_ticks_usec()
-        var res: Dictionary = TT.generate_loop(b.grid,b.world.field,b.descriptor(),7)
-        b.route_start = TT.route_order(b.grid)["order"][0]
+        var as_route: bool = OS.get_environment("ROUTE") == "1"
+        if as_route:
+            b.topology = "route"
+            var rr0: Dictionary = TT.generate_route(b.grid,b.world.field,b.descriptor(),7)
+            b.route_start = (rr0["order"] as Array)[0] if bool(rr0.get("ok",false)) else TT.route_order(b.grid)["order"][0]
+        else:
+            TT.generate_loop(b.grid,b.world.field,b.descriptor(),7)
+            b.route_start = TT.route_order(b.grid)["order"][0]
         b._after_edit()
         var adapt_ms: float = float(Time.get_ticks_usec()-t1)/1000.0
         b._set_view("3D")
@@ -103,6 +109,29 @@ func _run() -> void:
             b.camera.look_at(Vector3(mp.x,rh[mi]-6.0,mp.y),Vector3.UP)
             await _shot("%s_6_bridge" % a)
             b.set_process(true)
+        if as_route:
+            # Route ends: staging paddock behind the start, parc ferme after
+            # the finish, start light pole.
+            var rs2: Array = b.world.road.get("samples",[])
+            for end_i in [0,rs2.size()-1]:
+                var ep: Vector2 = rs2[end_i]
+                var ra: Array = b.world.scenery.venue_keep
+                if ra.size() > 0:
+                    # Aim at the nearest start / finish area.
+                    var bestd: float = INF
+                    for rr in ra:
+                        var cc: Vector2 = (rr as Rect2).get_center()
+                        if cc.distance_to(ep) < bestd:
+                            bestd = cc.distance_to(ep)
+                            if bestd < 90.0:
+                                ep = (ep+cc)*0.5
+                b.goal_target = Vector3(ep.x,b.world.height_at(ep.x,ep.y),ep.y)
+                b.cam_target = b.goal_target
+                b.cam_dist = 120.0
+                b.goal_dist = 120.0
+                b.cam_pitch = 34.0
+                b.goal_pitch = 34.0
+                await _shot("%s_7_route_%s" % [a,"start" if end_i == 0 else "finish"])
         var ms: Dictionary = b.world.mesh_stats()
         var path: String = "user://nitro_track_capture_%s.json" % a
         if not b._write(path,"capture "+a,"capture_"+a):

@@ -166,6 +166,8 @@ func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, he
         cls = c["class"]
         road = {"samples":samples,"halfwidths":halfwidths,"heights":heights,"closed":closed,
             "class":cls,"summary":c}
+        if not closed:
+            road["end_pads"] = end_pads(samples,halfwidths,heights)
     _deform()
     var dirty: Array = []
     var cc: Vector2i = chunk_counts()
@@ -185,6 +187,36 @@ func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, he
             road_result = {"dirty":dirty,"ms":last_stats["ms"],"class":cls,"summary":road.get("summary",{})})
         return tail)
     return more
+
+## v0.1.27 open routes: a paved staging area behind the start and a parc
+## ferme after the finish, on the road's own line and height; the terrain is
+## cut / filled for them like for the road (scenery fills them with vans,
+## tents, parked cars). Skipped over water / the sea cliff / off the map.
+func end_pads(samples: Array[Vector2], hw: PackedFloat32Array, rh: PackedFloat32Array) -> Array:
+    var out: Array = []
+    var n: int = samples.size()
+    if n < 3:
+        return out
+    var mode: String = str(desc.get("event_mode","club"))
+    for end in ["start","finish"]:
+        var e: int = 0 if end == "start" else n-1
+        var inner: int = 1 if end == "start" else n-2
+        var away: Vector2 = (samples[e]-samples[inner]).normalized()
+        var side := Vector2(-away.y,away.x)
+        var w: float = hw[e]*2.0+18.0
+        var d: float = 34.0 if mode == "practice" else 46.0
+        var o: Vector2 = samples[e]-side*w*0.5+away*0.6
+        var ok: bool = true
+        for a in [0.0,0.5,1.0]:
+            for b in [0.0,0.5,1.0]:
+                var q: Vector2 = o+side*w*a+away*d*b
+                if absf(q.x) > FIELD.HALF_X-30.0 or absf(q.y) > FIELD.HALF_Z-30.0 or field.is_water(q.x,q.y):
+                    ok = false
+                if field.relief == "coast" and field.coast_distance(q.x,q.y) < 8.0:
+                    ok = false
+        if ok:
+            out.append({"end":end,"o":o,"u":side,"v":away,"w":w,"d":d,"y":rh[e]})
+    return out
 
 func _deform() -> void:
     var h: PackedFloat32Array = field.base.duplicate()
@@ -294,6 +326,36 @@ func _deform() -> void:
                 var wall2: float = minf(-dz,5.5) if c == 3 else 0.0
                 tgt = road_h-minf(-dz,wall2+t2*0.75)
         h[k] = tgt
+    # Start / finish pads of open routes: flat at the pad level, cut / fill
+    # slopes around them (never touching the road bench).
+    for pad in road.get("end_pads",[]):
+        var o: Vector2 = pad["o"]
+        var ua: Vector2 = pad["u"]
+        var va: Vector2 = pad["v"]
+        var pw: float = pad["w"]
+        var pd: float = pad["d"]
+        var py: float = float(pad["y"])-ROAD_SINK
+        var c0: Vector2 = o+ua*pw*0.5+va*pd*0.5
+        var reach: float = maxf(pw,pd)*0.5+40.0
+        var i0: int = maxi(0,int(ceil((c0.x-reach+FIELD.HALF_X)/FIELD.STEP)))
+        var i1: int = mini(nx-1,int(floor((c0.x+reach+FIELD.HALF_X)/FIELD.STEP)))
+        var j0: int = maxi(0,int(ceil((c0.y-reach+FIELD.HALF_Z)/FIELD.STEP)))
+        var j1: int = mini(field.nz-1,int(floor((c0.y+reach+FIELD.HALF_Z)/FIELD.STEP)))
+        for gj in range(j0,j1+1):
+            for gi in range(i0,i1+1):
+                var k2: int = gj*nx+gi
+                if best_d[k2] < INF and sqrt(best_d[k2]) <= best_w[k2]+BENCH_M:
+                    continue
+                var q := Vector2(-FIELD.HALF_X+float(gi)*FIELD.STEP,-FIELD.HALF_Z+float(gj)*FIELD.STEP)
+                var lu: float = (q-c0).dot(ua)
+                var lv: float = (q-c0).dot(va)
+                var out_d: float = Vector2(maxf(absf(lu)-pw*0.5,0.0),maxf(absf(lv)-pd*0.5,0.0)).length()
+                var orig: float = h[k2]
+                var dz: float = orig-py
+                var slope: float = 1.6 if dz > 0.0 else 0.9
+                var tgt2: float = py+signf(dz)*minf(absf(dz),out_d*slope)
+                if absf(tgt2-orig) > 0.01:
+                    h[k2] = tgt2
     field.height = h
 
 func _chunk_hash(id: Vector2i) -> int:

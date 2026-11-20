@@ -172,7 +172,7 @@ var last_changed: Array = []
 
 func on_road_changed_steps(dirty: Array) -> Array:
     var old_sig: Dictionary = road_sig.duplicate()
-    var old_venue: Rect2 = _venue_bounds()
+    var old_venue: Array = venue_keep.duplicate()
     _index_road()
     _build_venue()
     var todo: Dictionary = {}
@@ -184,9 +184,8 @@ func on_road_changed_steps(dirty: Array) -> Array:
     for id3 in old_sig.keys():
         if not road_sig.has(id3):
             todo[id3] = true
-    var new_venue: Rect2 = _venue_bounds()
-    if old_venue != new_venue:
-        for r in [old_venue,new_venue]:
+    if old_venue != venue_keep:
+        for r in old_venue+venue_keep:
             for id4 in _chunks_of_rect(r):
                 todo[id4] = true
     last_changed = todo.keys()
@@ -1129,6 +1128,11 @@ func _build_venue() -> void:
             venue_info.erase("grandstand_corners")
     if str(info["country"]) == "ireland":
         venue_info["stone_walls"] = _roadside_walls(acc)
+    # v0.1.27 start lights before the start line (every event), and real
+    # start / finish areas instead of a cut-off road on open routes.
+    _start_lights(acc,samples,hw,rh,closed)
+    if not closed:
+        venue_info["route_ends"] = _route_ends(acc,samples,hw,rh,mode,venue)
     var mi := MeshInstance3D.new()
     mi.name = "Venue %s (%s)" % [venue,mode]
     mi.mesh = acc.commit(_mats[0],_mats[1])
@@ -1218,6 +1222,134 @@ func _paddock_items(acc, c: Vector2, t: Vector2, nrm: Vector2, w: float, d: floa
     for i3 in range(6):
         var u2: float = 3.0+float(i3)*2.2
         acc.box(u2,u2+0.45,2.0,2.45,top,top+0.7,Color(1.0,0.45,0.08))
+
+## Arc-length index helper: first sample at or beyond s metres.
+func _index_at(samples: Array[Vector2], s_m: float) -> int:
+    var acc_s: float = 0.0
+    for i in range(1,samples.size()):
+        acc_s += samples[i-1].distance_to(samples[i])
+        if acc_s >= s_m:
+            return i
+    return samples.size()-1
+
+## Start light pole (owner request): on the right of the road a few metres
+## before the start line, a dark panel with four green lamps facing the
+## grid, on an arm reaching over the barrier.
+func _start_lights(acc, samples: Array[Vector2], hw: PackedFloat32Array, rh: PackedFloat32Array, closed: bool) -> void:
+    var n: int = samples.size()
+    if n < 4:
+        return
+    var line_i: int = _index_at(samples,18.0) if not closed else 0
+    var i: int = maxi(0,line_i-2) if not closed else (n-2)%n
+    var j: int = mini(i+1,n-1)
+    var t: Vector2 = (samples[j]-samples[i]).normalized()
+    var nrm := Vector2(-t.y,t.x)
+    var p: Vector2 = samples[i]+nrm*(hw[i]+1.6)
+    var y: float = rh[i]
+    acc.set_frame([p,t,nrm])
+    var pole := Color(0.22,0.23,0.25)
+    acc.box(-0.18,0.18,-0.18,0.18,y-0.5,y+5.4,pole)
+    acc.box(-0.12,0.12,-2.2,0.0,y+5.0,y+5.25,pole)                    # arm over the barrier
+    acc.box(-0.20,0.20,-2.6,-1.6,y+2.6,y+5.25,Color(0.06,0.06,0.07))  # lamp panel
+    for k in range(4):
+        var ly: float = y+2.85+float(k)*0.58
+        acc.box(-0.26,-0.20,-2.42,-1.78,ly,ly+0.42,Color(0.22,1.0,0.42),true)
+        acc.box(-0.34,-0.20,-2.48,-1.72,ly+0.42,ly+0.50,Color(0.04,0.04,0.05))   # visor
+    venue_info["start_lights"] = [p.x,p.y]
+
+## Open routes: a staging paddock behind the start (team vans, cars,
+## gazebos, flags) and a parc ferme after the finish, both as paved areas
+## that continue the road past its end barriers. Returns what was built.
+func _route_ends(acc, samples: Array[Vector2], hw: PackedFloat32Array, rh: PackedFloat32Array, mode: String,
+        venue: String) -> Dictionary:
+    var out: Dictionary = {}
+    var n: int = samples.size()
+    var colours: Array[Color] = [Color(0.92,0.20,0.22),Color(0.96,0.96,0.94),Color(0.20,0.36,0.70),Color(0.95,0.62,0.12)]
+    for pad in road_pads():
+        var end: String = str(pad["end"])
+        var w: float = float(pad["w"])
+        var d: float = float(pad["d"])
+        var y: float = float(pad["y"])
+        var fr: Array = [pad["o"],pad["u"],pad["v"]]
+        acc.set_frame(fr)
+        var c: Vector2 = (fr[0] as Vector2)+(fr[1] as Vector2)*w*0.5+(fr[2] as Vector2)*d*0.5
+        var lo: float = INF
+        for a in [0.0,0.5,1.0]:
+            for b in [0.0,0.5,1.0]:
+                var q: Vector2 = (fr[0] as Vector2)+(fr[1] as Vector2)*w*a+(fr[2] as Vector2)*d*b
+                lo = minf(lo,field.height_at(q.x,q.y))
+        var slab := Color(0.30,0.30,0.32)
+        acc.box(0.0,w,0.0,d,minf(lo,y)-1.5,y-0.02,slab.darkened(0.25),false,slab)
+        # Low concrete wall around the far edges.
+        acc.box(0.0,w,d-0.6,d,y,y+0.9,Color(0.72,0.72,0.70))
+        acc.box(0.0,0.6,0.0,d,y,y+0.9,Color(0.72,0.72,0.70))
+        acc.box(w-0.6,w,0.0,d,y,y+0.9,Color(0.72,0.72,0.70))
+        # Painted bays along both long sides.
+        var u: float = 2.0
+        while u < w-3.0:
+            acc.box(u,u+0.16,d-7.0,d-1.2,y,y+0.02,Color(0.92,0.92,0.88))
+            u += 3.2
+        var rng := RandomNumberGenerator.new()
+        rng.seed = seed_value*31+(1 if end == "start" else 2)
+        # Parked cars (start: competitors waiting; finish: parc ferme).
+        var u2: float = 2.6
+        while u2 < w-4.0:
+            if rng.randf() < 0.75:
+                var cc: Color = Color.from_hsv(rng.randf(),rng.randf_range(0.4,0.85),rng.randf_range(0.55,0.95))
+                acc.box(u2+0.2,u2+2.0,d-6.4,d-2.0,y,y+0.75,cc,false,cc)
+                acc.box(u2+0.35,u2+1.85,d-5.4,d-3.1,y+0.75,y+1.25,Color(0.12,0.14,0.17))
+            u2 += 3.2
+        if end == "start":
+            # Team vans + gazebos on the near half, flags along the road.
+            for k in range(2 if mode == "practice" else 4):
+                var vu: float = 2.0+float(k)*(w-6.0)/3.0
+                var vc: Color = colours[k%colours.size()]
+                acc.box(vu,vu+2.2,6.0,12.0,y,y+2.6,Color(0.92,0.92,0.92),false,Color(0.85,0.85,0.86))
+                acc.box(vu-0.05,vu+2.25,7.5,10.5,y+1.2,y+1.7,vc)
+                if mode != "practice":
+                    for pu in [vu+2.8,vu+7.0]:
+                        for pv in [6.0,10.0]:
+                            acc.box(pu,pu+0.1,pv,pv+0.1,y,y+2.5,Color(0.75,0.75,0.76))
+                    acc.box(vu+2.6,vu+7.3,5.8,10.3,y+2.5,y+2.8,vc,false,vc)
+            # Start banner on two posts (practice: there is no start gantry).
+            if mode != "practice":
+                pass
+            else:
+                acc.box(0.8,1.1,0.4,0.7,y,y+5.5,Color(0.80,0.80,0.80))
+                acc.box(w-1.1,w-0.8,0.4,0.7,y,y+5.5,Color(0.80,0.80,0.80))
+                acc.box(0.8,w-0.8,0.45,0.65,y+4.3,y+5.4,STYLE_BANNER(venue),true)
+        else:
+            # Parc ferme: marshal cabin, checkered flag posts, cones.
+            acc.box(1.2,6.2,6.0,10.0,y,y+2.8,Color(0.90,0.90,0.88),false,Color(0.32,0.33,0.35))
+            acc.box(1.0,6.4,5.94,6.0,y+1.3,y+2.2,Color(0.22,0.32,0.42))
+            for fk in range(4):
+                var fu: float = 8.0+float(fk)*(w-10.0)/3.0
+                acc.box(fu,fu+0.1,2.0,2.1,y,y+4.5,Color(0.8,0.8,0.8))
+                for cx in range(4):
+                    for cy in range(3):
+                        var col: Color = Color(0.95,0.95,0.95) if (cx+cy)%2 == 0 else Color(0.06,0.06,0.07)
+                        acc.box(fu+0.1+float(cx)*0.3,fu+0.4+float(cx)*0.3,2.02,2.08,y+3.6+float(cy)*0.3,y+3.9+float(cy)*0.3,col)
+            for k2 in range(6):
+                var cu: float = w*0.3+float(k2)*1.8
+                acc.box(cu,cu+0.45,1.6,2.05,y,y+0.7,Color(1.0,0.45,0.08))
+        var r := Rect2(c,Vector2.ZERO)
+        for a2 in [-0.5,0.5]:
+            for b2 in [-0.5,0.5]:
+                r = r.expand(c+(fr[1] as Vector2)*w*a2+(fr[2] as Vector2)*d*b2)
+        venue_keep.append(r.grow(3.0))
+        out[end] = true
+    return out
+
+func road_pads() -> Array:
+    return world.road.get("end_pads",[]) if not world.road.is_empty() else []
+
+func STYLE_BANNER(venue: String) -> Color:
+    match venue:
+        "paddock_eu":
+            return Color(0.85,0.12,0.20)
+        "paddock_ie":
+            return Color(0.10,0.55,0.32)
+    return Color(0.95,0.22,0.36)
 
 ## Irish roads: dry-stone walls along both sides, outside the verge and
 ## barrier strip (gaps at the paddock and over bridges / cliff walls).

@@ -23,6 +23,8 @@ const GRID = preload("res://scripts/world/track_grid.gd")
 const TRACK = preload("res://scripts/world/drift_track.gd")
 const DNA = preload("res://scripts/world/track_dna.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const STEPS = preload("res://scripts/world/step_runner.gd")
+const BUSY = preload("res://scripts/ui/busy_overlay.gd")
 const DRAFT: String = "user://nitro_terrain_builder_draft.json"
 const DRIVE_PATH: String = "user://nitro_track_terrain_drive.json"
 const REBUILD_INTERVAL: float = 0.30
@@ -104,9 +106,31 @@ var dim_rect: ColorRect
 # building area visible over mountain walls.
 var _cam_key: String = ""
 var view_pitch: float = 40.0
+## v0.1.27: in the game, long jobs run in frame slices behind a loading
+## animation; tests (a scripted SceneTree) keep the synchronous calls.
+var ui_async: bool = false
+var busy_running: bool = false
+## v0.1.27 navigation: MOVE mode (one finger pans while building), pan on a
+## fixed ground plane (no jumps over mountains), fling, twist dead zone,
+## auto-scroll when a stroke reaches the map edge.
+var pan_mode: bool = false
+var pan_pointer: int = -1
+var pan_plane_y: float = 0.0
+var pan_anchor: Vector3 = Vector3.ZERO
+var pan_vel: Vector2 = Vector2.ZERO
+var pan_last_t: int = 0
+var stroke_pos: Vector2 = Vector2(-1,-1)
+var g_twist_on: bool = false
+var g_plane_y: float = 0.0
+var dialog: Control
+## Saved track being edited (SAVE overwrites it; SAVE AS NEW makes a copy).
+var loaded_path: String = ""
+var loaded_name: String = ""
+var _adapt_again: bool = false
 
 func _ready() -> void:
     STYLE.ensure_settings()
+    ui_async = get_tree().get_script() == null
     grid = TT.new_grid()
     _build_scene_nodes()
     var edit_path: String = str(ProjectSettings.get_setting("nitro/terrain_edit_track",""))
@@ -117,12 +141,18 @@ func _ready() -> void:
     if not loaded:
         _load_draft()
     _build_ui()
-    generate_terrain(false)
-    if stage == "build":
-        _enter_build()
-    else:
-        _enter_setup()
     get_viewport().size_changed.connect(_on_resize)
+    var enter := func() -> void:
+        if stage == "build":
+            _enter_build()
+        else:
+            _enter_setup()
+    if ui_async:
+        _enter_setup_ui_only()
+        _generate_async(false,enter,"LOADING TRACK" if loaded else "GENERATING TERRAIN")
+        return
+    generate_terrain(false)
+    enter.call()
 
 # ------------------------------------------------------------------ scene
 
@@ -159,10 +189,11 @@ func descriptor() -> Dictionary:
 ## (Re)generate the landscape for the current selection. new_seed = true
 ## rolls a new terrain seed ("NEW LANDSCAPE").
 func generate_terrain(new_seed: bool = true) -> void:
+    if ui_async:
+        _generate_async(new_seed)
+        return
     if new_seed:
-        terrain_seed = (terrain_seed*1103515245+12345+int(Time.get_ticks_usec()%9973)) % 999983
-        if terrain_seed <= 0:
-            terrain_seed += 1
+        _roll_seed()
     if world != null:
         remove_child(world)
         world.queue_free()
@@ -183,6 +214,50 @@ func generate_terrain(new_seed: bool = true) -> void:
     _adapt_now()
     if title_label != null:
         _refresh_titles()
+
+func _roll_seed() -> void:
+    terrain_seed = (terrain_seed*1103515245+12345+int(Time.get_ticks_usec()%9973)) % 999983
+    if terrain_seed <= 0:
+        terrain_seed += 1
+
+## generate_terrain() in frame slices behind the loading animation (field
+## bake -> terrain chunks -> scenery chunks -> road fit), then `then`.
+func _generate_async(new_seed: bool, then: Callable = Callable(), title: String = "GENERATING TERRAIN") -> void:
+    if busy_running:
+        return
+    busy_running = true
+    var b: NitroBusy = BUSY.open(self,title)
+    b.set_text(title,"%s • %s" % [str(CAT.info(archetype)["name"]),str(CAT.info(archetype)["country"]).to_upper()])
+    await get_tree().process_frame
+    await get_tree().process_frame
+    if new_seed:
+        _roll_seed()
+    var w: NitroTerrainWorld = WORLD.new()
+    w.name = "Terrain world"
+    w.setup(descriptor())
+    await STEPS.run_sliced(w.field.bake_steps(),get_tree(),35.0,func(f: float): b.set_progress(f*0.25))
+    if world != null:
+        remove_child(world)
+        world.queue_free()
+    world = w
+    add_child(w)
+    await STEPS.run_sliced(w.build_steps(),get_tree(),35.0,func(f: float): b.set_progress(0.25+f*0.6))
+    world.set_fog_scale(0.0)
+    _last_fog = -1.0
+    build_map = world.field.build_map()
+    generated_key = "%s/%d" % [archetype,terrain_seed]
+    _rebuild_overlay()
+    dirty = true
+    adapt_pending = true
+    _rebuild_preview()
+    b.set_text("FITTING THE ROAD","CUT / FILL • BRIDGES • SCENERY")
+    await _adapt_sliced(b)
+    if title_label != null:
+        _refresh_titles()
+    b.close()
+    busy_running = false
+    if then.is_valid():
+        then.call()
 
 func _rebuild_overlay() -> void:
     for child in overlay_root.get_children():
@@ -313,8 +388,8 @@ func _build_ui() -> void:
     _landscape_row(y2,row_h,left,width)
     _row(setup_box,[["PRACTICE","_pick_event","practice"],["CLUB EVENT","_pick_event","club"],["PRO EVENT","_pick_event","pro"]],
         y3,row_h,left,width,"event_")
-    _row(setup_box,[["GENERATE TERRAIN","_generate_pressed",null],["VIEW","_cycle_view",null],["DRAW ROAD ▶","_enter_build",null]],
-        y4,row_h,left,width,"")
+    _row(setup_box,[["GENERATE TERRAIN","_generate_pressed",null],["MY TRACKS","_open_tracks",null],["VIEW","_cycle_view",null],
+        ["DRAW ROAD ▶","_enter_build",null]],y4,row_h,left,width,"")
     desc_label = Label.new()
     desc_label.name = "Landscape description"
     desc_label.position = Vector2(left,y1-row_h*1.25)
@@ -366,6 +441,8 @@ func _build_ui() -> void:
         y3,row_h,left,width,"")
     _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
         ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
+    var mw: float = width*0.30
+    _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y3-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
     map_rect = Rect2(0.0,header_rect.end.y+s.y*0.006,s.x,y1-row_h*1.3-header_rect.end.y)
     _refresh_titles()
 
@@ -440,7 +517,9 @@ func _refresh_titles() -> void:
         gen.text = "NEW LANDSCAPE ↻" if generated_key == "%s/%d" % [archetype,terrain_seed] else "GENERATE TERRAIN"
         STYLE.style_button(gen,ui_unit,is_pending())
     if buttons.has("DRAW"):
-        STYLE.style_button(buttons["DRAW"],ui_unit,mode == "draw")
+        STYLE.style_button(buttons["DRAW"],ui_unit,mode == "draw" and not pan_mode)
+        if buttons.has("MOVE"):
+            STYLE.style_button(buttons["MOVE"],ui_unit,pan_mode)
         STYLE.style_button(buttons["ERASE"],ui_unit,mode == "erase")
         (buttons["b_LOOP"] as Button).text = "LOOP" if topology == "loop" else "ROUTE"
         STYLE.style_button(buttons["b_LOOP"],ui_unit,true)
@@ -467,6 +546,11 @@ func _on_resize() -> void:
 
 # ------------------------------------------------------------ setup stage
 
+## Bars only (no camera fit) while the first landscape is still loading.
+func _enter_setup_ui_only() -> void:
+    setup_box.visible = stage != "build"
+    build_box.visible = stage == "build"
+
 func _enter_setup() -> void:
     stage = "setup"
     setup_box.visible = true
@@ -475,7 +559,7 @@ func _enter_setup() -> void:
     view_index = 0
     _set_view("3D")
     _fit()
-    _status("DRAG TO LOOK AROUND • PINCH TO ZOOM • GENERATE TERRAIN AGAIN FOR A NEW LANDSCAPE",true)
+    _status("DRAG TO MOVE • PINCH TO ZOOM • TWIST TO ROTATE • GENERATE FOR A NEW LANDSCAPE",true)
 
 func _enter_build() -> void:
     if is_pending():
@@ -520,13 +604,28 @@ func _pick_event(e: String) -> void:
 
 func _generate_pressed() -> void:
     var again: bool = generated_key == "%s/%d" % [archetype,terrain_seed]
-    # A different landscape keeps the road only where it is still buildable.
+    if ui_async:
+        _generate_async(again,_after_generate)
+        return
     generate_terrain(again)
-    _drop_unbuildable_tiles()
+    _after_generate()
+
+## v0.1.27: a new landscape keeps the WHOLE drawn road (no more scattered
+## pieces): it is re-fitted to the new terrain; tiles that are red there
+## are reported (ERASE them or CLEAR) instead of silently cut out.
+func _after_generate() -> void:
+    var red: int = 0
+    for c in grid.links.keys():
+        if int(build_map[c]["state"]) >= 2:
+            red += 1
+            _flash(c,false)
     _refresh_titles()
     _fit()
     _save_draft()
-    _status("TERRAIN %s • SEED %d • %s" % [str(CAT.info(archetype)["name"]),terrain_seed,_map_summary()],true)
+    if red > 0:
+        _status("TERRAIN %s • YOUR ROAD CROSSES %d RED TILE%s HERE • ERASE THEM OR CLEAR" % [str(CAT.info(archetype)["name"]),red,"" if red == 1 else "S"],false)
+    else:
+        _status("TERRAIN %s • SEED %d • %s" % [str(CAT.info(archetype)["name"]),terrain_seed,_map_summary()],true)
 
 func _map_summary() -> String:
     var cnt: Array = [0,0,0]
@@ -679,6 +778,9 @@ func pick(screen: Vector2) -> Vector2i:
 # ------------------------------------------------------------------ input
 
 func _unhandled_input(event: InputEvent) -> void:
+    if busy_running or dialog != null:
+        touches.clear()
+        return
     if event is InputEventScreenTouch:
         var t: InputEventScreenTouch = event
         if t.pressed and map_rect.has_point(t.position):
@@ -686,22 +788,30 @@ func _unhandled_input(event: InputEvent) -> void:
         else:
             touches.erase(t.index)
         if t.pressed and touches.size() == 2:
+            pan_pointer = -1
             _begin_gesture()
         elif t.pressed and touches.size() == 1 and not gesture_active and map_rect.has_point(t.position):
-            if stage == "build":
+            if stage == "build" and not pan_mode:
                 stroke_pointer = t.index
+                stroke_pos = t.position
                 begin_stroke(pick(t.position))
             else:
-                orbit_pointer = t.index
-                orbit_last = t.position
+                _begin_pan(t.index,t.position)
         elif not t.pressed:
             if t.index == stroke_pointer:
                 stroke_pointer = -1
+                stroke_pos = Vector2(-1,-1)
                 end_stroke()
+            if t.index == pan_pointer:
+                _end_pan()
             if t.index == orbit_pointer:
                 orbit_pointer = -1
         if gesture_active and touches.size() < 2:
             gesture_active = false
+            # The finger left on screen keeps panning (no jump).
+            if touches.size() == 1 and (stage != "build" or pan_mode):
+                var k: int = int(touches.keys()[0])
+                _begin_pan(k,touches[k])
     elif event is InputEventScreenDrag:
         var dr: InputEventScreenDrag = event
         if touches.has(dr.index):
@@ -709,7 +819,10 @@ func _unhandled_input(event: InputEvent) -> void:
         if gesture_active:
             _update_gesture()
         elif dr.index == stroke_pointer:
+            stroke_pos = dr.position
             move_stroke(pick(dr.position))
+        elif dr.index == pan_pointer:
+            _move_pan(dr.position)
         elif dr.index == orbit_pointer:
             _orbit(dr.position-orbit_last)
             orbit_last = dr.position
@@ -725,25 +838,71 @@ func _unhandled_input(event: InputEvent) -> void:
         if mb.button_index != MOUSE_BUTTON_LEFT:
             return
         if mb.pressed and map_rect.has_point(mb.position):
-            if stage == "build":
+            if stage == "build" and not pan_mode:
+                stroke_pos = mb.position
                 begin_stroke(pick(mb.position))
             else:
-                orbit_pointer = 98
-                orbit_last = mb.position
+                _begin_pan(98,mb.position)
         elif not mb.pressed:
             if stroke_active:
+                stroke_pos = Vector2(-1,-1)
                 end_stroke()
-            if orbit_pointer == 98:
-                orbit_pointer = -1
+            if pan_pointer == 98:
+                _end_pan()
     elif event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
         var mm: InputEventMouseMotion = event
         if stroke_active and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
+            stroke_pos = mm.position
             move_stroke(pick(mm.position))
+        elif pan_pointer == 98:
+            _move_pan(mm.position)
         elif orbit_pointer >= 98:
             _orbit(mm.position-orbit_last)
             orbit_last = mm.position
     elif event.is_action_pressed("ui_cancel"):
         _back()
+
+## Ground point under a screen position on the horizontal plane y (smooth
+## panning: the anchor never jumps between near and far terrain).
+func _plane_hit(screen: Vector2, y: float) -> Vector3:
+    var o: Vector3 = camera.project_ray_origin(screen)
+    var d: Vector3 = camera.project_ray_normal(screen)
+    if d.y > -0.02:
+        return ground_hit(screen)
+    var t: float = (y-o.y)/d.y
+    return o+d*t
+
+func _begin_pan(index: int, pos: Vector2) -> void:
+    pan_pointer = index
+    pan_anchor = ground_hit(pos)
+    pan_plane_y = pan_anchor.y
+    pan_vel = Vector2.ZERO
+    pan_last_t = Time.get_ticks_msec()
+
+func _move_pan(pos: Vector2) -> void:
+    var now: Vector3 = _plane_hit(pos,pan_plane_y)
+    var d := Vector2(pan_anchor.x-now.x,pan_anchor.z-now.z)
+    cam_target += Vector3(d.x,0.0,d.y)
+    goal_target = cam_target
+    _apply_camera()
+    var t: int = Time.get_ticks_msec()
+    var dt: float = maxf(float(t-pan_last_t)/1000.0,0.004)
+    pan_vel = pan_vel.lerp(d/dt,0.35)
+    pan_last_t = t
+
+func _end_pan() -> void:
+    pan_pointer = -1
+    # Fling: keep gliding a little in the swipe direction.
+    if Time.get_ticks_msec()-pan_last_t < 90 and pan_vel.length() > 30.0:
+        var glide: Vector2 = pan_vel.limit_length(cam_dist*2.0)*0.22
+        goal_target = cam_target+Vector3(glide.x,0.0,glide.y)
+    pan_vel = Vector2.ZERO
+
+func _toggle_pan() -> void:
+    pan_mode = not pan_mode
+    _refresh_titles()
+    _status("MOVE: ONE FINGER PANS THE MAP • TAP ✋ MOVE AGAIN TO DRAW" if pan_mode
+        else "DRAW: DRAG OVER TILES • TWO FINGERS ALWAYS MOVE / ZOOM",true)
 
 func _orbit(delta: Vector2) -> void:
     goal_yaw -= delta.x*0.25
@@ -774,6 +933,8 @@ func _begin_gesture() -> void:
     g_start_cam_dist = cam_dist
     g_start_yaw = cam_yaw
     g_anchor = ground_hit((a+b)*0.5)
+    g_plane_y = g_anchor.y
+    g_twist_on = false
 
 func _update_gesture() -> void:
     var pts: Array = touches.values()
@@ -783,9 +944,17 @@ func _update_gesture() -> void:
     var b: Vector2 = pts[1]
     var mid: Vector2 = (a+b)*0.5
     cam_dist = clampf(g_start_cam_dist*g_start_dist/maxf(a.distance_to(b),1.0),DIST_MIN,DIST_MAX)
-    cam_yaw = g_start_yaw-rad_to_deg(wrapf((b-a).angle()-g_start_angle,-PI,PI))
+    # Twist rotates only after a clear turn (12 deg), so pinching never
+    # spins the map by accident.
+    var twist: float = rad_to_deg(wrapf((b-a).angle()-g_start_angle,-PI,PI))
+    if not g_twist_on and absf(twist) > 12.0:
+        g_twist_on = true
+        g_start_angle += deg_to_rad(12.0*signf(twist))
+        twist = rad_to_deg(wrapf((b-a).angle()-g_start_angle,-PI,PI))
+    if g_twist_on:
+        cam_yaw = g_start_yaw-twist
     _apply_camera()
-    var now: Vector3 = ground_hit(mid)
+    var now: Vector3 = _plane_hit(mid,g_plane_y)
     cam_target += Vector3(g_anchor.x-now.x,0.0,g_anchor.z-now.z)
     goal_target = cam_target
     goal_dist = cam_dist
@@ -988,6 +1157,15 @@ func _close_loop() -> void:
 
 ## AUTO: a random buildable loop / route on this terrain.
 func _auto() -> void:
+    if ui_async:
+        if busy_running:
+            return
+        busy_running = true
+        var b: NitroBusy = BUSY.open(self,"FINDING A %s" % topology.to_upper())
+        await get_tree().process_frame
+        await get_tree().process_frame
+        b.close()
+        busy_running = false
     _push_undo()
     redo_stack.clear()
     var seed_value: int = terrain_seed*31+int(Time.get_ticks_msec()%100000)
@@ -1017,6 +1195,26 @@ func _process(delta: float) -> void:
             cam_target = cam_target.lerp(goal_target,k)
             cam_pitch = lerpf(cam_pitch,goal_pitch,k)
             cam_yaw = lerpf(cam_yaw,goal_yaw,k)
+    if stroke_active and stroke_pos.x >= 0.0 and map_rect.size.x > 0.0:
+        # Drawing towards the map edge scrolls the map (long roads).
+        var m: float = map_rect.size.x*0.09
+        var push := Vector2.ZERO
+        if stroke_pos.x < map_rect.position.x+m:
+            push.x = -1.0
+        elif stroke_pos.x > map_rect.end.x-m:
+            push.x = 1.0
+        if stroke_pos.y < map_rect.position.y+m:
+            push.y = -1.0
+        elif stroke_pos.y > map_rect.end.y-m:
+            push.y = 1.0
+        if push != Vector2.ZERO:
+            var yaw: float = deg_to_rad(cam_yaw)
+            var right := Vector3(cos(yaw),0.0,-sin(yaw))
+            var fwd := Vector3(-sin(yaw),0.0,-cos(yaw))
+            var v: Vector3 = (right*push.x-fwd*push.y)*cam_dist*0.55*delta
+            cam_target += v
+            goal_target = cam_target
+            move_stroke(pick(stroke_pos))
     _apply_camera()
     if dirty and stroke_active and since_rebuild >= REBUILD_INTERVAL:
         _rebuild_preview()
@@ -1094,6 +1292,47 @@ func _draped_heights(samples: Array[Vector2], closed: bool) -> PackedFloat32Arra
 ## Full terrain adaptation for the drawn road (one connected piece): the
 ## saved data (with knot heights) -> Track DNA -> the race road + terrain.
 func _adapt_now() -> void:
+    if ui_async:
+        _adapt_ui()
+        return
+    var prep: Dictionary = _adapt_prepare()
+    if prep.has("comp"):
+        var comp: Dictionary = prep["comp"]
+        last_adapt = world.set_road(comp["centerline"],comp["halfwidths"],comp["heights"],bool(comp["closed"]))
+    else:
+        last_adapt = world.set_road([] as Array[Vector2],PackedFloat32Array(),PackedFloat32Array(),false)
+    _adapt_finish(prep)
+
+## Game: road fit after an edit in slices behind a small "UPDATING" pill.
+func _adapt_ui() -> void:
+    if busy_running:
+        _adapt_again = true
+        return
+    busy_running = true
+    var b: NitroBusy = BUSY.open(self,"UPDATING TERRAIN",true)
+    await get_tree().process_frame
+    await _adapt_sliced(b)
+    b.close()
+    busy_running = false
+    if _adapt_again:
+        _adapt_again = false
+        _adapt_ui()
+
+func _adapt_sliced(b: NitroBusy) -> void:
+    var prep: Dictionary = _adapt_prepare()
+    var steps: Array
+    if prep.has("comp"):
+        var comp: Dictionary = prep["comp"]
+        steps = world.set_road_steps(comp["centerline"],comp["halfwidths"],comp["heights"],bool(comp["closed"]))
+    else:
+        steps = world.set_road_steps([] as Array[Vector2],PackedFloat32Array(),PackedFloat32Array(),false)
+    await STEPS.run_sliced(steps,get_tree(),35.0,func(f: float): b.set_progress(f))
+    last_adapt = world.road_result
+    _adapt_finish(prep)
+
+## Evaluate the drawn road: {} = no single drivable piece (terrain cleared),
+## else {"comp", "ev", "data", "closed"}.
+func _adapt_prepare() -> Dictionary:
     adapt_pending = false
     track_ok = false
     last_eval = {}
@@ -1104,16 +1343,21 @@ func _adapt_now() -> void:
         order.append(c)
     var closed: bool = bool(ro.get("closed",false))
     if int(ro.get("parts",0)) != 1 or order.size() < 2 or (closed and topology == "route"):
-        last_adapt = world.set_road([] as Array[Vector2],PackedFloat32Array(),PackedFloat32Array(),false)
-        _update_status()
-        return
+        return {}
     var data: Dictionary = TT.track_data(grid,order,closed,world.field,descriptor(),"Terrain track","terrain_check")
     var ev: Dictionary = TT.evaluate(world.field,data)
     last_eval = ev
     last_data = data
     var comp: Dictionary = ev.get("compiled",{})
     if bool(comp.get("ok",false)) and (comp["heights"] as PackedFloat32Array).size() == (comp["centerline"] as Array).size():
-        last_adapt = world.set_road(comp["centerline"],comp["halfwidths"],comp["heights"],bool(comp["closed"]))
+        return {"comp":comp,"ev":ev,"data":data,"closed":closed}
+    return {}
+
+func _adapt_finish(prep: Dictionary) -> void:
+    if prep.has("comp"):
+        var comp: Dictionary = prep["comp"]
+        var ev: Dictionary = prep["ev"]
+        var closed: bool = bool(prep["closed"])
         # Replace the quick preview by the exact race road.
         for child in road_root.get_children():
             road_root.remove_child(child)
@@ -1127,8 +1371,6 @@ func _adapt_now() -> void:
         piece._apply_compiled(comp)
         var drivable: bool = (closed and topology == "loop") or (not closed and topology == "route")
         track_ok = bool(ev["ok"]) and drivable
-    else:
-        last_adapt = world.set_road([] as Array[Vector2],PackedFloat32Array(),PackedFloat32Array(),false)
     _update_status()
 
 func _update_status() -> void:
@@ -1194,16 +1436,178 @@ func _write(path: String, title: String, id: String) -> bool:
     file.close()
     return bool(DNA.read_track(path).get("ok",false))
 
+## SAVE: asks for a name (v0.1.27). Editing a saved track offers SAVE
+## (overwrite) and SAVE AS NEW. Saved tracks appear in DRIVE > MY TRACKS and
+## in MY TRACKS here.
 func _save() -> bool:
-    var stamp: Dictionary = Time.get_datetime_dict_from_system()
-    var title: String = "%s %02d-%02d %02d:%02d" % [str(CAT.info(archetype)["short"]),stamp["day"],stamp["month"],stamp["hour"],stamp["minute"]]
-    var slug: String = "terrain_%04d%02d%02d_%02d%02d%02d" % [stamp["year"],stamp["month"],stamp["day"],
-        stamp["hour"],stamp["minute"],stamp["second"]]
-    var path: String = "user://nitro_track_"+slug+".json"
-    if not _write(path,title,slug):
+    if current_track_data("x","x").is_empty():
+        _status("FINISH A VALID %s FIRST" % topology.to_upper(),false)
         return false
-    _status("SAVED • "+title+" • IN DRIVE > MY TRACKS",true)
+    if not ui_async:
+        return _do_save(_default_name(),false)
+    _name_dialog()
     return true
+
+func _default_name() -> String:
+    if loaded_name != "":
+        return loaded_name
+    return "MY %s %s" % [str(CAT.info(archetype)["short"]),"ROUTE" if topology == "route" else "CIRCUIT"]
+
+func _do_save(title: String, overwrite: bool) -> bool:
+    var name: String = title.strip_edges().to_upper()
+    if name == "":
+        name = _default_name()
+    var path: String = loaded_path
+    var slug: String = ""
+    if overwrite and loaded_path != "" and loaded_path != DRIVE_PATH:
+        slug = loaded_path.get_file().trim_prefix("nitro_track_").trim_suffix(".json")
+    else:
+        var stamp: Dictionary = Time.get_datetime_dict_from_system()
+        slug = "terrain_%04d%02d%02d_%02d%02d%02d" % [stamp["year"],stamp["month"],stamp["day"],
+            stamp["hour"],stamp["minute"],stamp["second"]]
+        path = "user://nitro_track_"+slug+".json"
+    if not _write(path,name,slug):
+        return false
+    loaded_path = path
+    loaded_name = name
+    _status("SAVED • %s • DRIVE > MY TRACKS" % name,true)
+    return true
+
+func _modal(title: String, height: float) -> VBoxContainer:
+    _close_dialog()
+    var s: Vector2 = get_viewport().get_visible_rect().size
+    var layer := CanvasLayer.new()
+    layer.layer = 40
+    add_child(layer)
+    var root := Control.new()
+    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.mouse_filter = Control.MOUSE_FILTER_STOP
+    root.theme = STYLE.screen_theme(ui_unit)
+    layer.add_child(root)
+    dialog = root
+    var shade := ColorRect.new()
+    shade.color = Color(0,0,0,0.62)
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.add_child(shade)
+    var panel := PanelContainer.new()
+    panel.add_theme_stylebox_override("panel",STYLE.modal_box(ui_unit))
+    panel.position = Vector2(s.x*0.06,s.y*0.12)
+    panel.size = Vector2(s.x*0.88,height)
+    root.add_child(panel)
+    var box := VBoxContainer.new()
+    box.add_theme_constant_override("separation",int(12*ui_unit))
+    panel.add_child(box)
+    var head := Label.new()
+    head.text = title
+    head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    head.add_theme_font_override("font",STYLE.BOLD)
+    head.add_theme_font_size_override("font_size",int(26*ui_unit))
+    box.add_child(head)
+    return box
+
+func _close_dialog() -> void:
+    if dialog != null:
+        dialog.get_parent().queue_free()
+        dialog = null
+
+func _dialog_button(parent: Control, text: String, cb: Callable, primary: bool = false) -> Button:
+    var b := Button.new()
+    b.text = text
+    b.custom_minimum_size = Vector2(0,int(58*ui_unit))
+    b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    b.add_theme_font_size_override("font_size",int(19*ui_unit))
+    STYLE.style_button(b,ui_unit,primary)
+    b.pressed.connect(cb)
+    parent.add_child(b)
+    return b
+
+func _name_dialog() -> void:
+    var box: VBoxContainer = _modal("SAVE TRACK",get_viewport().get_visible_rect().size.y*0.30)
+    var hint := Label.new()
+    hint.text = "NAME"
+    hint.add_theme_color_override("font_color",STYLE.MUTED)
+    box.add_child(hint)
+    var edit := LineEdit.new()
+    edit.name = "Track name"
+    edit.text = _default_name()
+    edit.max_length = 28
+    edit.select_all_on_focus = true
+    edit.custom_minimum_size.y = 60*ui_unit
+    edit.add_theme_font_size_override("font_size",int(22*ui_unit))
+    box.add_child(edit)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation",int(10*ui_unit))
+    box.add_child(row)
+    if loaded_path != "" and loaded_path != DRIVE_PATH:
+        _dialog_button(row,"SAVE",func():
+            _close_dialog()
+            _do_save(edit.text,true),true)
+        _dialog_button(row,"SAVE AS NEW",func():
+            _close_dialog()
+            _do_save(edit.text,false))
+    else:
+        _dialog_button(row,"SAVE",func():
+            _close_dialog()
+            _do_save(edit.text,false),true)
+    _dialog_button(row,"CANCEL",_close_dialog)
+    edit.text_submitted.connect(func(t: String):
+        _close_dialog()
+        _do_save(t,loaded_path != "" and loaded_path != DRIVE_PATH))
+    edit.call_deferred("grab_focus")
+
+## Saved terrain tracks on this device (newest first).
+static func terrain_tracks() -> Array[Dictionary]:
+    var out: Array[Dictionary] = []
+    for f in DirAccess.get_files_at("user://"):
+        if not (f.begins_with("nitro_track_") and f.ends_with(".json")):
+            continue
+        var path: String = "user://"+f
+        var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+        if not (raw is Dictionary):
+            continue
+        var w: Dictionary = TT.world_of(raw)
+        if w.is_empty():
+            continue
+        out.append({"path":path,"name":str(raw.get("name","TRACK")),"archetype":str(w.get("archetype","")),
+            "closed":bool(raw.get("closed",true)),"time":FileAccess.get_modified_time(path)})
+    out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["time"]) > int(b["time"]))
+    return out
+
+## MY TRACKS: pick a saved terrain track to edit (its landscape is rebuilt).
+func _open_tracks() -> void:
+    var list: Array[Dictionary] = terrain_tracks()
+    var box: VBoxContainer = _modal("MY TRACKS",get_viewport().get_visible_rect().size.y*0.66)
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size.y = get_viewport().get_visible_rect().size.y*0.46
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    box.add_child(scroll)
+    var col := VBoxContainer.new()
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    col.add_theme_constant_override("separation",int(10*ui_unit))
+    scroll.add_child(col)
+    if list.is_empty():
+        var none := Label.new()
+        none.text = "NO SAVED TERRAIN TRACKS YET\nDRAW A ROAD AND TAP SAVE"
+        none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        col.add_child(none)
+    for t in list:
+        var inf: Dictionary = CAT.info(str(t["archetype"]))
+        var label: String = "%s\n%s • %s" % [str(t["name"]).to_upper(),str(inf.get("name","")),"LOOP" if bool(t["closed"]) else "ROUTE"]
+        var b: Button = _dialog_button(col,label,func():
+            _close_dialog()
+            _open_saved(str(t["path"])))
+        b.custom_minimum_size.y = 84*ui_unit
+        b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+    _dialog_button(box,"CLOSE",_close_dialog)
+
+func _open_saved(path: String) -> void:
+    grid = TT.new_grid()
+    if not load_track_file(path):
+        _status("COULD NOT OPEN THAT TRACK",false)
+        return
+    _generate_async(false,func():
+        _enter_build()
+        _status("EDITING %s" % loaded_name,true),"LOADING TRACK")
 
 func _drive() -> void:
     if not _write(DRIVE_PATH,"MY %s %s" % [str(CAT.info(archetype)["short"]),"ROUTE" if topology == "route" else "CIRCUIT"],"player_terrain_track"):
@@ -1277,4 +1681,6 @@ func load_track_file(path: String) -> bool:
     var order: Array = lg["order"]
     route_start = order[0] if not order.is_empty() else Vector2i(-1,-1)
     stage = "build"
+    loaded_path = path
+    loaded_name = str(raw.get("name","")).to_upper()
     return true

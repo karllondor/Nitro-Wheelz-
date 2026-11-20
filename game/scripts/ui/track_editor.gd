@@ -77,6 +77,13 @@ func _ready() -> void:
     if not (raw is Dictionary):
         raw = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
         chosen = SOURCE
+    # v0.1.27: terrain tracks are edited in the Terrain Builder (the node
+    # editor has no landscape); open it there instead of losing the world.
+    if raw is Dictionary and chosen != SOURCE and \
+            not load("res://scripts/world/terrain/terrain_track.gd").world_of(raw).is_empty():
+        ProjectSettings.set_setting("nitro/terrain_edit_track",chosen)
+        get_tree().call_deferred("change_scene_to_file","res://scenes/terrain_builder.tscn")
+        return
     data = raw
     if chosen == SOURCE:
         data["id"] = "player_custom_track"
@@ -657,7 +664,15 @@ func _auto_smooth() -> void:
     if _point_count() < 8:
         _status("PLACE AT LEAST 8 NODES FIRST",false)
         return
+    var busy: CanvasLayer = null
+    if get_tree().get_script() == null:
+        # Game: show SMOOTHING… with the loading animation before the work.
+        busy = load("res://scripts/ui/busy_overlay.gd").open(self,"SMOOTHING TRACK")
+        await get_tree().process_frame
+        await get_tree().process_frame
     var fix: Dictionary = DNA.repair(data)
+    if busy != null:
+        busy.queue_free()
     if not bool(fix.get("ok",false)):
         _status("CAN'T FIX AUTOMATICALLY • "+str(fix.get("reason","drag the red nodes apart")),false)
         return

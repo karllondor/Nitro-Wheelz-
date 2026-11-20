@@ -192,6 +192,13 @@ func _run() -> void:
         _fail("Open route must race as one lap without a wrap segment")
         return
     var tr: NitroDriftTrack = rr.track
+    # v0.1.27: open routes end in a staging paddock / parc ferme (no cut-off
+    # road) and the start has a light pole.
+    var vinfo: Dictionary = tr.terrain.scenery.venue_info
+    var ends: Dictionary = vinfo.get("route_ends",{})
+    if not bool(ends.get("start",false)) or not bool(ends.get("finish",false)) or not vinfo.has("start_lights"):
+        _fail("Open route needs start / finish areas and start lights (%s)" % [vinfo.get("route_ends",{})])
+        return
     if tr.start_index <= 0 or tr.finish_index >= tr.centerline.size()-1 or tr.finish_progress >= 1.0:
         _fail("Open route needs a start inside the first tile and a finish before the end cap")
         return
@@ -225,5 +232,9 @@ func _run() -> void:
     PHYS.save_settings(saved_settings)
     DirAccess.remove_absolute(LOOP_PATH)
     DirAccess.remove_absolute(ROUTE_PATH)
-    print("PASS: elevation physics presets 0/25/50/75/100 %% monotonic (%.2f/%.2f/%.2f/%.2f/%.2f m/s after 2 s parked on %.1f %%; rolling resistance holds the low presets), uphill full throttle 3 s %.1f -> %.1f m/s at 100 %%, 0 %% = parked, flat track bit-identical at 100 %%, snap grounding + nose-up pitch, chase camera above terrain, telemetry, open route finish + end caps" % [speeds[0],speeds[1],speeds[2],speeds[3],speeds[4],best*100.0,climb[0],climb[1]])
+    print("PASS: elevation physics presets 0/25/50/75/100 %% monotonic (%.2f/%.2f/%.2f/%.2f/%.2f m/s after 2 s parked on %.1f %%; rolling resistance holds the low presets), uphill full throttle 3 s %.1f -> %.1f m/s at 100 %%, 0 %% = parked, flat track bit-identical at 100 %%, snap grounding + nose-up pitch, chase camera above terrain, telemetry, open route finish + end caps + start / finish areas + start lights" % [speeds[0],speeds[1],speeds[2],speeds[3],speeds[4],best*100.0,climb[0],climb[1]])
+    # Let freed races release their audio playbacks before the engine exits
+    # (a quit in the same frame could leave the audio thread spinning).
+    for _f in range(3):
+        await process_frame
     quit(0)

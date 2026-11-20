@@ -96,6 +96,9 @@ func _ready() -> void:
     track.track_data_path = str(ProjectSettings.get_setting(
         "nitro/selected_track",TRACK.TRACK_DATA))
     track.name = "Nitro Track DNA"
+    # Game: terrain tracks load behind the loading animation (tests keep the
+    # synchronous build).
+    track.defer_terrain = get_tree().get_script() == null
     add_child(track)
     if not track.track_valid:
         push_error("Selected benchmark track invalid: "+track.track_data_path)
@@ -135,6 +138,29 @@ func _ready() -> void:
     road_y = track.height_from_info(info0)
     car_y = road_y
     _update_visuals()
+    if not track.pending_terrain.is_empty():
+        _load_terrain()
+
+## v0.1.27 loading screen: the landscape of a terrain track is generated in
+## slices under a dimmed "LOADING TRACK" card with spinning dots and a
+## chequered progress strip; driving starts once it is ready.
+func _load_terrain() -> void:
+    set_physics_process(false)
+    var desc: Dictionary = track.pending_terrain
+    var b: NitroBusy = load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING TRACK")
+    var inf: Dictionary = load("res://scripts/world/terrain/terrain_catalog.gd").info(str(desc.get("archetype","")))
+    b.set_text("LOADING TRACK","%s • %s" % [str(track.display_name).to_upper(),str(inf.get("name",""))])
+    await get_tree().process_frame
+    await get_tree().process_frame
+    await load("res://scripts/world/step_runner.gd").run_sliced(track.build_terrain_steps(desc),get_tree(),35.0,
+        func(f: float): b.set_progress(f))
+    track.pending_terrain = {}
+    var info1: Dictionary = track.sample_info(model.position)
+    road_y = track.height_from_info(info1)
+    car_y = road_y
+    _update_visuals()
+    b.close()
+    set_physics_process(true)
 
 func _make_telemetry() -> void:
     if not bool(dev.get("telemetry",false)):
@@ -719,7 +745,8 @@ func _toggle_pause() -> void:
         var panel: NitroPauseMenu = PAUSE_VIEW.new()
         pause_layer.add_child(panel)
         panel.show_pause(Callable(self,"_toggle_pause"),Callable(self,"_restart"),
-            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
+            _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable())
     else:
         if pause_layer != null:
             pause_layer.queue_free()
