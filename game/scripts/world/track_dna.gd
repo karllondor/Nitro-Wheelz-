@@ -19,11 +19,16 @@ static func read_track(path: String) -> Dictionary:
 
 static func compile(data: Dictionary) -> Dictionary:
     var errors := PackedStringArray()
-    if int(data.get("schema_version",0)) != 1 or not bool(data.get("closed",false)):
+    # v0.1.25: point-to-point routes (closed = false, topology "open") are
+    # accepted with their own open-chain sampling and validation; closed
+    # loops are compiled exactly as before.
+    var open_route: bool = not bool(data.get("closed",false)) and str(data.get("topology","")) == "open"
+    if int(data.get("schema_version",0)) != 1 or (not bool(data.get("closed",false)) and not open_route):
         errors.append("Only schema 1 closed loops are accepted")
     var raw_points: Variant = data.get("control_points",[])
-    if not (raw_points is Array) or raw_points.size() < 8:
-        errors.append("At least eight control points are required")
+    var min_points: int = 4 if open_route else 8
+    if not (raw_points is Array) or raw_points.size() < min_points:
+        errors.append("At least %s control points are required" % ("four" if open_route else "eight"))
         return {"ok":false,"errors":errors}
     var points: Array[Vector2] = []
     for item in raw_points:
@@ -38,7 +43,7 @@ static func compile(data: Dictionary) -> Dictionary:
         points.append(Vector2(x,y))
     if not errors.is_empty():
         return {"ok":false,"errors":errors}
-    for i in range(points.size()):
+    for i in range(points.size()-(1 if open_route else 0)):
         if points[i].distance_to(points[(i+1)%points.size()]) < 8.0:
             errors.append("Duplicate or too-close control points at %d" % i)
             return {"ok":false,"errors":errors}
@@ -56,19 +61,34 @@ static func compile(data: Dictionary) -> Dictionary:
             return {"ok":false,"errors":errors}
         widths.append(w)
 
-    var curve: Dictionary = sample_curve(points,widths)
+    var curve: Dictionary = sample_curve_open(points,widths) if open_route else sample_curve(points,widths)
     var samples: Array[Vector2] = curve["centerline"]
     var left: Array[Vector2] = curve["left_edge"]
     var right: Array[Vector2] = curve["right_edge"]
     var halfwidths: PackedFloat32Array = curve["halfwidths"]
-    var checked: PackedStringArray = validate_geometry(samples,left,right,halfwidths)
+    var checked: PackedStringArray = validate_geometry(samples,left,right,halfwidths,not open_route)
     errors.append_array(checked)
+    if open_route and float(curve["length_metres"]) < 150.0:
+        errors.append("Open route shorter than 150 m")
+    # Optional elevation (terrain worlds): one height per control point,
+    # expanded with the same spline as the centreline. Legacy tracks: flat.
+    var heights := PackedFloat32Array()
+    var elev: Variant = data.get("elevation",null)
+    if elev is Dictionary and (elev.get("knot_heights",[]) as Array).size() == points.size():
+        heights = load("res://scripts/world/terrain/road_profile.gd").from_knots(
+            elev["knot_heights"],not open_route,SUBDIVISIONS)
+        for hv in heights:
+            if not is_finite(hv) or absf(hv) > 2000.0:
+                errors.append("Invalid elevation profile")
+                heights = PackedFloat32Array()
+                break
     return {"ok":errors.is_empty(),"errors":errors,
         "centerline":samples,"left_edge":left,"right_edge":right,
         "halfwidths":halfwidths,"arc_lengths":curve["arc_lengths"],
         "length_metres":float(curve["length_metres"]),"track_id":str(data.get("id","unnamed")),
         "track_name":str(data.get("name",data.get("id","unnamed"))),
-        "seed":int(data.get("seed",0)),"control_points":points}
+        "seed":int(data.get("seed",0)),"control_points":points,
+        "closed":not open_route,"heights":heights}
 
 ## Closed Catmull-Rom centreline + road edges, no validation. compile() and
 ## the editor preview both use this, so the editor draws exactly the road
@@ -103,6 +123,41 @@ static func sample_curve(points: Array[Vector2], widths: PackedFloat32Array) -> 
         right.append(samples[i]+normal*halfwidths[i])
         lengths.append(total)
         total += samples[i].distance_to(next)
+    return {"centerline":samples,"left_edge":left,"right_edge":right,
+        "halfwidths":halfwidths,"arc_lengths":lengths,"length_metres":total}
+
+## Open point-to-point route: same uniform Catmull-Rom with clamped end
+## knots (exactly like the builder preview), no wrap-around segment.
+static func sample_curve_open(points: Array[Vector2], widths: PackedFloat32Array) -> Dictionary:
+    var samples: Array[Vector2] = []
+    var halfwidths: PackedFloat32Array = PackedFloat32Array()
+    var count: int = points.size()
+    for i in range(count-1):
+        var p0: Vector2 = points[i-1] if i > 0 else points[0]
+        var p1: Vector2 = points[i]
+        var p2: Vector2 = points[i+1]
+        var p3: Vector2 = points[i+2] if i+2 < count else points[count-1]
+        for j in range(SUBDIVISIONS):
+            var t: float = float(j)/float(SUBDIVISIONS)
+            samples.append(0.5*(2.0*p1+(-p0+p2)*t+(2.0*p0-5.0*p1+4.0*p2-p3)*t*t+(-p0+3.0*p1-3.0*p2+p3)*t*t*t))
+            halfwidths.append(0.5*lerpf(widths[i],widths[i+1],t))
+    samples.append(points[count-1])
+    halfwidths.append(0.5*widths[count-1])
+    var left: Array[Vector2] = []
+    var right: Array[Vector2] = []
+    var lengths: PackedFloat32Array = PackedFloat32Array()
+    var total: float = 0.0
+    var n: int = samples.size()
+    for i in range(n):
+        var a: Vector2 = samples[maxi(i-1,0)]
+        var b: Vector2 = samples[mini(i+1,n-1)]
+        var tangent: Vector2 = (b-a).normalized()
+        var normal: Vector2 = Vector2(-tangent.y,tangent.x)
+        left.append(samples[i]-normal*halfwidths[i])
+        right.append(samples[i]+normal*halfwidths[i])
+        lengths.append(total)
+        if i < n-1:
+            total += samples[i].distance_to(samples[i+1])
     return {"centerline":samples,"left_edge":left,"right_edge":right,
         "halfwidths":halfwidths,"arc_lengths":lengths,"length_metres":total}
 
@@ -252,12 +307,14 @@ static func _merge_pair(groups: Array[Dictionary], i: int, j: int, gap: float, n
     groups.append({"a":Vector2i(i,i),"b":Vector2i(j,j),"gap":gap,"need":need,"at_a":pa,"at_b":pb})
 
 static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
-        right: Array[Vector2], halfwidths: PackedFloat32Array) -> PackedStringArray:
+        right: Array[Vector2], halfwidths: PackedFloat32Array, closed: bool = true) -> PackedStringArray:
     var errors := PackedStringArray()
     var n: int = center.size()
     if n < 8 or left.size()!=n or right.size()!=n or halfwidths.size()!=n:
         errors.append("Invalid sample array dimensions")
         return errors
+    if not closed:
+        return _validate_open(center,left,right,halfwidths)
     for i in range(n):
         var next_i: int = (i+1)%n
         if center[i].distance_to(center[next_i]) < MIN_SEGMENT_M:
@@ -275,10 +332,11 @@ static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
     # Do not test only the centre: unsafe offset meshes can intersect even
     # when a centreline looks superficially acceptable.
     for ring in [center,left,right]:
+        var near: Array = _pair_candidates(ring,true,0.01)
         for i in range(n):
             var a: Vector2 = ring[i]
             var b: Vector2 = ring[(i+1)%n]
-            for j in range(i+2,n):
+            for j in near[i]:
                 if i==0 and j==n-1:
                     continue
                 if Geometry2D.segment_intersects_segment(
@@ -294,10 +352,14 @@ static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
     for k in range(n):
         progress.append(perimeter)
         perimeter += center[k].distance_to(center[(k+1)%n])
+    var max_hw: float = 0.0
+    for w in halfwidths:
+        max_hw = maxf(max_hw,w)
+    var near_c: Array = _pair_candidates(center,true,2.0*max_hw+MIN_CLEARANCE_M+0.01)
     for i in range(n):
         var a: Vector2 = center[i]
         var b: Vector2 = center[(i+1)%n]
-        for j in range(i+2,n):
+        for j in near_c[i]:
             var along: float = progress[j]-progress[i]
             if minf(along,perimeter-along) <= LOCAL_ARC_NEIGHBOURHOOD_M:
                 continue
@@ -309,6 +371,105 @@ static func validate_geometry(center: Array[Vector2],left: Array[Vector2],
                 errors.append("Road corridors overlap near samples %d/%d (%.1fm vs %.1fm)" % [i,j,clearance,safe])
                 return errors
     return errors
+
+## Open chain: the same radius, ring-crossing and corridor-overlap rules
+## as a loop, without the closing segment (ends are free).
+static func _validate_open(center: Array[Vector2],left: Array[Vector2],
+        right: Array[Vector2], halfwidths: PackedFloat32Array) -> PackedStringArray:
+    var errors := PackedStringArray()
+    var n: int = center.size()
+    for i in range(n-1):
+        if center[i].distance_to(center[i+1]) < MIN_SEGMENT_M:
+            errors.append("Zero-length edge at %d" % i)
+            return errors
+    for i in range(2,n-2):
+        var a: Vector2 = center[i-2]
+        var b: Vector2 = center[i]
+        var c: Vector2 = center[i+2]
+        var cross: float = absf((b-a).cross(c-a))
+        if cross > 0.00001:
+            var radius: float = a.distance_to(b)*b.distance_to(c)*c.distance_to(a)/(2.0*cross)
+            if radius < maxf(MIN_RADIUS_M,halfwidths[i]+2.0):
+                errors.append("Curve radius %.1f m too small at sample %d" % [radius,i])
+                return errors
+    for ring in [center,left,right]:
+        var near: Array = _pair_candidates(ring,false,0.01)
+        for i in range(n-1):
+            for j in near[i]:
+                if Geometry2D.segment_intersects_segment(ring[i],ring[i+1],ring[j],ring[j+1]) != null:
+                    errors.append("Self-intersecting road / wall ring at segments %d and %d" % [i,j])
+                    return errors
+    var progress := PackedFloat32Array()
+    var total: float = 0.0
+    for k in range(n):
+        progress.append(total)
+        if k < n-1:
+            total += center[k].distance_to(center[k+1])
+    var max_hw2: float = 0.0
+    for w2 in halfwidths:
+        max_hw2 = maxf(max_hw2,w2)
+    var near_o: Array = _pair_candidates(center,false,2.0*max_hw2+MIN_CLEARANCE_M+0.01)
+    for i in range(n-1):
+        for j in near_o[i]:
+            if progress[j]-progress[i] <= LOCAL_ARC_NEIGHBOURHOOD_M:
+                continue
+            var gap: float = _segment_distance(center[i],center[i+1],center[j],center[j+1])
+            var safe: float = halfwidths[i]+halfwidths[j]+MIN_CLEARANCE_M
+            if gap < safe:
+                errors.append("Road corridors overlap near samples %d/%d (%.1fm vs %.1fm)" % [i,j,gap,safe])
+                return errors
+    return errors
+
+## Broad phase for the pair tests above (v0.1.25): for every segment i the
+## ascending list of segments j >= i+2 whose bounding boxes come within
+## `reach` metres. Pairs further apart can neither intersect nor violate the
+## corridor clearance, so iterating only these candidates in the same (i, j)
+## order gives exactly the same result (and the same first error) as the
+## full O(n^2) scan, in a fraction of the time on long tracks.
+const PAIR_CELL_M: float = 40.0
+
+static func _pair_candidates(ring: Array[Vector2], closed: bool, reach: float) -> Array:
+    var n: int = ring.size()
+    var segs: int = n if closed else n-1
+    var lo: Array[Vector2] = []
+    var hi: Array[Vector2] = []
+    var grid: Dictionary = {}
+    for i in range(segs):
+        var a: Vector2 = ring[i]
+        var b: Vector2 = ring[(i+1)%n]
+        var l := Vector2(minf(a.x,b.x),minf(a.y,b.y))
+        var h := Vector2(maxf(a.x,b.x),maxf(a.y,b.y))
+        lo.append(l)
+        hi.append(h)
+        for cy in range(int(floor(l.y/PAIR_CELL_M)),int(floor(h.y/PAIR_CELL_M))+1):
+            for cx in range(int(floor(l.x/PAIR_CELL_M)),int(floor(h.x/PAIR_CELL_M))+1):
+                var key := Vector2i(cx,cy)
+                if not grid.has(key):
+                    grid[key] = PackedInt32Array()
+                var list: PackedInt32Array = grid[key]
+                list.append(i)
+                grid[key] = list
+    var out: Array = []
+    out.resize(segs)
+    for i2 in range(segs):
+        var l2: Vector2 = lo[i2]-Vector2.ONE*reach
+        var h2: Vector2 = hi[i2]+Vector2.ONE*reach
+        var seen: Dictionary = {}
+        for cy2 in range(int(floor(l2.y/PAIR_CELL_M)),int(floor(h2.y/PAIR_CELL_M))+1):
+            for cx2 in range(int(floor(l2.x/PAIR_CELL_M)),int(floor(h2.x/PAIR_CELL_M))+1):
+                var key2 := Vector2i(cx2,cy2)
+                if not grid.has(key2):
+                    continue
+                for j in grid[key2]:
+                    if j < i2+2 or seen.has(j):
+                        continue
+                    if lo[j].x > h2.x or hi[j].x < l2.x or lo[j].y > h2.y or hi[j].y < l2.y:
+                        continue
+                    seen[j] = true
+        var js := PackedInt32Array(seen.keys())
+        js.sort()
+        out[i2] = js
+    return out
 
 static func _segment_distance(a: Vector2,b: Vector2,c: Vector2,d: Vector2) -> float:
     if Geometry2D.segment_intersects_segment(a,b,c,d) != null:

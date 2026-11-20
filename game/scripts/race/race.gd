@@ -12,6 +12,7 @@ const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
 const SCORER = preload("res://scripts/race/drift_scorer.gd")
+const PHYS_DEV = preload("res://scripts/world/terrain/physics_dev.gd")
 
 var model: NitroDriveModel
 var sfx: NitroDriveAudio
@@ -60,11 +61,30 @@ const RACE_CAR_SCALE: float = 1.15
 const OVERHEAD_FRAMING_PORTRAIT: float = 0.11
 const VIGNETTE_SHADER = preload("res://assets/shaders/night_vignette.gdshader")
 var wall_collision_count: int = 0
+# v0.1.25 terrain roads: height under the car, grade, visual pose and the
+# Developer Mode elevation settings (default: flat handling, 0 % grade force).
+var dev: Dictionary = {}
+var road_y: float = 0.0
+var car_y: float = 0.0
+var car_y_vel: float = 0.0
+var road_grade: float = 0.0        # along the road tangent
+var heading_grade: float = 0.0     # along the car's heading
+var grade_accel: Vector2 = Vector2.ZERO
+var body_pitch: float = 0.0
+var body_roll: float = 0.0
+var heave: float = 0.0
+var last_speed_mps: float = 0.0
+var lat_accel: float = 0.0
+var long_accel: float = 0.0
+var telemetry_label: Label
+var route_mode: bool = false
+var laps_total: int = 3
 var tyre_smoke: Array[CPUParticles3D] = []
 
 var skid_mesh: ImmediateMesh
 var skid_material: StandardMaterial3D
 var skid_segments: Array[PackedVector2Array] = []
+var skid_heights: Array[float] = []
 var last_left: Vector2 = Vector2.ZERO
 var last_right: Vector2 = Vector2.ZERO
 var had_skid: bool = false
@@ -80,6 +100,9 @@ func _ready() -> void:
     if not track.track_valid:
         push_error("Selected benchmark track invalid: "+track.track_data_path)
         return
+    dev = PHYS_DEV.load_settings()
+    route_mode = not track.closed_loop
+    laps_total = 1 if route_mode else 3
     model = DRIVE.new()
     # Per-car handling from its profile (Lada = baseline, unchanged).
     model.apply_profile(CARS.handling(CARS.selected()))
@@ -104,8 +127,54 @@ func _ready() -> void:
     _make_cameras()
     _make_tyre_marks()
     _make_ui()
-    last_progress = float(track.sample_info(model.position)["progress"])
+    if hud != null:
+        hud.lap_limit = laps_total
+    _make_telemetry()
+    var info0: Dictionary = track.sample_info(model.position)
+    last_progress = float(info0["progress"])
+    road_y = track.height_from_info(info0)
+    car_y = road_y
     _update_visuals()
+
+func _make_telemetry() -> void:
+    if not bool(dev.get("telemetry",false)):
+        return
+    var layer := CanvasLayer.new()
+    layer.name = "Physics telemetry"
+    layer.layer = 31
+    add_child(layer)
+    telemetry_label = Label.new()
+    telemetry_label.name = "Telemetry"
+    telemetry_label.position = Vector2(12,get_viewport().get_visible_rect().size.y*0.30)
+    telemetry_label.add_theme_font_size_override("font_size",15)
+    telemetry_label.add_theme_color_override("font_color",Color(0.85,1.0,0.85))
+    telemetry_label.add_theme_color_override("font_outline_color",Color(0,0,0,0.9))
+    telemetry_label.add_theme_constant_override("outline_size",5)
+    layer.add_child(telemetry_label)
+
+## Elevation dynamics of one physics tick (terrain tracks; flat tracks give
+## zero grade so nothing changes). Grade force is a planar acceleration
+## along the road tangent, scaled by the Developer Mode percentage.
+func _elevation_tick(info: Dictionary, delta: float) -> void:
+    road_y = track.height_from_info(info)
+    var tangent: Vector2 = Vector2(info["tangent"])
+    road_grade = track.grade_from_info(info)
+    heading_grade = road_grade*model.forward().dot(tangent)
+    grade_accel = PHYS_DEV.grade_acceleration(tangent,road_grade,int(dev.get("grade_force",0)))
+    if grade_accel != Vector2.ZERO and race_started:
+        model.velocity += grade_accel*delta
+    if str(dev.get("grounding","snap")) == "smooth":
+        # Critically damped follow (visual): never sinks below the road.
+        var k: float = 60.0
+        car_y_vel += (k*(road_y-car_y)-2.0*sqrt(k)*car_y_vel)*delta
+        car_y = maxf(car_y+car_y_vel*delta,road_y)
+    else:
+        car_y = road_y
+        car_y_vel = 0.0
+    var spd: float = model.speed_mps()
+    long_accel = lerpf(long_accel,(spd-last_speed_mps)/maxf(delta,0.0001),0.15)
+    last_speed_mps = spd
+    lat_accel = lerpf(lat_accel,model.yaw_rate*spd,0.15)
 
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
@@ -302,6 +371,7 @@ func _physics_process(delta: float) -> void:
         sfx.wall_contact(slide)
         sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
 
+    _elevation_tick(info,delta)
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     _drift_scoring(delta,float(info["width"])-float(info["distance"]))
@@ -336,7 +406,7 @@ func _show_results() -> void:
         Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
         {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
         "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
-        "laps":lap_splits.duplicate(true),"length_m":track.length_metres,
+        "laps":lap_splits.duplicate(true),"length_m":track.length_metres/(3.0 if route_mode else 1.0),
         "on_edit":_edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable()})
 
 func _player_track_path() -> String:
@@ -344,6 +414,11 @@ func _player_track_path() -> String:
 
 ## Results of a player track -> straight back into the editor with it.
 func _edit_this_track() -> void:
+    if track.terrain != null:
+        # Terrain tracks open in the terrain-first builder (same world).
+        ProjectSettings.set_setting("nitro/terrain_edit_track",_player_track_path())
+        get_tree().change_scene_to_file("res://scenes/terrain_builder.tscn")
+        return
     var f: FileAccess = FileAccess.open("user://nitro_editor_last_path.txt",FileAccess.WRITE)
     if f != null:
         f.store_string(_player_track_path())
@@ -367,6 +442,17 @@ func _wall_feedback(impact_speed: float) -> void:
         Input.start_joy_vibration(joypads[0],0.20,0.42,0.14)
 
 func _lap_logic(progress: float, tangent: Vector2, _delta: float) -> void:
+    if route_mode:
+        # Open route: one run from the start line to the finish line.
+        if race_started and progress >= track.finish_progress and last_progress < track.finish_progress \
+                and model.velocity.dot(tangent) > 0.5:
+            scorer.bank()
+            lap_score = scorer.total
+            lap_splits.append({"time":time_elapsed-lap_started_at,"score":maxi(0,scorer.total-lap_score_at_start)})
+            finished = true
+            model.velocity = Vector2.ZERO
+        last_progress = progress
+        return
     # Count only a forward finish-line crossing after sufficient driving time.
     if last_progress > 0.94 and progress < 0.06 and time_elapsed-lap_started_at > 7.0:
         if model.velocity.dot(tangent) > 1.5:
@@ -408,8 +494,11 @@ func _record_marks(dt: float) -> void:
     if had_skid:
         skid_segments.append(PackedVector2Array([last_left,left_p]))
         skid_segments.append(PackedVector2Array([last_right,right_p]))
+        skid_heights.append(road_y)
+        skid_heights.append(road_y)
         while skid_segments.size()>700:
             skid_segments.pop_front()
+            skid_heights.pop_front()
         _refresh_skid_mesh()
     last_left = left_p
     last_right = right_p
@@ -420,7 +509,9 @@ func _refresh_skid_mesh() -> void:
     if skid_segments.is_empty():
         return
     skid_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,skid_material)
-    for line in skid_segments:
+    for si in range(skid_segments.size()):
+        var line: PackedVector2Array = skid_segments[si]
+        var sy: float = 0.08+(skid_heights[si] if si < skid_heights.size() else 0.0)
         var a: Vector2 = line[0]
         var b: Vector2 = line[1]
         var delta: Vector2 = b-a
@@ -429,15 +520,28 @@ func _refresh_skid_mesh() -> void:
         var n: Vector2 = Vector2(-delta.y,delta.x).normalized()*0.15
         for p in [a-n,b-n,a+n,a+n,b-n,b+n]:
             skid_mesh.surface_set_normal(Vector3.UP)
-            skid_mesh.surface_add_vertex(Vector3(p.x,0.08,p.y))
+            skid_mesh.surface_add_vertex(Vector3(p.x,sy,p.y))
     skid_mesh.surface_end()
 
 func _update_visuals() -> void:
     if car_root == null:
         return
-    car_root.position = Vector3(model.position.x,0.0,model.position.y)
     # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
-    car_root.rotation.y = -model.heading
+    var dt: float = get_physics_process_delta_time()
+    var target_pitch: float = atan(heading_grade)
+    var target_roll: float = 0.0
+    var target_heave: float = 0.0
+    if bool(dev.get("suspension",false)):
+        target_pitch += clampf(-long_accel*0.006,-0.05,0.05)
+        target_heave = clampf(-absf(long_accel)*0.004,-0.08,0.0)
+    if bool(dev.get("banking",false)):
+        target_roll = clampf(lat_accel*0.008,-0.07,0.07)
+    var pose_k: float = 1.0-exp(-12.0*dt)
+    body_pitch = lerpf(body_pitch,target_pitch,pose_k)
+    body_roll = lerpf(body_roll,target_roll,pose_k)
+    heave = lerpf(heave,target_heave,pose_k)
+    car_root.position = Vector3(model.position.x,car_y+heave,model.position.y)
+    car_root.rotation = Vector3(body_pitch,-model.heading,body_roll)
     var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished
     for smoke in tyre_smoke:
         smoke.emitting = smoking
@@ -461,8 +565,23 @@ func _update_visuals() -> void:
         hud.paused = paused
         hud.finished = finished
         hud.road_status = "OFF TRACK" if offroad else "ON TRACK"
+    if telemetry_label != null:
+        telemetry_label.text = telemetry_text()
     if touch != null:
         touch.overlay_visible = false
+
+## Developer telemetry (Developer Mode > ELEVATION PHYSICS > TELEMETRY).
+func telemetry_text() -> String:
+    var grade_force: int = int(dev.get("grade_force",0))
+    return "ELEVATION PHYSICS\n" + \
+        "grade road %+.1f %%  heading %+.1f %%\n" % [road_grade*100.0,heading_grade*100.0] + \
+        "grade force %d %%  accel %.2f m/s2\n" % [grade_force,grade_accel.length()] + \
+        "camera pitch %s  %.1f deg\n" % ["ON" if bool(dev.get("camera_pitch",true)) else "OFF",rad_to_deg(atan(heading_grade))] + \
+        "traction rear %.2f  load cos %.3f\n" % [model.rear_traction,cos(atan(road_grade))] + \
+        "banking %s  cross-fall 0.0 deg  roll %.1f deg\n" % ["ON" if bool(dev.get("banking",false)) else "OFF",rad_to_deg(body_roll)] + \
+        "grounding %s  car-road %.3f m\n" % [str(dev.get("grounding","snap")).to_upper(),car_y-road_y] + \
+        "suspension %s  pitch %.1f deg heave %.2f m\n" % ["ON" if bool(dev.get("suspension",false)) else "OFF",rad_to_deg(body_pitch),heave] + \
+        "contact %s  y %.1f m" % ["ROAD" if not offroad else "OFF",road_y]
 
 func _process(delta: float) -> void:
     camera_shake_strength = move_toward(camera_shake_strength,0.0,delta*1.6)
@@ -471,7 +590,7 @@ func _process(delta: float) -> void:
 
 func _update_chase_occlusion() -> void:
     # Physics direct-space queries belong in _physics_process only.
-    var car: Vector3 = Vector3(model.position.x,0.0,model.position.y)
+    var car: Vector3 = Vector3(model.position.x,car_y,model.position.y)
     var direction2: Vector2 = model.forward()
     var f: Vector3 = Vector3(direction2.x,0.0,direction2.y)
     var speed_t: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
@@ -512,7 +631,7 @@ func _update_camera(delta: float) -> void:
 func _update_camera_view(delta: float) -> void:
     if model == null or overhead == null or chase == null:
         return
-    var car_position: Vector3 = Vector3(model.position.x,0.0,model.position.y)
+    var car_position: Vector3 = Vector3(model.position.x,car_y,model.position.y)
     var forward_dir: Vector2 = model.forward()
     # Chase direction does not instantly flip when selecting reverse.
     var view_dir: Vector2 = forward_dir
@@ -547,6 +666,10 @@ func _update_camera_view(delta: float) -> void:
     var chase_height: float = lerpf(9.0,12.0,speed_lerp)
     var chase_target: Vector3 = car_position-f*chase_back+camera_velocity_lead*0.22+Vector3.UP*chase_height
     var look_target: Vector3 = car_position+f*(2.0 if model.is_reversing() else 7.0)+camera_velocity_lead*0.32+Vector3.UP*0.8
+    if bool(dev.get("camera_pitch",true)) and heading_grade != 0.0:
+        # Follow the road grade: behind the car the road is lower uphill.
+        chase_target.y -= heading_grade*chase_back
+        look_target.y += heading_grade*7.0
     # A nearby wall must not snap the camera to the bumper.
     if chase_is_blocked:
         var candidate: Vector3 = chase_occlusion_point+Vector3.UP*3.5
@@ -556,6 +679,10 @@ func _update_camera_view(delta: float) -> void:
             chase_target = car_position-f*chase_back+Vector3.UP*(chase_height+8.0)
     var chase_alpha: float = 1.0-exp(-3.6*maxf(delta,0.0))
     chase.position = chase.position.lerp(chase_target,chase_alpha)
+    if track.terrain != null:
+        # Terrain clearance: never inside a cut slope or hillside.
+        var ground: float = track.terrain.height_at(chase.position.x,chase.position.z)
+        chase.position.y = maxf(chase.position.y,ground+2.5)
     chase.look_at(look_target,Vector3.UP)
     chase.fov = lerpf(chase.fov,lerpf(76.0,82.0,speed_lerp),zoom_alpha)
 
@@ -615,6 +742,8 @@ func _restart() -> void:
         touch.set_process_input(true)
         touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     model.reset(track.start_position(),track.start_heading())
+    car_y = track.road_height_at(model.position)
+    car_y_vel = 0.0
     if sfx != null:
         sfx.reset()
     time_elapsed = 0.0
@@ -633,6 +762,7 @@ func _restart() -> void:
     finished = false
     offroad = false
     skid_segments.clear()
+    skid_heights.clear()
     skid_mesh.clear_surfaces()
     had_skid = false
     collision_cooldown = 0.0

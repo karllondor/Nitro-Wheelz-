@@ -57,8 +57,23 @@ var with_environment: bool = true
 ## tracks, v0.1.23) provides the scenery, so builder and race match.
 var with_props: bool = true
 var world: Node3D = null
+## v0.1.25 terrain worlds: road height per centreline sample (empty = the
+## legacy flat road at y = 0) and the open-route layout (start a little
+## inside the first tile, finish line before the end cap).
+var heights: PackedFloat32Array = PackedFloat32Array()
+var start_index: int = 0
+var finish_index: int = -1
+var finish_progress: float = 1.0
+const OPEN_START_M: float = 18.0
+const OPEN_FINISH_M: float = 30.0
 const PROC_WORLD = preload("res://scripts/world/procedural_world.gd")
 const BUILD_GRID = preload("res://scripts/world/track_grid.gd")
+const TERRAIN_WORLD = preload("res://scripts/world/terrain/terrain_world.gd")
+const TERRAIN_TRACK = preload("res://scripts/world/terrain/terrain_track.gd")
+const ROAD_PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
+const TERRAIN_CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
+## Generated terrain world (v0.1.25 terrain-first tracks) or null.
+var terrain: NitroTerrainWorld = null
 
 func _ready() -> void:
     if centerline.is_empty():
@@ -70,12 +85,51 @@ func build() -> void:
     var grid: RefCounted = world_grid(raw) if raw is Dictionary else null
     if grid != null:
         with_props = false
+    var tdesc: Dictionary = TERRAIN_TRACK.world_of(raw) if raw is Dictionary else {}
+    if not tdesc.is_empty():
+        # Terrain-first track: the generated landscape replaces the flat
+        # park ground, sky and roadside props (same world as the builder).
+        with_props = false
+        with_environment = false
     _apply_compiled(compiled)
+    if not tdesc.is_empty() and track_valid:
+        build_terrain(tdesc)
     if grid != null and track_valid:
         world = PROC_WORLD.new()
         world.name = "Procedural world"
         add_child(world)
         world.generate(grid.links,grid.cols,grid.rows,int(raw["world"].get("seed",1)))
+
+## Generate the terrain world of this track and adapt it to the road. A
+## terrain track saved without (matching) knot heights gets its heights
+## solved here with the same solver the builder uses.
+func build_terrain(desc: Dictionary) -> void:
+    terrain = TERRAIN_WORLD.new()
+    terrain.name = "Terrain world"
+    terrain.setup(desc)
+    terrain.field.bake()
+    add_child(terrain)
+    terrain.build()
+    if heights.size() != centerline.size():
+        var grade: float = float(TERRAIN_CAT.info(str(desc.get("archetype","")))["grade"])
+        heights = ROAD_PROFILE.solve(terrain.field,centerline,halfwidths,closed_loop,grade)
+        # Road meshes were built flat: rebuild them on the solved heights.
+        for child in get_children():
+            if child != terrain:
+                remove_child(child)
+                child.queue_free()
+        _build_visuals()
+    terrain.set_road(centerline,halfwidths,heights,closed_loop)
+
+## Grade (rise / run) of the road along the centreline direction at a
+## sample_info() result; 0 on flat tracks.
+func grade_from_info(info: Dictionary) -> float:
+    if heights.is_empty():
+        return 0.0
+    var n: int = centerline.size()
+    var i: int = int(info["index"])
+    var j: int = (i+1)%n
+    return (heights[j]-heights[i])/maxf(centerline[i].distance_to(centerline[j]),0.01)
 
 ## The builder grid behind a saved track that carries a procedural world,
 ## or null. The tiles must reproduce the saved road exactly (a track reshaped
@@ -137,17 +191,55 @@ func _apply_compiled(compiled: Dictionary) -> void:
     length_metres = float(compiled["length_metres"])
     track_id = str(compiled["track_id"])
     display_name = str(compiled["track_name"])
-    closed_loop = true
+    closed_loop = bool(compiled.get("closed",true))
+    heights = compiled.get("heights",PackedFloat32Array())
+    if heights.size() != centerline.size():
+        heights = PackedFloat32Array()
+    _layout_ends()
     _build_visuals()
+
+func _layout_ends() -> void:
+    start_index = 0
+    finish_index = -1
+    finish_progress = 1.0
+    if closed_loop or centerline.size() < 4:
+        return
+    var n: int = centerline.size()
+    for i in range(n):
+        if arc_lengths[i] >= OPEN_START_M:
+            start_index = i
+            break
+    finish_index = n-1
+    for i2 in range(n-1,0,-1):
+        if length_metres-arc_lengths[i2] >= OPEN_FINISH_M:
+            finish_index = i2
+            break
+    finish_progress = arc_lengths[finish_index]/maxf(length_metres,1.0)
+
+## Road surface height under sample i (0 on legacy flat tracks).
+func hy(i: int) -> float:
+    return heights[i] if not heights.is_empty() else 0.0
+
+## Road surface height at a sample_info() result.
+func height_from_info(info: Dictionary) -> float:
+    if heights.is_empty():
+        return 0.0
+    var i: int = int(info["index"])
+    return lerpf(heights[i],heights[(i+1)%heights.size()],float(info["t"]))
+
+func road_height_at(pos: Vector2) -> float:
+    return height_from_info(sample_info(pos)) if not heights.is_empty() else 0.0
 
 ## Builder preview: draw the same road/kerb/verge/scenery for an arbitrary
 ## sampled centreline (open chain or closed loop). Not used for racing.
 func build_from_samples(samples: Array[Vector2], halfwidth: float, closed: bool,
-        id: String = "builder_preview", environment: bool = false) -> void:
+        id: String = "builder_preview", environment: bool = false,
+        sample_heights: PackedFloat32Array = PackedFloat32Array()) -> void:
     for child in get_children():
         remove_child(child)
         child.queue_free()
     closed_loop = closed
+    heights = sample_heights if sample_heights.size() == samples.size() else PackedFloat32Array()
     with_environment = environment
     centerline = samples.duplicate()
     left_edge.clear()
@@ -173,6 +265,7 @@ func build_from_samples(samples: Array[Vector2], halfwidth: float, closed: bool,
     length_metres = total
     track_id = id
     track_valid = true
+    _layout_ends()
     _build_visuals()
 
 func _segment_count() -> int:
@@ -195,6 +288,9 @@ func _build_visuals() -> void:
         _shift_edge(right_edge,-LINE_INSET),0.066,LINE_COLOUR)
     if closed_loop:
         _build_start_line()
+    elif centerline.size() >= 4:
+        _build_start_line(start_index,false)
+        _build_start_line(finish_index,true)
     _build_barriers()
     if with_props:
         _build_track_props()
@@ -209,10 +305,13 @@ func _shift_edge(edge: Array[Vector2], metres: float) -> Array[Vector2]:
     return shifted
 
 func start_position() -> Vector2:
-    return centerline[0]
+    return centerline[start_index]
 
 func start_heading() -> float:
-    var tangent: Vector2 = (centerline[1]-centerline[centerline.size()-1]).normalized()
+    var n: int = centerline.size()
+    var tangent: Vector2 = (centerline[1]-centerline[n-1]).normalized()
+    if not closed_loop:
+        tangent = (centerline[mini(start_index+1,n-1)]-centerline[maxi(start_index-1,0)]).normalized()
     return atan2(tangent.x,-tangent.y)
 
 func sample_info(pos: Vector2) -> Dictionary:
@@ -221,7 +320,7 @@ func sample_info(pos: Vector2) -> Dictionary:
     var nearest: Vector2 = Vector2.ZERO
     var segment_t: float = 0.0
     var n: int = centerline.size()
-    for i in range(n):
+    for i in range(_segment_count()):
         var a: Vector2 = centerline[i]
         var b: Vector2 = centerline[(i+1)%n]
         var delta: Vector2 = b-a
@@ -327,6 +426,10 @@ func _probe_penetration(q: Vector2, hint: int) -> Vector3:
     var nearest: Vector2 = q
     for k in range(-PROBE_WINDOW,PROBE_WINDOW+1):
         var i: int = posmod(hint+k,n)
+        if not closed_loop:
+            i = hint+k
+            if i < 0 or i > n-2:
+                continue
         var a: Vector2 = centerline[i]
         var delta: Vector2 = centerline[(i+1)%n]-a
         var t: float = clampf((q-a).dot(delta)/maxf(delta.length_squared(),0.000001),0.0,1.0)
@@ -346,7 +449,18 @@ func _probe_penetration(q: Vector2, hint: int) -> Vector3:
     var outward: Vector2 = across*side
     # Barrier face is drawn 0.10 m outside the edge; keep a small skin.
     var limit: Vector2 = boundary+outward*(0.10-BODY_SKIN)
-    return Vector3(outward.x,outward.y,(q-limit).dot(outward))
+    var result := Vector3(outward.x,outward.y,(q-limit).dot(outward))
+    if not closed_loop:
+        # Open route: end-cap barriers across the road at both ends.
+        var t0: Vector2 = (centerline[1]-centerline[0]).normalized()
+        var pen0: float = (centerline[0]+t0*(0.10+BODY_SKIN)-q).dot(t0)
+        if pen0 > result.z and pen0 > 0.0:
+            result = Vector3(-t0.x,-t0.y,pen0)
+        var te: Vector2 = (centerline[n-1]-centerline[n-2]).normalized()
+        var pen1: float = (q-(centerline[n-1]-te*(0.10+BODY_SKIN))).dot(te)
+        if pen1 > result.z and pen1 > 0.0:
+            result = Vector3(te.x,te.y,pen1)
+    return result
 
 func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
         height: float,tint: Color,texture: Texture2D = null,tile_m: float = 7.0) -> void:
@@ -354,10 +468,12 @@ func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
     for i in range(_segment_count()):
         var next_i: int = (i+1)%centerline.size()
-        var p: Vector3 = Vector3(a[i].x,height,a[i].y)
-        var q: Vector3 = Vector3(b[i].x,height,b[i].y)
-        var r: Vector3 = Vector3(a[next_i].x,height,a[next_i].y)
-        var u: Vector3 = Vector3(b[next_i].x,height,b[next_i].y)
+        var y0: float = height+hy(i)
+        var y1: float = height+hy(next_i)
+        var p: Vector3 = Vector3(a[i].x,y0,a[i].y)
+        var q: Vector3 = Vector3(b[i].x,y0,b[i].y)
+        var r: Vector3 = Vector3(a[next_i].x,y1,a[next_i].y)
+        var u: Vector3 = Vector3(b[next_i].x,y1,b[next_i].y)
         _add_tri(st,p,r,q,tint,tile_m)
         _add_tri(st,q,r,u,tint,tile_m)
     var arr: ArrayMesh = st.commit()
@@ -410,18 +526,49 @@ func _build_barriers() -> void:
             var q: Vector2 = left_edge[next_i] if side<0 else right_edge[next_i]
             p += n0*side*0.10
             q += n1*side*0.10
-            var bottom_a := Vector3(p.x,0.055,p.y)
-            var bottom_b := Vector3(q.x,0.055,q.y)
-            var top_a := Vector3(p.x,WALL_HEIGHT,p.y)
-            var top_b := Vector3(q.x,WALL_HEIGHT,q.y)
+            var ya: float = hy(i)
+            var yb: float = hy(next_i)
+            var foot: float = 0.055 if heights.is_empty() else -0.5
+            var bottom_a := Vector3(p.x,foot+ya,p.y)
+            var bottom_b := Vector3(q.x,foot+yb,q.y)
+            var top_a := Vector3(p.x,WALL_HEIGHT+ya,p.y)
+            var top_b := Vector3(q.x,WALL_HEIGHT+yb,q.y)
             var outer_p: Vector2 = p+n0*side*WALL_THICKNESS
             var outer_q: Vector2 = q+n1*side*WALL_THICKNESS
-            var outside_a := Vector3(outer_p.x,WALL_HEIGHT,outer_p.y)
-            var outside_b := Vector3(outer_q.x,WALL_HEIGHT,outer_q.y)
+            var outside_a := Vector3(outer_p.x,WALL_HEIGHT+ya,outer_p.y)
+            var outside_b := Vector3(outer_q.x,WALL_HEIGHT+yb,outer_q.y)
             _wall_tri(st,triangles,bottom_a,bottom_b,top_a,colour)
             _wall_tri(st,triangles,top_a,bottom_b,top_b,colour)
             _wall_tri(st,triangles,top_a,top_b,outside_a,top_colour)
             _wall_tri(st,triangles,outside_a,top_b,outside_b,top_colour)
+            if not heights.is_empty():
+                # outer face down to the ground (terrain worlds: roads on fills)
+                var ob_a := Vector3(outer_p.x,ya-0.5,outer_p.y)
+                var ob_b := Vector3(outer_q.x,yb-0.5,outer_q.y)
+                _wall_tri(st,triangles,outside_a,outside_b,ob_a,colour.darkened(0.1))
+                _wall_tri(st,triangles,ob_a,outside_b,ob_b,colour.darkened(0.1))
+    if not closed_loop and count >= 4:
+        # End caps of an open route: a barrier across the road at both ends.
+        for end in [0,count-1]:
+            var tan: Vector2 = (centerline[1]-centerline[0]).normalized() if end == 0 \
+                else (centerline[count-1]-centerline[count-2]).normalized()
+            var dir: float = -1.0 if end == 0 else 1.0
+            var l: Vector2 = left_edge[end]+(left_edge[end]-right_edge[end]).normalized()*0.5+tan*dir*0.10
+            var r: Vector2 = right_edge[end]+(right_edge[end]-left_edge[end]).normalized()*0.5+tan*dir*0.10
+            var lo: Vector2 = l+tan*dir*WALL_THICKNESS
+            var ro: Vector2 = r+tan*dir*WALL_THICKNESS
+            var yy: float = hy(end)
+            var foot2: float = 0.055 if heights.is_empty() else -0.5
+            var a1 := Vector3(l.x,yy+foot2,l.y)
+            var b1 := Vector3(r.x,yy+foot2,r.y)
+            var c1 := Vector3(r.x,yy+WALL_HEIGHT,r.y)
+            var d1 := Vector3(l.x,yy+WALL_HEIGHT,l.y)
+            var c2 := Vector3(ro.x,yy+WALL_HEIGHT,ro.y)
+            var d2 := Vector3(lo.x,yy+WALL_HEIGHT,lo.y)
+            _wall_tri(st,triangles,a1,b1,c1,KERB_BLUE)
+            _wall_tri(st,triangles,a1,c1,d1,KERB_BLUE)
+            _wall_tri(st,triangles,d1,c1,c2,BARRIER_TOP_A)
+            _wall_tri(st,triangles,d1,c2,d2,BARRIER_TOP_A)
     var mesh: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
@@ -441,11 +588,15 @@ func _build_barriers() -> void:
     body.add_child(collider)
     add_child(body)
 
-func _build_start_line() -> void:
-    var p: Vector2 = start_position()
-    var t: Vector2 = (centerline[1]-centerline[centerline.size()-1]).normalized()
-    var across: Vector2 = (right_edge[0]-left_edge[0]).normalized()
-    var road_width: float = halfwidths[0]*2.0
+func _build_start_line(at: int = 0, finish: bool = false) -> void:
+    var n: int = centerline.size()
+    var p: Vector2 = centerline[at]
+    var t: Vector2 = (centerline[(at+1)%n]-centerline[(at-1+n)%n]).normalized()
+    if not closed_loop:
+        t = (centerline[mini(at+1,n-1)]-centerline[maxi(at-1,0)]).normalized()
+    var across: Vector2 = (right_edge[at]-left_edge[at]).normalized()
+    var road_width: float = halfwidths[at]*2.0
+    var line_heading: float = atan2(t.x,-t.y)
     var tiles: int = 20
     for tile in range(tiles):
         for stripe in range(2):
@@ -453,13 +604,15 @@ func _build_start_line() -> void:
             var box := BoxMesh.new()
             box.size = Vector3(road_width/float(tiles),0.025,0.58)
             board.mesh = box
-            var lateral: float = -halfwidths[0]+(float(tile)+0.5)*road_width/float(tiles)
+            var lateral: float = -halfwidths[at]+(float(tile)+0.5)*road_width/float(tiles)
             var longitudinal: float = (float(stripe)-0.5)*0.58
             var pt: Vector2 = p+across*lateral+t*longitudinal
-            board.position = Vector3(pt.x,0.094,pt.y)
-            board.rotation.y = -start_heading()
+            board.position = Vector3(pt.x,0.094+hy(at),pt.y)
+            board.rotation.y = -line_heading
             var material := StandardMaterial3D.new()
             material.albedo_color = Color.WHITE if (tile+stripe)%2==0 else Color(0.055,0.055,0.06)
+            if finish and (tile+stripe)%2 != 0:
+                material.albedo_color = Color(0.85,0.10,0.16)
             material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
             board.material_override = material
             add_child(board)
@@ -553,13 +706,15 @@ func _build_kerbs() -> void:
                 var o1: Vector2 = outer[i].lerp(outer[j],t1)
                 var i0: Vector2 = inner[i].lerp(inner[j],t0)
                 var i1: Vector2 = inner[i].lerp(inner[j],t1)
-                _flat_quad(st,o0,o1,i0,i1,top_y,top_y,colour)
+                var e0: float = lerpf(hy(i),hy(j),t0)
+                var e1: float = lerpf(hy(i),hy(j),t1)
+                _flat_quad(st,o0,o1,i0,i1,top_y,top_y,colour,e0,e1)
                 var l0: Vector2 = lip[i].lerp(lip[j],t0)
                 var l1: Vector2 = lip[i].lerp(lip[j],t1)
-                _flat_quad(st,i0,i1,l0,l1,top_y,low_y,colour.darkened(0.45))
+                _flat_quad(st,i0,i1,l0,l1,top_y,low_y,colour.darkened(0.45),e0,e1)
                 var b0: Vector2 = back[i].lerp(back[j],t0)
                 var b1: Vector2 = back[i].lerp(back[j],t1)
-                _flat_quad(st,b0,b1,o0,o1,low_y,top_y,KERB_BEVEL)
+                _flat_quad(st,b0,b1,o0,o1,low_y,top_y,KERB_BEVEL,e0,e1)
     var mesh: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
@@ -572,11 +727,11 @@ func _build_kerbs() -> void:
     add_child(node)
 
 func _flat_quad(st: SurfaceTool,a0: Vector2,a1: Vector2,b0: Vector2,b1: Vector2,
-        ya: float,yb: float,colour: Color) -> void:
-    var p0 := Vector3(a0.x,ya,a0.y)
-    var p1 := Vector3(a1.x,ya,a1.y)
-    var q0 := Vector3(b0.x,yb,b0.y)
-    var q1 := Vector3(b1.x,yb,b1.y)
+        ya: float,yb: float,colour: Color,e0: float = 0.0,e1: float = 0.0) -> void:
+    var p0 := Vector3(a0.x,ya+e0,a0.y)
+    var p1 := Vector3(a1.x,ya+e1,a1.y)
+    var q0 := Vector3(b0.x,yb+e0,b0.y)
+    var q1 := Vector3(b1.x,yb+e1,b1.y)
     for p in [p0,p1,q0,q0,p1,q1]:
         st.set_color(colour)
         st.set_normal(Vector3.UP)
