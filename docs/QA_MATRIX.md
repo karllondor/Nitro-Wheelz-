@@ -21,6 +21,13 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.28 — Japan City street circuit (Claude Code cloud container, 2026-11-20)
+| Area | Result |
+|---|---|
+| terrain_scenery_test (frontage >= 20 buildings, nearest facade 5.4 m), terrain_builder_test, terrain_world_test, dynamic_camera_test (local) | PASS |
+| CI on add0883 | Godot suite PASS ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44822723583)), Android debug APK v0.1.28 BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44822723468)), Web BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44822723374)), desktop BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44822723418)), foundation PASS — built, not installed or played |
+| Phone review | NOT RUN |
+
 ## v0.1.27 local evidence — Terrain Builder visual & track builder refinement (Claude Code cloud container, 2026-11-20)
 Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/llvmpipe.
 
