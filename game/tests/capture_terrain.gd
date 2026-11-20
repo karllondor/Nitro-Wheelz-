@@ -23,6 +23,12 @@ func _shot(name: String) -> void:
         await process_frame
     root.get_viewport().get_texture().get_image().save_png(out_dir+name+".png")
 
+## Objects / draw calls / primitives of the last rendered frame.
+func _frame_info() -> Dictionary:
+    return {"objects":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+        "draw_calls":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+        "primitives":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)}
+
 func _run() -> void:
     var env_dir: String = OS.get_environment("OUT_DIR")
     if env_dir != "":
@@ -170,11 +176,13 @@ func _run() -> void:
             race._physics_process(DT)
             race._process(DT)
         await _shot("%s_4_race_topdown" % a)
+        stats[stats.size()-1]["frame_topdown"] = _frame_info()
         race._toggle_camera()
         for k2 in range(90):
             race._physics_process(DT)
             race._process(DT)
         await _shot("%s_5_race_chase" % a)
+        stats[stats.size()-1]["frame_chase"] = _frame_info()
         root.remove_child(race)
         race.free()
         DirAccess.remove_absolute(path)

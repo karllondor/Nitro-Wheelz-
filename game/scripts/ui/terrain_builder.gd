@@ -106,6 +106,7 @@ var dim_rect: ColorRect
 # building area visible over mountain walls.
 var _cam_key: String = ""
 var view_pitch: float = 40.0
+var _pitch_goal: float = 40.0
 ## v0.1.27: in the game, long jobs run in frame slices behind a loading
 ## animation; tests (a scripted SceneTree) keep the synchronous calls.
 var ui_async: bool = false
@@ -727,7 +728,9 @@ func _apply_camera() -> void:
     var key: String = "%.1f|%.1f|%.1f|%.1f|%.2f|%.2f" % [cam_target.x,cam_target.z,cam_target.y,cam_dist,cam_pitch,cam_yaw]
     if key != _cam_key:
         _cam_key = key
-        view_pitch = _clear_pitch()
+        _pitch_goal = _clear_pitch()
+    # Game: the occlusion pitch eases in (no jumps while panning).
+    view_pitch = move_toward(view_pitch,_pitch_goal,2.0) if ui_async else _pitch_goal
     camera.position = _cam_pos(view_pitch)
     camera.near = clampf(cam_dist*0.0025,0.3,4.0)
     camera.look_at(cam_target,Vector3.UP)

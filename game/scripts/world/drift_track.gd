@@ -67,6 +67,7 @@ var start_index: int = 0
 var kerb_a: Color = KERB_BLUE
 var kerb_b: Color = KERB_WHITE
 var runoff_tint: Color = Color.WHITE
+var shoulder_concrete: bool = false
 
 func apply_region_style(desc: Dictionary) -> void:
     var inf: Dictionary = TERRAIN_CAT.info(str(desc.get("archetype","")))
@@ -74,6 +75,9 @@ func apply_region_style(desc: Dictionary) -> void:
     kerb_a = k[0]
     kerb_b = k[1]
     runoff_tint = inf.get("runoff",Color.WHITE)
+    # v0.1.27: street circuits get a concrete shoulder (asphalt texture,
+    # light grey) instead of the dirt verge.
+    shoulder_concrete = str(inf.get("relief","")) == "urban"
 var finish_index: int = -1
 var finish_progress: float = 1.0
 const OPEN_START_M: float = 18.0
@@ -311,7 +315,8 @@ func _build_visuals() -> void:
     # Layering outward from the racing surface (brief: surface -> painted
     # line -> safety gap -> kerb -> outer gap -> barrier -> verge).
     _add_corridor("Compacted shoulder",_shift_edge(left_edge,-VERGE_WIDTH),
-        _shift_edge(right_edge,VERGE_WIDTH),0.018,runoff_tint,DIRT,6.0)
+        _shift_edge(right_edge,VERGE_WIDTH),0.018,Color(1.9,1.9,1.95) if shoulder_concrete else runoff_tint,
+        ASPHALT if shoulder_concrete else DIRT,6.0)
     _add_corridor("Single continuous driving surface",left_edge,right_edge,
         0.05,ASPHALT_TINT,ASPHALT,7.0)
     _build_kerbs()

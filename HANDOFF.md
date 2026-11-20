@@ -1,4 +1,11 @@
-# Nitro Wheelz — v0.1.26 E30 visual refinement v0.2 (test build) on top of v0.1.25 Terrain-first Track Builder
+# Nitro Wheelz — v0.1.27 Terrain Builder visual & track builder refinement (test build) on top of v0.1.26 E30 v0.2 and v0.1.25 Terrain-first Track Builder
+
+## TERRAIN BUILDER REFINEMENT (v0.1.27)
+- Read docs/terrain_builder/REFINEMENT_v0.1.27.md (all brief items + the owner's chat requests, BEFORE / AFTER sheets in docs/terrain_builder/v0127/, measurements, PASS / FAIL / NOT RUN). The two phone recordings named in the brief were NOT received.
+- New code: scripts/world/step_runner.gd (NitroSteps: frame-sliced jobs), scripts/ui/busy_overlay.gd (NitroBusy loading card), assets/shaders/city_facade.gdshader, tests/capture_bridges.gd, tests/capture_ui_v0127.gd. Big edits: terrain_field (macro landforms, city grid), terrain_world (steps API, road_gap street mask, stream channel, arch bridges, end pads, colour pass), terrain_scenery (rocks / trees, city district, roadside band + posts, route ends, start lights), terrain_ground shader (strata, streets, tile markers), terrain_builder (async + loading card, MOVE navigation, named SAVE, MY TRACKS), race.gd (sliced terrain load, pause EDIT TRACK, chase camera), race_pause.gd, drift_track.gd (deferred terrain, concrete shoulder), boot.gd / track_editor.gd (loading card, terrain-track redirect).
+- In the game (no test SceneTree script) the builder and the race build terrain in slices behind NitroBusy; tests keep the synchronous API (`ui_async` / `defer_terrain` false).
+- NOT DONE: free-draw drawing (evaluation in the report), Japan City catch fencing / rail viaduct.
+- STOP POINT: owner plays v0.1.27 on the phone (builder navigation, loading card, MY TRACKS / SAVE name, pause EDIT TRACK, bridges, route ends, colours) before the next pass.
 
 ## E30 VISUAL REFINEMENT v0.2 (v0.1.26)
 - Read docs/car_factory/E30_VISUAL_REFINEMENT_v0.2.md. One revertable commit. Rebuild: tools/car_factory/blender/build_e30_blessed.py + build_wheels.py (bpy 5.3.0), views: tests/capture_e30_views.gd.

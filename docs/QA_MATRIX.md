@@ -21,6 +21,18 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.27 local evidence — Terrain Builder visual & track builder refinement (Claude Code cloud container, 2026-11-20)
+Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/llvmpipe.
+
+| Area | Result |
+|---|---|
+| Godot suite (29 tests) | PASS here (all PASS lines; runner exit = timeout because terrain_physics_test hangs at engine exit in this container after PASS); CI: see below |
+| check_project.py | PASS |
+| Captures BEFORE / AFTER (8 regions, seeds, bridges, route ends, UI) | DONE -> docs/terrain_builder/v0127/ |
+| Frame stats + CPU times BEFORE / AFTER (llvmpipe) | MEASURED (report table) |
+| Phone / browser performance, owner review | NOT RUN |
+| CI on the v0.1.27 commit | pending at commit time (filled in by the follow-up docs commit) |
+
 ## v0.1.26 local evidence — E30 visual refinement pass v0.2 (Claude Code cloud container, 2026-11-20)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

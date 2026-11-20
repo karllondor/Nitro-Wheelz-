@@ -470,12 +470,118 @@ func _roadside(node: Node3D, id: Vector2i, x0: float, z0: float, span: float, pe
                 if _blocked(q,th*0.22) or field.slope_at(q.x,q.y) > 1.1:
                     continue
                 _add_tree(per,shadows,sp,q.x,q.y,th,rng)
+    # Delineator posts every ~20 m on both sides (speed cue for the chase
+    # camera), skipped on bridges / cliff edges and at the venue.
+    var posts: Array = []
+    var next_s: float = 0.0
+    var run_s: float = 0.0
+    for i2 in range(n):
+        if i2 > 0:
+            run_s += samples[i2-1].distance_to(samples[i2])
+        if run_s < next_s:
+            continue
+        next_s = run_s+20.0
+        if not rect.has_point(samples[i2]) or cls[i2] >= 4:
+            continue
+        var nrm2: Vector2 = PROFILE._normal(samples,i2,closed)
+        for side3 in [-1.0,1.0]:
+            var pp: Vector2 = samples[i2]+nrm2*side3*(hw[i2]+PROFILE.VERGE+1.0)
+            if road_clearance(pp) < PROFILE.VERGE+ROADSIDE_MIN_M or field.is_water(pp.x,pp.y):
+                continue
+            var bad2: bool = false
+            for r2 in keep_out+venue_keep:
+                if (r2 as Rect2).has_point(pp):
+                    bad2 = true
+            if bad2:
+                continue
+            posts.append(Transform3D(Basis(Vector3.UP,atan2(nrm2.x,nrm2.y)),Vector3(pp.x,field.height_at(pp.x,pp.y)-0.05,pp.y)))
+    if not posts.is_empty():
+        _multimesh(node,"Roadside posts",_post_mesh(),_rock_mat,posts,[],false)
+    # All soft planting of the chunk merged into ONE mesh (one draw call
+    # instead of one MultiMesh per kind); instance colours baked in.
     var keys: Array = soft.keys()
     keys.sort()
-    for k in keys:
-        _multimesh(node,"Roadside "+str(k),_species_mesh(str(k)),_veg_mat,soft[k][0],soft[k][1])
+    var merged := _merge_instances(soft,keys)
+    if merged != null:
+        var mi := MeshInstance3D.new()
+        mi.name = "Roadside planting"
+        mi.mesh = merged
+        mi.material_override = _veg_mat
+        mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        mi.position = _chunk_centre
+        if draw_range > 0.0:
+            mi.visibility_range_end = draw_range
+        node.add_child(mi)
+        roadside_counts[node.name] = 0
+        for k2 in keys:
+            roadside_counts[node.name] = int(roadside_counts[node.name])+(soft[k2][0] as Array).size()
+        mi.set_meta("roadside_points",_points_of(soft,keys))
     if not (stones[0] as Array).is_empty():
         _multimesh(node,"Roadside stones",_rock_mesh("boulder"),_rock_mat,stones[0],stones[1],false)
+
+var roadside_counts: Dictionary = {}
+
+func _points_of(groups: Dictionary, keys: Array) -> PackedVector2Array:
+    var pts := PackedVector2Array()
+    for k in keys:
+        for x in groups[k][0]:
+            var o: Vector3 = (x as Transform3D).origin
+            pts.append(Vector2(o.x,o.z))
+    return pts
+
+## Bake transformed copies of each kind's mesh (vertex colour x instance
+## colour, foliage flag kept in UV) into one ArrayMesh around the chunk centre.
+func _merge_instances(groups: Dictionary, keys: Array) -> ArrayMesh:
+    var pos := PackedVector3Array()
+    var nrm := PackedVector3Array()
+    var col := PackedColorArray()
+    var uv := PackedVector2Array()
+    var idx := PackedInt32Array()
+    for k in keys:
+        var src: ArrayMesh = _species_mesh(str(k))
+        var arr: Array = src.surface_get_arrays(0)
+        var sp: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+        var sn: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+        var sc: PackedColorArray = arr[Mesh.ARRAY_COLOR]
+        var su: PackedVector2Array = arr[Mesh.ARRAY_TEX_UV]
+        var si: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+        var xs: Array = groups[k][0]
+        var cs: Array = groups[k][1]
+        for n_i in range(xs.size()):
+            var xf: Transform3D = (xs[n_i] as Transform3D).translated(-_chunk_centre)
+            var ic: Color = cs[n_i]
+            var base: int = pos.size()
+            for v in range(sp.size()):
+                pos.append(xf*sp[v])
+                nrm.append((xf.basis*sn[v]).normalized())
+                var vc: Color = sc[v]
+                col.append(Color(vc.r*ic.r,vc.g*ic.g,vc.b*ic.b,1.0))
+                uv.append(su[v])
+            for t in si:
+                idx.append(base+t)
+    if pos.is_empty():
+        return null
+    var out: Array = []
+    out.resize(Mesh.ARRAY_MAX)
+    out[Mesh.ARRAY_VERTEX] = pos
+    out[Mesh.ARRAY_NORMAL] = nrm
+    out[Mesh.ARRAY_COLOR] = col
+    out[Mesh.ARRAY_TEX_UV] = uv
+    out[Mesh.ARRAY_INDEX] = idx
+    var mesh := ArrayMesh.new()
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,out)
+    return mesh
+
+func _post_mesh() -> ArrayMesh:
+    if _meshes.has("post"):
+        return _meshes["post"]
+    var b := _MeshBuild.new()
+    b.box(Vector3(0,0.55,0),Vector3(0.07,0.55,0.07),Color(0.95,0.95,0.93),0.0)
+    b.box(Vector3(0,0.86,0),Vector3(0.075,0.10,0.075),Color(0.06,0.06,0.07),0.0)
+    b.box(Vector3(0,0.86,-0.08),Vector3(0.04,0.05,0.01),Color(0.95,0.25,0.10),0.0)
+    var mesh: ArrayMesh = b.commit()
+    _meshes["post"] = mesh
+    return mesh
 
 func _pick_weighted(mix: Array, rng: RandomNumberGenerator) -> String:
     var total: float = 0.0
@@ -1866,6 +1972,10 @@ func min_roadside_clearance() -> Array:
                 for k in range(mm.instance_count):
                     var o: Vector3 = mm.get_instance_transform(k).origin+base
                     best = minf(best,road_clearance(Vector2(o.x,o.z)))
+                    count += 1
+            elif child is MeshInstance3D and child.has_meta("roadside_points"):
+                for q in (child.get_meta("roadside_points") as PackedVector2Array):
+                    best = minf(best,road_clearance(q))
                     count += 1
     return [best,count]
 

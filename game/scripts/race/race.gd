@@ -689,10 +689,13 @@ func _update_camera_view(delta: float) -> void:
     overhead.look_at(focus+drone_direction*5.0,Vector3.UP)
 
     var speed_lerp: float = clampf(model.speed_kmh()/120.0,0.0,1.0)
-    var chase_back: float = lerpf(16.0,22.0,speed_lerp)
-    var chase_height: float = lerpf(9.0,12.0,speed_lerp)
+    # v0.1.27 speed feel: closer and lower behind the car (road texture,
+    # kerbs and roadside posts stream past), pulling back a little and
+    # widening the lens with speed.
+    var chase_back: float = lerpf(13.5,19.0,speed_lerp)
+    var chase_height: float = lerpf(7.0,9.5,speed_lerp)
     var chase_target: Vector3 = car_position-f*chase_back+camera_velocity_lead*0.22+Vector3.UP*chase_height
-    var look_target: Vector3 = car_position+f*(2.0 if model.is_reversing() else 7.0)+camera_velocity_lead*0.32+Vector3.UP*0.8
+    var look_target: Vector3 = car_position+f*(2.0 if model.is_reversing() else 8.0)+camera_velocity_lead*0.32+Vector3.UP*0.8
     if bool(dev.get("camera_pitch",true)) and heading_grade != 0.0:
         # Follow the road grade: behind the car the road is lower uphill.
         chase_target.y -= heading_grade*chase_back
@@ -711,7 +714,7 @@ func _update_camera_view(delta: float) -> void:
         var ground: float = track.terrain.height_at(chase.position.x,chase.position.z)
         chase.position.y = maxf(chase.position.y,ground+2.5)
     chase.look_at(look_target,Vector3.UP)
-    chase.fov = lerpf(chase.fov,lerpf(76.0,82.0,speed_lerp),zoom_alpha)
+    chase.fov = lerpf(chase.fov,lerpf(75.5,83.5,speed_lerp*speed_lerp),zoom_alpha)
 
     # Portrait framing: lift the car out of the pedal/handbrake area while the
     # velocity lookahead still opens the view ahead of it.

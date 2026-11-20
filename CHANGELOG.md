@@ -1,3 +1,20 @@
+## [0.1.27] — Terrain Builder visual & track builder refinement (+ owner chat requests)  — TEST BUILD, not approved until the owner plays it on the phone
+Report: docs/terrain_builder/REFINEMENT_v0.1.27.md (every item, BEFORE / AFTER for all 8 regions, seeds, bridges, route ends, UI, measurements, PASS / FAIL / NOT RUN). The two phone recordings named in the brief were not received.
+- Builder camera: line-of-sight FIT (no more Tatry rock / snow walls in front of the map), smooth pitch, no overview haze; region change shows a clear NOT GENERATED card.
+- Navigation: ✋ MOVE mode, plane-anchored pan / pinch (no jumps), fling, 12° twist dead zone, auto-scroll while drawing at the map edge; setup drag pans.
+- Loading card (dim, spinning dots, chequered progress) with frame-sliced terrain generation / road fit / AUTO / track loading in the builder, sliced terrain build at race start, card on AUTO-SMOOTH and menu transitions (new `NitroSteps`, `NitroBusy`).
+- Landscapes: per-seed macro landforms (mirrors, macro parameters, 2-4 large hills / hollows); faceted rocks by geology; tree proportions / lean / crown variants; rock strata in the ground shader; taller Irish cliffs with strata, surf and sea stacks.
+- Japan City: shader-painted street grid + zoned district (towers, offices, department store, mansions with balconies, shop rows with awnings and signs, convenience stores, parks with shrines, utility poles + wires, street trees, traffic signals), facade shader, concrete shoulder.
+- Bridges: stream channel never filled (bridge over the Ojców stream, water continuous); > 6 m fill = bridge; masonry arch bridges / viaducts for Poland and Ireland sized by the valley, concrete for Japan.
+- Builder preview pieces laid on the ground (no more buried road); buildability squares painted on the terrain; a new landscape keeps the whole road and reports red tiles.
+- Roadside band behind the barrier (shrubs, flowers, ferns, heather, gorse, dwarf pine, stones, forest edge), delineator posts every 20 m; colour pass (linear tone mapping, cooler ambient, saturation, depth fog from 220 m); chase camera closer / lower with speed FOV.
+- Open routes: staging paddock behind the start + parc fermé after the finish on terrain-fitted pads; start light pole with four green lamps before the start line.
+- SAVE with a name (SAVE / SAVE AS NEW), MY TRACKS list in the builder, terrain tracks redirected from the node editor to the Terrain Builder; pause menu: ▶ RESUME, RESTART + ✎ EDIT TRACK, GARAGE / MENU, SOUND & STYLE folded.
+- Game icon: the owner's NW crown icon (full-bleed, Android adaptive layers, project icon).
+- Tests: terrain_scenery_test (city block variety, roadside planting behind the barrier), terrain_physics_test (route start / finish areas + start lights); run_godot_checks.sh runs headless tests with `--audio-driver Dummy`. Evidence tools: capture_bridges.gd, capture_ui_v0127.gd, capture_terrain.gd (routes, bridges, frame stats).
+- NOT DONE: free-draw (Townscaper-like) drawing — evaluated only; Japan City catch fencing / rail viaduct. NOT RUN: phone / browser performance, owner review.
+- Android versionCode 27 / versionName 0.1.27.
+
 ## [0.1.26] — E30 Blessed visual refinement pass v0.2  — TEST BUILD, not approved until the owner reviews it on the phone
 Report: docs/car_factory/E30_VISUAL_REFINEMENT_v0.2.md (BEFORE / AFTER views, close-ups, race cameras, photo-camera comparison, measurements).
 - Bonnet: rounder nose, more crown, soft creases, separate shark-nose visor over the grille (the old leaning end cap pushed yellow wedges into the grille).
