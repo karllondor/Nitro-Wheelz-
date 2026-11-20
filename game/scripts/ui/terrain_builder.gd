@@ -96,6 +96,7 @@ var desc_label: Label
 var setup_box: Control
 var build_box: Control
 var buttons: Dictionary = {}
+var _last_fog: float = -1.0
 
 func _ready() -> void:
     STYLE.ensure_settings()
@@ -164,7 +165,8 @@ func generate_terrain(new_seed: bool = true) -> void:
     world.field.bake()
     add_child(world)
     world.build()
-    world.set_fog_scale(0.12)
+    world.set_fog_scale(0.0)
+    _last_fog = -1.0
     build_map = world.field.build_map()
     generated_key = "%s/%d" % [archetype,terrain_seed]
     _rebuild_overlay()
@@ -541,6 +543,13 @@ func _apply_camera() -> void:
     if world != null:
         camera.position.y = maxf(camera.position.y,world.height_at(camera.position.x,camera.position.z)+12.0)
     camera.look_at(cam_target,Vector3.UP)
+    if world != null:
+        # Overview without haze (it washed the whole map out); a little
+        # aerial perspective only for close, low views.
+        var fog: float = clampf((700.0-cam_dist)/700.0,0.0,1.0)*0.5
+        if absf(fog-_last_fog) > 0.02:
+            _last_fog = fog
+            world.set_fog_scale(fog)
     if map_rect.size.y > 0.0:
         var s: Vector2 = get_viewport().get_visible_rect().size
         camera.v_offset = 0.0

@@ -65,6 +65,10 @@ var _rock_mat: StandardMaterial3D
 var _mats: Array = []
 var landmark_node: Node3D
 var venue_node: Node3D
+## Race: vegetation / rocks of a chunk stop drawing beyond this distance
+## (metres from the chunk centre; 0 = always, used by the builder overview).
+var draw_range: float = 0.0
+var _chunk_centre: Vector3 = Vector3.ZERO
 
 func setup(w: NitroTerrainWorld) -> void:
     world = w
@@ -250,6 +254,7 @@ func _build_chunk(id: Vector2i) -> void:
     var x0: float = -FIELD.HALF_X+float(id.x)*span
     var z0: float = -FIELD.HALF_Z+float(id.y)*span
     var rng: RandomNumberGenerator = _rng_for(id,1)
+    _chunk_centre = Vector3(x0+span*0.5,0.0,z0+span*0.5)
     var per: Dictionary = {}        # species -> [xforms, colours]
     var shadows: Array[Transform3D] = []
     var spacing: float = 11.0 if float(info["forest"]) > 0.4 else 12.0
@@ -1139,8 +1144,11 @@ func _multimesh(parent: Node3D, label: String, mesh: Mesh, material: Material,
     mm.use_colors = not colours.is_empty()
     mm.mesh = mesh
     mm.instance_count = transforms.size()
+    # Instances relative to the chunk centre so the node's distance (used by
+    # the visibility range) is the chunk's distance from the camera.
+    var origin: Vector3 = _chunk_centre
     for k in range(transforms.size()):
-        mm.set_instance_transform(k,transforms[k])
+        mm.set_instance_transform(k,(transforms[k] as Transform3D).translated(-origin))
         if mm.use_colors:
             mm.set_instance_color(k,colours[k])
     var node := MultiMeshInstance3D.new()
@@ -1148,6 +1156,11 @@ func _multimesh(parent: Node3D, label: String, mesh: Mesh, material: Material,
     node.multimesh = mm
     node.material_override = material
     node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    node.position = origin
+    if draw_range > 0.0:
+        node.visibility_range_end = draw_range
+        node.visibility_range_end_margin = 40.0
+        node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
     parent.add_child(node)
 
 func summary() -> Dictionary:
@@ -1163,8 +1176,9 @@ func min_item_clearance() -> float:
         for child in node.get_children():
             if child is MultiMeshInstance3D and str(child.name) != "Tree shadows":
                 var mm: MultiMesh = (child as MultiMeshInstance3D).multimesh
+                var base: Vector3 = (child as Node3D).position
                 for k in range(mm.instance_count):
-                    var o: Vector3 = mm.get_instance_transform(k).origin
+                    var o: Vector3 = mm.get_instance_transform(k).origin+base
                     best = minf(best,road_clearance(Vector2(o.x,o.z)))
     return best
 

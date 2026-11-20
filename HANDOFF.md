@@ -1,4 +1,14 @@
-# Nitro Wheelz — v0.1.24 Car Factory prototype: E30 Blessed (test build, awaiting visual review)
+# Nitro Wheelz — v0.1.25 Terrain-first Track Builder (test build, awaiting owner review)
+
+## TERRAIN-FIRST TRACK BUILDER (v0.1.25)
+- Read docs/terrain_builder/TERRAIN_BUILDER_REPORT.md first (what works, every check as PASS / FAIL / NOT RUN, measurements, reference comparison, limits). Architecture: docs/research/procedural_world/TERRAIN_FIRST_ARCHITECTURE.md.
+- Player flow: MAIN MENU > TRACK BUILDER > TERRAIN BUILDER: COUNTRY -> LANDSCAPE -> EVENT -> GENERATE TERRAIN -> DRAW ROAD -> automatic terrain adaptation -> SAVE / DRIVE. DEVELOPER > ELEVATION PHYSICS: grade force 0/25/50/75/100 % + visual / telemetry switches.
+- Code: game/scripts/world/terrain/ (terrain_catalog, terrain_field, road_profile, terrain_track, terrain_world, terrain_scenery, physics_dev), game/scripts/ui/terrain_builder.gd + game/scenes/terrain_builder.tscn, drift_track.gd (heights, open routes, end caps, region kerbs, terrain world), race.gd (height / pitch / cameras / open finish / telemetry), drive_model.gd (external_accel, ZERO = baseline), track_dna.gd (open topology, broad phase), boot.gd (menu + ELEVATION PHYSICS page). Shaders terrain_ground / terrain_water / terrain_vegetation.
+- Tests (registered): terrain_world_test, terrain_scenery_test, terrain_builder_test, terrain_physics_test. Captures: tests/capture_terrain.gd, tests/capture_terrain_seeds.gd -> docs/terrain_builder/captures/.
+- Saved data: schema 1 + `topology`, `world` (descriptor), `elevation.knot_heights`; legacy flat and Phase A tracks unchanged.
+- References: the owner's Drive packs are public and were verified (12/12 SHA-256); images are not committed.
+- STOP POINT: owner plays the APK (Builder -> SAVE -> DRIVE on all three countries) and reviews the look before further art passes (guard rails, crowds, banners, footbridge, horizon trees, phone performance tuning).
+
 
 ## CAR FACTORY / E30 BLESSED (v0.1.24)
 - Read docs/car_factory/E30_BLESSED_PROTOTYPE.md (results, confirmed vs unconfirmed, comparison, performance, decisions) and docs/car_factory/CAR_FACTORY_AUDIT.md (why this pipeline).
@@ -8,7 +18,7 @@
 - Reference package: assets/references/drafts/e30_blessed_v0.1/ (DRAFT; photos not committed).
 - STOP POINT: owner reviews the E30 before any further cars.
 
-> **NEW 2026-11-20 OWNER APPROVAL:** Phase A's procedural adjacency, local chunks and Builder/Race parity are worth preserving, but its road-adjacent generic village art was rejected. All future world work must follow [master implementation brief](docs/research/procedural_world/CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md), [terrain-first spec](docs/research/procedural_world/TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md), [research](docs/research/procedural_world/NITRO_WHEELZ_WORLD_RESEARCH_v1.md) and [Drive-hosted 49-image reference library](docs/references/drift_tracks/README.md). These are specifications/references; the full 3D terrain system has **NOT** been implemented or tested yet. The earlier Phase A STOP POINT and planned house-heavy Phase B are superseded.
+> **2026-11-20 OWNER APPROVAL (still binding):** Phase A's procedural adjacency, local chunks and Builder/Race parity are worth preserving, but its road-adjacent generic village art was rejected. All world work follows [master implementation brief](docs/research/procedural_world/CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md), [terrain-first spec](docs/research/procedural_world/TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md), [research](docs/research/procedural_world/NITRO_WHEELZ_WORLD_RESEARCH_v1.md) and [Drive-hosted 49-image reference library](docs/references/drift_tracks/README.md). v0.1.25 implements the terrain system as a test build (see above); owner approval is NOT RUN.
 
 
 ## PROCEDURAL WORLD PHASE A (v0.1.23)

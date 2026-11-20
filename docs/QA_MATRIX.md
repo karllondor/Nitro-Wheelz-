@@ -21,6 +21,23 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.25 local evidence — Terrain-first Track Builder (Claude Code cloud container, 2026-11-20)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 29 Godot tests: 25 existing + terrain_world / terrain_scenery / terrain_builder / terrain_physics) | Linux container, Godot 4.7.2 headless | PASS | local run 2026-11-20; CI on push |
+| 8 archetypes x 10 seeds deterministic and distinct; buildable tiles on the worst seed 127-192 of 192 | Linux container | PASS | terrain_world_test |
+| generated loop on all 8 archetypes, max grade within +10 % of target, no height step incl. loop closure; open routes JP / PL / IE | Linux container | PASS | terrain_world_test |
+| Irish cliff edge: road centre 24 m from the drop, full width + verge on land (verge edge 8.4 m from the drop), cliff wall 307 m; tiles < 21 m refused | Linux container | PASS | terrain_world_test |
+| local adaptation (none beyond 98 m), 4 / 30 chunks rebuilt, road removal restores terrain, safety strip 14 m on 8 archetypes, one venue practice < club <= pro | Linux container | PASS | terrain_scenery_test |
+| Track DNA broad phase == former O(n^2) scan on 32 tracks (16 invalid); 756 -> 56 ms on 900 samples | Linux container | PASS | terrain_scenery_test |
+| legacy flat tracks unchanged; terrain track without knot heights re-solved | Linux container | PASS | terrain_scenery_test |
+| builder: countries / landscapes / events, GENERATE + new seed, red tile refused with reason, UNDO / REDO / ERASE / CLEAR restore road + terrain, pinch + twist without painting, AUTO, CLOSE LOOP, SAVE -> race world identical, EDIT, ROUTE + DRIVE | Linux container | PASS | terrain_builder_test |
+| grade force 0/25/50/75/100 % monotonic (parked 2 s on 6.3 %: 0 / 0 / 0 / 0.04 / 0.30 m/s), uphill 15.8 -> 15.0 m/s at 100 %, flat track bit-identical at 100 %, Lada golden trace bit-identical, grounding, pitch, chase camera above terrain, telemetry, open-route finish + end caps | Linux container | PASS | terrain_physics_test, car_profiles_test |
+| captures: 8 x 10 seed sheets; per archetype builder before / with road, paddock, race top-down + chase on the same saved track | Xvfb + llvmpipe | DONE | docs/terrain_builder/captures/ |
+| generate 446-900 ms, road adaptation 338-492 ms, race load 623-848 ms; whole world 118 k-379 k triangles, 147-209 draw calls before culling | Linux container CPU / llvmpipe | MEASURED | docs/terrain_builder/TERRAIN_BUILDER_REPORT.md |
+| owner reference packs: 12 / 12 SHA-256 verified, 10 images inspected individually + index sheets | Drive (public) | DONE | report section 5 |
+| **Android / Web FPS, memory, adaptation time on a phone; owner playtest and visual approval** | devices / owner | **NOT RUN** | owner |
+
 ## v0.1.24 local evidence — Car Factory prototype E30 Blessed (Claude Code cloud container, 2026-11-20)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

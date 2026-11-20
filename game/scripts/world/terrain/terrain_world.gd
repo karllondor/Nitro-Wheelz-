@@ -43,6 +43,8 @@ var last_stats: Dictionary = {}
 var with_lighting: bool = true
 var env: Environment
 var _fog_base: float = 0.001
+## Race sets a draw range for vegetation / rocks (0 = everything, builder).
+var scenery_range: float = 0.0
 
 func setup(descriptor: Dictionary) -> NitroTerrainWorld:
     desc = descriptor.duplicate(true)
@@ -92,6 +94,7 @@ func build() -> void:
     scenery.name = "Scenery"
     add_child(scenery)
     scenery.setup(self)
+    scenery.draw_range = scenery_range
     scenery.rebuild_all()
     last_stats = {"build_ms":float(Time.get_ticks_usec()-t0)/1000.0,"bake_ms":field.bake_ms,
         "chunks":chunk_nodes.size()}
@@ -675,6 +678,7 @@ func _build_lighting() -> void:
 ## Builder overview cameras look from 600-1200 m: thinner haze there.
 func set_fog_scale(k: float) -> void:
     if env != null:
+        env.fog_enabled = k > 0.001
         env.fog_density = _fog_base*k
 
 func mesh_stats() -> Dictionary:

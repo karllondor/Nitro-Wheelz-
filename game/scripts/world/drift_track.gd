@@ -121,6 +121,7 @@ func build_terrain(desc: Dictionary) -> void:
     terrain.name = "Terrain world"
     terrain.setup(desc)
     terrain.field.bake()
+    terrain.scenery_range = 650.0
     add_child(terrain)
     terrain.build()
     if heights.size() != centerline.size():

@@ -1,5 +1,7 @@
 # Terrain-first Track Builder — architecture (v0.1.25)
 
+> **Status v0.1.25:** implemented as a test build — see [TERRAIN_BUILDER_REPORT.md](../../terrain_builder/TERRAIN_BUILDER_REPORT.md) for the verified results (PASS / FAIL / NOT RUN). Deviations from this plan found while testing: flat bench 15 m (not hw+6 m) so the 8 m terrain grid never rises through the verge; coast tiles measured at the tile centre (21 m red / 40 m amber); grade force integrated inside the drive-model substeps (`external_accel`) instead of after them (the model's parking clamp otherwise held the car); canonical loop order for SAVE/LOAD fidelity.
+
 Written 2026-11-20 after auditing branch `ccr-91dad981-53kkbi` at 427644f (v0.1.24) against
 `CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md` (controlling) and `TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md`.
 
