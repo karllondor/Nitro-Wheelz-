@@ -5,8 +5,9 @@
 shader_type spatial;
 render_mode blend_mix, cull_disabled, diffuse_burley, specular_schlick_ggx;
 
-uniform vec4 tint : source_color = vec4(0.05, 0.06, 0.075, 1.0);
-uniform float opacity : hint_range(0.0, 1.0) = 0.52;
+// v0.2: darker, more realistic tint; the cage and seats stay subtly visible.
+uniform vec4 tint : source_color = vec4(0.028, 0.034, 0.044, 1.0);
+uniform float opacity : hint_range(0.0, 1.0) = 0.64;
 uniform float gloss : hint_range(0.0, 3.0) = 1.1;
 uniform vec4 studio : source_color = vec4(0.97, 0.97, 1.0, 1.0);
 

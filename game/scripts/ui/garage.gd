@@ -23,6 +23,7 @@ var ui_unit: float = 1.0
 var studio_env: Environment
 var studio_key: DirectionalLight3D
 var studio_fill: DirectionalLight3D
+var camera: Camera3D
 
 func _ready() -> void:
     var s: Vector2 = get_viewport_rect().size
@@ -162,12 +163,22 @@ func _apply_studio() -> void:
     studio_fill.light_color = Color(0.86,0.89,1.0)
     studio_fill.light_energy = 0.50
 
+const BASE_FOV: float = 36.0
+
+## Per-car garage framing (profile "presentation.garage_zoom", default 1):
+## a narrower lens, same camera position and target.
+func _apply_zoom() -> void:
+    if camera == null:
+        return
+    var zoom: float = float((CARS.profile(active_variant).get("presentation",{}) as Dictionary).get("garage_zoom",1.0))
+    camera.fov = rad_to_deg(2.0*atan(tan(deg_to_rad(BASE_FOV*0.5))/maxf(zoom,0.5)))
+
 func _build_turntable() -> void:
     turntable = Node3D.new()
     turntable.name = "Turntable"
     turntable.rotation.y = deg_to_rad(145.0)  # front three-quarter, like the sheet
     preview.add_child(turntable)
-    var camera := Camera3D.new()
+    camera = Camera3D.new()
     camera.name = "Garage camera"
     # Horizontal FOV (KEEP_WIDTH): the whole 4.2 m car stays inside the tall
     # card at every turntable angle, side-on included (it was cut off).
@@ -283,6 +294,7 @@ func _spawn_car() -> void:
     car.set("shadow_height",0.012)
     car.name = str(CARS.info(active_variant)["name"])+" "+active_variant
     turntable.add_child(car)
+    _apply_zoom()
 
 func _choose(chosen: String) -> void:
     if chosen == active_variant:

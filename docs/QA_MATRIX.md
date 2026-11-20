@@ -21,6 +21,15 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.26 local evidence — E30 visual refinement pass v0.2 (Claude Code cloud container, 2026-11-20)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 29 Godot tests) | Linux container, Godot 4.7.2 headless | PASS | local run; CI on push |
+| E30: 41 288 triangles (budget 42 000), 8 draw calls, paint / atlas / glass, dimensions unchanged, garage fit over a full turn (min margin 1.6 %) | Linux container | PASS | e30_factory_car_test |
+| Lada / RYU-32 physics bit-identical, other cars' shaders untouched | Linux container | PASS | car_profiles_test, visual_identity_test |
+| BEFORE / AFTER garage views, close-ups, race top-down + chase, v0.1 vs v0.2 from the 3 solved photo cameras | Xvfb + llvmpipe | DONE | docs/car_factory/e30_v02/ |
+| **Phone review of the refined E30** | owner | **NOT RUN** | owner |
+
 ## v0.1.25 local evidence — Terrain-first Track Builder (Claude Code cloud container, 2026-11-20)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

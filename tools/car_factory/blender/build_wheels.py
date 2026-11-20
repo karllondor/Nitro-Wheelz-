@@ -34,7 +34,7 @@ def _outward(center_r):
     return want
 
 
-def tyre(part):
+def tyre(part, seg=40):
     m = nwcf.frame_from_axis((0, 0, 0), (1, 0, 0))
     w = TYRE_W * 0.5
     prof = [(-HALF - 0.001, FLANGE_R - 0.002), (-w - 0.005, 0.240), (-w - 0.003, 0.262),
@@ -43,7 +43,6 @@ def tyre(part):
             (w + 0.005, 0.240), (HALF + 0.001, FLANGE_R - 0.002)]
     keys = ["tyre_side"] * 4 + ["tyre"] * 3 + ["tyre_side"] * 4
     rows = []
-    seg = 40
     for a, r in prof:
         rows.append([m @ Vector((a, r * math.cos(math.tau * s / seg), r * math.sin(math.tau * s / seg)))
                      for s in range(seg)])
@@ -55,36 +54,52 @@ def tyre(part):
 
 
 def rim_signature(part):
-    """Deep polished lip + silver dished face with vents, 4 nuts (4x100)."""
+    """v0.2 Signature: wide polished STEP LIP that dives into a deep dish,
+    a concave silver face set ~7 cm back, eight vent pockets with real depth
+    (dark tunnels, not painted dots), raised webbing between them, a domed
+    centre and 4 nuts (4x100). Same size, hub pivot and outer offset."""
     m = nwcf.frame_from_axis((0, 0, 0), (1, 0, 0))
-    seg = 40
-    lip_depth = 0.066
+    seg = 36
+    lip_depth = 0.070
     face_a = HALF - lip_depth
-    # Outer flange and polished lip (outer side, then inner side of the lip).
-    nwcf.lathe(part, m, [(HALF - 0.004, FLANGE_R + 0.001), (HALF + 0.003, FLANGE_R - 0.003),
-                         (HALF + 0.004, RIM_R + 0.004), (HALF, RIM_R - 0.002)], "rim_lip", segments=seg,
-               orient=lambda c: Vector((1.0, 0, 0)) + Vector((0, c.y, c.z)) * 2.0)
-    nwcf.lathe(part, m, [(HALF, RIM_R - 0.002), (face_a + 0.004, RIM_R - 0.004)], "rim_lip", segments=seg,
-               orient=lambda c: -Vector((0, c.y, c.z)))
-    # Face: shallow concave disc.
-    face = [(face_a + 0.004, RIM_R - 0.004), (face_a, RIM_R - 0.012), (face_a + 0.002, 0.14),
-            (face_a + 0.006, 0.095), (face_a + 0.010, 0.058), (face_a + 0.012, 0.0)]
+    r_step = RIM_R - 0.015          # inner edge of the step lip
+    # Rolled outer flange -> flat polished lip -> step down into the dish.
+    nwcf.lathe(part, m, [(HALF - 0.006, FLANGE_R + 0.001), (HALF + 0.002, FLANGE_R - 0.001),
+                         (HALF + 0.004, FLANGE_R - 0.006), (HALF + 0.004, r_step + 0.004),
+                         (HALF + 0.001, r_step)], "rim_lip", segments=seg,
+               orient=lambda c: Vector((1.0, 0, 0)) + Vector((0, c.y, c.z)) * 1.5)
+    # Polished dish wall: slightly conical, so it catches the light.
+    nwcf.lathe(part, m, [(HALF + 0.001, r_step), (HALF - 0.020, r_step - 0.003),
+                         (face_a + 0.010, r_step - 0.010), (face_a + 0.004, r_step - 0.013)], "rim_lip",
+               segments=seg, orient=lambda c: -Vector((0, c.y, c.z)) + Vector((0.6, 0, 0)))
+    # Face: concave (outer edge forward, centre deeper), with a raised hub.
+    r_f = r_step - 0.013
+    face = [(face_a + 0.004, r_f), (face_a, r_f - 0.008), (face_a - 0.004, 0.150),
+            (face_a - 0.006, 0.112), (face_a - 0.004, 0.080), (face_a + 0.004, 0.064)]
     nwcf.lathe(part, m, face, "rim_silver", segments=seg, orient=lambda c: (1.0, 0, 0))
-    # Vents (dark recesses) and nuts.
+    # Vent pockets: dark tunnels sunk 25 mm into the face.
     for k in range(8):
         a = math.tau * k / 8 + math.tau / 16
-        cen = Vector((face_a + 0.0035, 0.138 * math.cos(a), 0.138 * math.sin(a)))
+        cen = Vector((face_a - 0.0035, 0.131 * math.cos(a), 0.131 * math.sin(a)))
         mm = nwcf.frame_from_axis(cen, (1, 0, 0))
-        nwcf.lathe(part, mm, [(0.0, 0.0), (0.0, 0.024)], "rim_dark", segments=12, orient=lambda c: (1.0, 0, 0))
+        nwcf.lathe(part, mm, [(0.0015, 0.0255), (-0.022, 0.0235)], "rim_dark", segments=10,
+                   orient=lambda c, cen=cen: -(c - cen) + Vector((0, 0, 0)))
+        nwcf.lathe(part, mm, [(-0.022, 0.0235), (-0.022, 0.0)], "brake", segments=10,
+                   orient=lambda c: (1.0, 0, 0))
+        nwcf.lathe(part, mm, [(0.0012, 0.0285), (0.0022, 0.0262)], "rim_lip", segments=10,
+                   orient=lambda c: (1.0, 0, 0))
+    # Domed centre with 4 nuts and a polished cap.
+    nwcf.lathe(part, m, [(face_a + 0.004, 0.064), (face_a + 0.016, 0.058), (face_a + 0.022, 0.044),
+                         (face_a + 0.024, 0.028)], "rim_silver", segments=24, orient=lambda c: (1.0, 0, 0))
     for k in range(4):
         a = math.tau * k / 4
-        cen = Vector((face_a + 0.010, 0.050 * math.cos(a), 0.050 * math.sin(a)))
+        cen = Vector((face_a + 0.022, 0.044 * math.cos(a), 0.044 * math.sin(a)))
         mm = nwcf.frame_from_axis(cen, (1, 0, 0))
-        nwcf.lathe(part, mm, [(0.0, 0.0105), (0.010, 0.0105), (0.012, 0.007), (0.0125, 0.0)], "nut",
+        nwcf.lathe(part, mm, [(-0.004, 0.0095), (0.007, 0.0095), (0.009, 0.0065), (0.0095, 0.0)], "nut",
                    segments=6, orient=lambda c, cen=cen: c - cen + Vector((0.002, 0, 0)))
-    nwcf.lathe(part, m, [(face_a + 0.012, 0.030), (face_a + 0.020, 0.026), (face_a + 0.024, 0.0)],
-               "rim_lip", segments=20, orient=lambda c: (1.0, 0, 0))
-    _barrel(part, m, face_a, seg)
+    nwcf.lathe(part, m, [(face_a + 0.024, 0.028), (face_a + 0.030, 0.024), (face_a + 0.034, 0.012),
+                         (face_a + 0.035, 0.0)], "rim_lip", segments=20, orient=lambda c: (1.0, 0, 0))
+    _barrel(part, m, face_a - 0.006, seg)
 
 
 def rim_nw_deep_dish(part):
@@ -128,9 +143,10 @@ def _barrel(part, m, face_a, seg):
 
 
 DESIGNS = {
-    "wheel_signature_e30": {"name": "SIGNATURE", "builder": rim_signature,
-                            "note": "Source-matched approximation: deep polished lip and silver face are visible in "
-                                    "the photos; the exact face design and size are NOT confirmed."},
+    "wheel_signature_e30": {"name": "SIGNATURE", "builder": rim_signature, "tyre_seg": 36,
+                            "note": "Source-matched approximation (v0.2): wide polished step lip, deep dish and a "
+                                    "recessed silver face are visible in the photos; the exact face design and size "
+                                    "are NOT confirmed."},
     "wheel_nw_deep_dish": {"name": "NW DEEP DISH", "builder": rim_nw_deep_dish,
                            "note": "Nitro Wheelz original design (cosmetic only)."},
 }
@@ -142,7 +158,7 @@ def build(out_dir):
     for wid, d in DESIGNS.items():
         nwcf.reset()
         part = nwcf.Part(wid)
-        tyre(part)
+        tyre(part, d.get("tyre_seg", 40))
         d["builder"](part)
         obj = part.to_object()
         atlas = nwcf.write_atlas_images(os.path.join(tempfile.mkdtemp(prefix="nwcf_"), wid + "_atlas.png"))

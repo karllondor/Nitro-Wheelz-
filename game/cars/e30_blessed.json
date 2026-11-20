@@ -2,7 +2,7 @@
   "id": "e30_blessed",
   "name": "E30 BLESSED",
   "role": "First Car Factory prototype (Blender -> GLB). Four-door E30 drift sedan in Blessed Yellow. Gameplay handling is the Lada baseline (untuned for this car) with only the confirmed factory wheelbase changed; proposed tuning waits for an A/B test.",
-  "spec": "M52B28 2.8 R6 \u2022 NA \u2022 factory ref. 193 PS / 280 Nm",
+  "spec": "M52B28 2.8 R6 • NA • factory ref. 193 PS / 280 Nm",
   "provenance": {
     "reference_package": "assets/references/research/e30_blessed_v0.1/ (DRAFT, not approved)",
     "confirmed": [
@@ -159,17 +159,17 @@
   "cosmetics": {
     "signature": {
       "paint_name": "BLESSED YELLOW",
-      "paint_color_hex": "#F2C40C",
+      "paint_color_hex": "#EFBA0D",
       "paint_finish": "solid",
       "wheel_asset_id": "wheel_signature_e30",
       "wheel_finish": "standard",
       "livery_id": "clean"
     },
-    "signature_note": "Immutable showcase preset. Colour sampled from the supplied photos (#ECBF24 / #F5CB06 under different light).",
+    "signature_note": "Immutable showcase preset. Colour sampled from the supplied photos (#ECBF24 / #F5CB06 under different light). v0.2: deepened / warmed to #EFBA0D (owner review: the old #F2C40C read as flat neon yellow on the phone).",
     "paints": [
       {
         "name": "BLESSED YELLOW",
-        "hex": "#F2C40C",
+        "hex": "#EFBA0D",
         "finish": "solid"
       },
       {
@@ -201,6 +201,13 @@
     "wheels": [
       "wheel_signature_e30",
       "wheel_nw_deep_dish"
-    ]
+    ],
+    "paint_aliases": {
+      "#F2C40C": "#EFBA0D"
+    }
+  },
+  "presentation": {
+    "garage_zoom": 1.18,
+    "garage_zoom_note": "v0.2 owner request: car ~18 % larger in the garage card; checked to stay inside the card through a full turn."
   }
 }

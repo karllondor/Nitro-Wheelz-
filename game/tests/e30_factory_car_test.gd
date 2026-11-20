@@ -80,7 +80,7 @@ func _checks() -> String:
         return "Draw calls over budget: %d" % stats["calls"]
     if int(stats["tris"]) > BUDGET_TRIANGLES:
         return "Triangles over budget: %d" % stats["tris"]
-    for shader in ["diecast_paint","nitro_car_atlas","nitro_car_glass"]:
+    for shader in ["nitro_car_paint","nitro_car_atlas","nitro_car_glass"]:
         if not (stats["shaders"] as Array).has(shader):
             return "Body material not converted to "+shader
     # Vertex bounds (Godot pads the AABB of compressed imported meshes).
@@ -140,6 +140,8 @@ func _checks() -> String:
     car.queue_free()
 
     # --- garage prototype: SIGNATURE / PAINT / WHEELS on the E30
+    var old_size: Vector2i = root.size
+    root.size = Vector2i(900,2000)     # portrait phone card, as on the device
     var garage: Control = (load(GARAGE_SCENE) as PackedScene).instantiate()
     root.add_child(garage)
     await process_frame
@@ -159,11 +161,29 @@ func _checks() -> String:
     garage.call("_signature")
     if not str((garage.get("version_label") as Label).text).contains("ORIGINAL"):
         return "Garage SIGNATURE must show the original state"
+    # v0.2: E30 shown ~18 % larger, still inside the card at every angle.
+    var cam: Camera3D = garage.get("camera")
+    if absf(cam.fov-36.0) < 1.0:
+        return "E30 garage zoom (profile presentation.garage_zoom) not applied"
+    var tt: Node3D = garage.get("turntable")
+    var vp_size: Vector2 = Vector2((garage.get("preview") as SubViewport).size)
+    var worst: float = 1.0
+    var probe: Array[Vector3] = []
+    for deg in range(0,360,15):
+        tt.rotation.y = deg_to_rad(float(deg))
+        probe = _car_corners(preview)
+        for corner in probe:
+            var sp: Vector2 = cam.unproject_position(corner)
+            worst = minf(worst,minf(minf(sp.x,vp_size.x-sp.x)/vp_size.x,minf(sp.y,vp_size.y-sp.y)/vp_size.y))
+    print("E30 garage zoom: fov %.1f deg, smallest margin to the card edge over a full turn %.1f %%" % [cam.fov,worst*100.0])
+    if worst < 0.01:
+        return "Zoomed E30 leaves the garage card during the turn (margin %.3f)" % worst
     garage.call("_choose","red")
     if not (garage.get_node("Cosmetic paint") as Button).disabled:
         return "Cosmetics must be disabled for non-factory cars"
     garage.queue_free()
     await process_frame
+    root.size = old_size
 
     # --- sound: inline six
     var s: NitroEngineSynth = SYNTH.new()
@@ -181,6 +201,19 @@ func _checks() -> String:
     if e <= 0.0:
         return "I6 synth is silent"
     return ""
+
+## Sample of the car's real mesh vertices in world space (body + wheels).
+func _car_corners(car: Node3D) -> Array[Vector3]:
+    var out: Array[Vector3] = []
+    for mi in car.find_children("*","MeshInstance3D",true,false):
+        var m: MeshInstance3D = mi
+        if m.mesh == null or not m.visible or str(m.name).to_lower().contains("shadow"):
+            continue
+        for si in range(m.mesh.get_surface_count()):
+            var verts: PackedVector3Array = m.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]
+            for k in range(0,verts.size(),7):
+                out.append(m.global_transform*verts[k])
+    return out
 
 func _mesh_stats(node: Node) -> Dictionary:
     var out: Dictionary = {"tris":0,"calls":0,"shaders":[]}

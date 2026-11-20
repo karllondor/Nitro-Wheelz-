@@ -17,43 +17,44 @@
     "wheelbase_m": 2.57,
     "width_body_without_mirrors_m": 1.645
   },
-  "glb_bytes": 1026648,
+  "glb_bytes": 1060232,
   "logical_faces": {
     "amber_lens": 108,
-    "black_gloss": 1328,
-    "black_matte": 1342,
-    "black_satin": 1554,
+    "black_gloss": 1368,
+    "black_matte": 1802,
+    "black_satin": 1506,
     "cage": 384,
-    "chrome": 804,
+    "chrome": 884,
     "exhaust": 32,
     "gap": 267,
-    "glass": 480,
+    "glass": 268,
     "interior": 935,
-    "paint": 4490,
-    "rubber": 277,
+    "paint": 4770,
+    "rubber": 228,
     "seat": 648,
     "soot": 32,
-    "tex_headlight": 432,
+    "tex_headlight": 192,
+    "tex_headlight_hi": 192,
     "tex_plate": 2,
-    "tex_tail": 12,
+    "tex_tail": 48,
     "under": 484,
-    "well": 480
+    "well": 372
   },
   "materials": [
     "NW_Paint",
     "NW_Atlas",
     "NW_Glass"
   ],
-  "triangles": 28666,
+  "triangles": 29510,
   "triangles_per_material": {
-    "NW_Atlas": 18589,
-    "NW_Glass": 960,
-    "NW_Paint": 9117
+    "NW_Atlas": 19145,
+    "NW_Glass": 536,
+    "NW_Paint": 9829
   },
   "uv_layers": [
     "UVMap"
   ],
-  "vertices": 16005,
+  "vertices": 16440,
   "wheel_pivots": {
     "wheel_FL": [
       -0.7120000123977661,

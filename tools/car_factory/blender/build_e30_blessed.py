@@ -79,7 +79,8 @@ def top_z(y):
     """Top surface edge height: bonnet, belt deck, boot lid."""
     if y >= Y_C:
         s = (Y_BF - y) / (Y_BF - Y_C)
-        hood = 0.712 + (0.800 - 0.712) * s ** 0.85
+        # v0.2: rounder nose -> flatter rear half of the bonnet (E30 profile)
+        hood = 0.712 + (0.800 - 0.712) * s ** 0.72
         return hood + (belt_z(Y_C) - 0.800) * smoothstep(Y_C + 0.06, Y_C, y)
     if y >= Y_RW:
         return belt_z(y)
@@ -89,7 +90,8 @@ def top_z(y):
 
 def crown(y):
     if y >= Y_C:
-        return 0.020 + 0.010 * smoothstep(Y_BF, Y_C, y)
+        # v0.2: a little more transverse curvature on the bonnet
+        return 0.026 + 0.012 * smoothstep(Y_BF, Y_C, y)
     if y >= Y_RW:
         return 0.0
     return 0.018
@@ -97,7 +99,7 @@ def crown(y):
 
 def half_width(y):
     w = W - 0.006 * max(0.0, (y - 1.6) / (Y_BF - 1.6))
-    rf, rr = 0.065, 0.060
+    rf, rr = 0.085, 0.060      # v0.2: softer front corners in plan
     d = y - (Y_BF - rf)
     if d > 0:
         w -= rf - math.sqrt(max(rf * rf - d * d, 0.0))
@@ -109,7 +111,7 @@ def half_width(y):
 
 def lip_drop(y):
     """Rounded leading edge of the bonnet and trailing edge of the boot."""
-    r = 0.030
+    r = 0.044                  # v0.2: rounder bonnet nose (was 0.030)
     d = y - (Y_BF - r)
     drop = 0.0
     if d > 0:
@@ -139,24 +141,31 @@ def section(y):
     xe = w - 0.064
 
     def top(x):
-        return zt + cr * (1.0 - (x / xe) ** 2)
+        z = zt + cr * (1.0 - (x / xe) ** 2)
+        if y >= Y_C:
+            # E30 bonnet: raised centre panel between two soft creases that
+            # run back from the kidney grille (fades in at the nose / cowl).
+            fade = smoothstep(Y_BF - 0.015, Y_BF - 0.16, y) * smoothstep(Y_C + 0.005, Y_C + 0.11, y)
+            z += 0.0040 * smoothstep(0.300, 0.180, abs(x)) * fade
+        return z
 
     pts = [
         (0.0, ZB), (w * 0.5, ZB), (w - 0.10, ZB), (w - 0.045, ZB + 0.006),
         (w - 0.016, ZB + 0.028), (w - 0.004, ZB + 0.065), (w, ZB + 0.12), (w, 0.36),
         (w, 0.52), (w, zs - 0.06), (w - 0.0015, zs - 0.012), (w - 0.004, zs),
         (w - 0.030, zs + 0.45 * (zt - zs)), (w - 0.052, zt - 0.010), (xe, zt),
-        (w - 0.090, top(w - 0.090)), (w * 0.62, top(w * 0.62)), (w * 0.35, top(w * 0.35)),
-        (w * 0.12, top(w * 0.12)), (0.0, top(0.0)),
+        (w - 0.090, top(w - 0.090)), (w * 0.62, top(w * 0.62)), (0.290, top(0.290)), (0.215, top(0.215)),
+        (0.110, top(0.110)), (0.0, top(0.0)),
     ]
     return pts
 
 
-def lean(y, z):
-    """Shark-nose: the bonnet lip leans forward over the grille panel."""
-    if y < Y_BF - 0.004:
-        return 0.0
-    return 0.018 * smoothstep(0.665, 0.712, z)
+def lean(y, x, z):
+    """Shark nose: the bonnet lip leans forward over the grille panel and
+    is slightly pointed in plan (centre ahead of the corners)."""
+    # v0.2: the lofted body stays straight (a leaning end cap triangulated
+    # into the grille); the overhang is the separate nose visor below.
+    return 0.0
 
 
 def stations():
@@ -174,8 +183,8 @@ def build_lower_body():
     rows = []
     for y in stations():
         half = section(y)
-        ring = [(x, y + lean(y, z), z) for x, z in half]
-        ring += [(-x, y + lean(y, z), z) for x, z in reversed(half[1:-1])]
+        ring = [(x, y + lean(y, x, z), z) for x, z in half]
+        ring += [(-x, y + lean(y, x, z), z) for x, z in reversed(half[1:-1])]
         rows.append(ring)
     V, _ = part.grid(rows, "paint", closed_u=True)
     part.cap(V[0], "paint")
@@ -322,7 +331,8 @@ def windows():
 
 
 def ws_half(y):
-    return side_x(y, rail_z(y)) - 0.052
+    # v0.2: 1.6 cm more yellow A-pillar / C-pillar beside the screens
+    return side_x(y, rail_z(y)) - 0.068
 
 
 def prism_yz(name, poly, x0=-1.2, x1=1.2):
@@ -338,7 +348,7 @@ def prism_yz(name, poly, x0=-1.2, x1=1.2):
     return part.to_object(recalc=True)
 
 
-def prism_xy(name, outline, z0, z1, key="rubber"):
+def prism_xy(name, outline, z0, z1, key="paint"):
     part = nwcf.Part(name)
     bm = part.bm
     a = [bm.verts.new((x, y, z0)) for x, y in outline]
@@ -397,7 +407,7 @@ def side_surface(y, z, inset):
 
 def build_glass_and_frames():
     part = nwcf.Part("glass_frames")
-    nu, nv = 8, 5
+    nu, nv = 6, 3              # v0.2: planar side glass needs few rows
     for name, poly in windows().items():
         big = expand(poly, 0.014)
         for sx in (1.0, -1.0):
@@ -442,7 +452,7 @@ def build_glass_and_frames():
     # Windshield and rear glass + rubber surrounds.
     for (y0, y1) in ((WS_Y0, WS_Y1), (RW_Y0, RW_Y1)):
         rows = []
-        n_y, n_x = 10, 12
+        n_y, n_x = 8, 10
         for j in range(n_y + 1):
             y = (y0 + 0.014 * math.copysign(1, y0 - y1)) + ((y1 - 0.014 * math.copysign(1, y0 - y1))
                                                              - (y0 + 0.014 * math.copysign(1, y0 - y1))) * j / n_y
@@ -456,14 +466,15 @@ def build_glass_and_frames():
             part.grid(rows, "glass")
         else:
             part.grid([list(reversed(r)) for r in rows], "glass")
-        loop = [(x + math.copysign(0.010, x), y) for x, y in glass_outline(y0, y1, 0.0, 16)]
+        loop = [(x + math.copysign(0.0075, x), y) for x, y in glass_outline(y0, y1, 0.0, 16)]
         loop.append(loop[0])
         loop = _densify(loop, 0.03)
         pts, nrm = [], []
         for x, y in loop:
             pts.append((x, y, g_top(y, x)))
             nrm.append((x * 0.15, 0.0, 1.0))
-        nwcf.strip(part, pts, nrm, 0.022, "rubber", lift=0.0016)
+        # v0.2: slim rubber seal (was 22 mm, read as a black A-pillar)
+        nwcf.strip(part, pts, nrm, 0.015, "rubber", lift=0.0016)
     return part.to_object()
 
 
@@ -485,7 +496,7 @@ def arch_cutter(name, y_axle, radius, side):
     x_in, x_out = W - 0.45, W + 0.30
     m = nwcf.frame_from_axis((0, y_axle, ARCH_Z), (side, 0, 0))
     a0, a1 = (x_in, x_out)
-    nwcf.lathe(part, m, [(a0, radius), (a1, radius)], "well", segments=72,
+    nwcf.lathe(part, m, [(a0, radius), (a1, radius)], "well", segments=56,
                cap_start="well", cap_end="well")
     return part.to_object(recalc=True)
 
@@ -524,7 +535,8 @@ def build_details():
         y0, y1 = Y_FA - ARCH_R_F - 0.012, Y_RA + ARCH_R_R + 0.012
         for k in range(31):
             y = y0 + (y1 - y0) * k / 30
-            row = [(sx * (half_width(y) + o), y, 0.430 + dz) for o, dz in prof]
+            f = min(1.0, 0.35 + 0.65 * min(k, 30 - k) / 1.5)     # v0.2: tapered rounded ends
+            row = [(sx * (half_width(y) + o * f), y, 0.430 + dz * (0.6 + 0.4 * f)) for o, dz in prof]
             rows.append(row if sx > 0 else list(reversed(row)))
         V, faces = part.grid(rows, "black_satin")
         faces.append(part.face(list(reversed(V[0])), "black_satin"))
@@ -595,34 +607,60 @@ def _gap(part, pts, nrm, sx):
 
 # -------------------------------------------------------------- front
 
+def build_nose_visor(part):
+    """E30 shark nose: the bonnet's front lip leans forward over the black
+    grille panel (rounded wedge, slightly pointed in plan)."""
+    rows = []
+    n = 24
+    xw = W - 0.075
+    for k in range(n + 1):
+        x = -xw + 2 * xw * k / n
+        plan = 1.0 - (x / W) ** 2
+        y0 = Y_BF - 0.050
+        zt = top_z(y0) - lip_drop(y0) + crown(y0) * (1.0 - (x / (W - 0.064)) ** 2)
+        tip = Y_BF + 0.020 + 0.010 * plan
+        prof = [(y0, zt - 0.002), (Y_BF - 0.010, zt - 0.006), (tip - 0.010, 0.693), (tip, 0.684),
+                (tip - 0.006, 0.674), (Y_BF - 0.004, 0.668), (Y_BF - 0.030, 0.668)]
+        rows.append([(x, yy, zz) for yy, zz in prof])
+    V, faces = part.grid(rows, "paint")
+    part.orient(faces, lambda c: Vector((0.0, 1.0, 1.0)) if c.z > 0.676 else Vector((0.0, 0.4, -1.0)))
+    for end in (V[0], V[-1]):
+        f = part.poly([v.co[:] for v in end], "paint")
+        if f is not None:
+            part.orient([f], lambda c: Vector((math.copysign(1.0, c.x), 0.0, 0.0)))
+
+
 def build_front():
     part = nwcf.Part("front")
     yf = Y_BF
+    build_nose_visor(part)
     # Recessed black grille panel under the bonnet lip.
-    nwcf.box(part, (0, yf - 0.012, 0.578), (1.484, 0.040, 0.182), "black_matte", bevel=0.006)
+    nwcf.box(part, (0, yf - 0.012, 0.580), (1.484, 0.040, 0.186), "black_matte", bevel=0.006)
     # Horizontal slats between the kidneys and the lamps.
     for sx in (1.0, -1.0):
         for z in (0.512, 0.540, 0.568, 0.596, 0.624, 0.652):
             nwcf.box(part, (sx * 0.255, yf + 0.010, z), (0.235, 0.008, 0.010), "black_gloss", bevel=0.002)
-    # Quad round lamps: chrome bezel + textured lens.
+    # Quad round lamps (v0.2): black housing cup, thin chrome trim ring, a
+    # clear lens set back inside the ring; outer = low beam (fluted lens,
+    # reflector), inner = high beam (concentric lens). No glowing discs.
     for sx in (1.0, -1.0):
-        for x, r in ((0.615, 0.074), (0.455, 0.068)):
+        for x, r, tex in ((0.615, 0.074, "tex_headlight"), (0.455, 0.068, "tex_headlight_hi")):
             m = nwcf.frame_from_axis((sx * x, yf + 0.008, 0.578), (0, 1, 0))
             back = Vector((sx * x, yf - 0.06, 0.578))
-            nwcf.lathe(part, m, [(0.000, r + 0.014), (0.010, r + 0.013), (0.015, r + 0.006),
-                                 (0.012, r - 0.002)], "chrome", segments=36,
+            nwcf.lathe(part, m, [(-0.040, r + 0.010), (0.006, r + 0.010)], "black_gloss", segments=28,
                        orient=lambda c, back=back: c - back)
-            prof = [(0.008, r), (0.013, r * 0.78), (0.017, r * 0.45), (0.0185, 0.0)]
+            nwcf.lathe(part, m, [(0.004, r + 0.011), (0.009, r + 0.0105), (0.0115, r + 0.007),
+                                 (0.0105, r + 0.002), (0.006, r + 0.0005)], "chrome", segments=32,
+                       orient=lambda c, back=back: c - back)
+            prof = [(0.0055, r + 0.0005), (0.0085, r * 0.80), (0.0105, r * 0.48), (0.0112, 0.0)]
 
             def uv(ks, kp, prof=prof, r=r):
-                rad = prof[kp][1] / r
-                t = math.tau * ks / 36
+                rad = min(prof[kp][1] / r, 1.0)
+                t = math.tau * ks / 32
                 return (0.5 + 0.5 * rad * math.cos(t), 0.5 + 0.5 * rad * math.sin(t))
 
-            nwcf.lathe(part, m, prof, "tex_headlight", segments=36, uv_fn=uv,
+            nwcf.lathe(part, m, prof, tex, segments=32, uv_fn=uv,
                        orient=lambda c: (0.0, 1.0, 0.0))
-            nwcf.lathe(part, m, [(-0.030, r + 0.004), (0.004, r + 0.004)], "black_gloss", segments=24,
-                       orient=lambda c, back=back: c - back)
     # Kidney grille: chrome surround, black backing, vertical slats.
     for sx in (1.0, -1.0):
         cx, cz, hw, hh, rc = sx * 0.075, 0.578, 0.056, 0.083, 0.026
@@ -662,7 +700,7 @@ def _bumper(part, front):
     else:
         y_face, y_end, z0, z1 = Y_BR - 0.006, Y_RA - ARCH_R_R - 0.055, 0.255, 0.535
     sgn = 1.0 if front else -1.0
-    rc = 0.11
+    rc = 0.13                  # v0.2: rounder bumper corners
     path = []
     # (x, y, outward normal x, outward normal y, reach scale)
     n_side = 6
@@ -678,9 +716,12 @@ def _bumper(part, front):
         x = (W + 0.004 - rc) * (1.0 - k / 8)
         path.append((x, y_face, 0.0, sgn, 1.0))
     h = z1 - z0
-    prof = [(-0.030, 1.000), (0.000, 1.005), (0.034, 0.990), (0.042, 0.945), (0.042, 0.885),
-            (0.035, 0.872), (0.035, 0.832), (0.045, 0.818), (0.050, 0.520), (0.068, 0.140),
-            (0.070, 0.070), (0.055, 0.0), (0.0, -0.005), (-0.030, 0.0)]
+    # v0.2 profile: rounded top, a moulded groove, a straight face, then the
+    # lower lip that kicks forward to a crisp but softened bottom edge.
+    prof = [(-0.030, 1.000), (0.000, 1.006), (0.022, 1.000), (0.036, 0.984), (0.043, 0.950),
+            (0.044, 0.900), (0.037, 0.884), (0.037, 0.852), (0.046, 0.836), (0.051, 0.640),
+            (0.054, 0.380), (0.060, 0.220), (0.071, 0.150), (0.075, 0.100), (0.072, 0.052),
+            (0.060, 0.012), (0.040, 0.0), (0.0, -0.005), (-0.030, 0.0)]
     rows = []
     full = path + [(-x, y, -nx, ny, s) for x, y, nx, ny, s in reversed(path[:-1])]
     for x, y, nx, ny, s in full:
@@ -715,19 +756,34 @@ def build_rear():
     yr = Y_BR
     for sx in (1.0, -1.0):
         x0, x1, z0, z1 = 0.272, 0.772, 0.557, 0.742
-        # Lamp body (black) slightly proud of the rear face.
-        nwcf.box(part, (sx * (x0 + x1) * 0.5, yr - 0.002, (z0 + z1) * 0.5),
-                 (x1 - x0, 0.020, z1 - z0), "black_satin", bevel=0.004)
-        nu = 6
+        # v0.2: black housing frame proud of the rear face, a slightly convex
+        # lens set 5 mm inside it, and divider bars between the reverse
+        # (inner, clear), tail / brake (red) and outer (darker red) segments.
+        nwcf.box(part, (sx * (x0 + x1) * 0.5, yr - 0.001, (z0 + z1) * 0.5),
+                 (x1 - x0, 0.006, z1 - z0), "black_satin")
+        fw = 0.008      # frame bars proud of the lens
+        for bx, bz, bw, bh in (((x0 + x1) * 0.5, z1 + 0.002, x1 - x0 + 2 * fw, fw),
+                               ((x0 + x1) * 0.5, z0 - 0.002, x1 - x0 + 2 * fw, fw),
+                               (x0 - 0.002, (z0 + z1) * 0.5, fw, z1 - z0),
+                               (x1 + 0.002, (z0 + z1) * 0.5, fw, z1 - z0)):
+            nwcf.box(part, (sx * bx, yr - 0.007, bz), (bw, 0.014, bh), "black_satin")
+        nu, nv = 8, 3
         rows = []
-        for j in range(2):
+        for j in range(nv + 1):
             row = []
+            v = j / nv
             for i in range(nu + 1):
-                x = x0 + (x1 - x0) * i / nu
-                row.append((sx * x, yr - 0.0125, z0 + 0.006 + (z1 - z0 - 0.012) * j))
+                u = i / nu
+                bulge = 0.0045 * (1.0 - (2 * u - 1) ** 2) * (1.0 - (2 * v - 1) ** 2)
+                x = x0 + 0.004 + (x1 - x0 - 0.008) * u
+                row.append((sx * x, yr - 0.0075 - bulge, z0 + 0.005 + (z1 - z0 - 0.010) * v))
             rows.append(row if sx < 0 else list(reversed(row)))
-        uvf = (lambda i, j: (i / nu, j)) if sx < 0 else (lambda i, j: (1.0 - i / nu, j))
-        part.grid(rows, "tex_tail", uv_fn=uvf, smooth=False, orient=lambda c: (0.0, -1.0, 0.0))
+        uvf = (lambda i, j: (i / nu, j / nv)) if sx < 0 else (lambda i, j: (1.0 - i / nu, j / nv))
+        part.grid(rows, "tex_tail", uv_fn=uvf, smooth=True, orient=lambda c: (0.0, -1.0, 0.0))
+        for u in (0.22, 0.70):
+            xd = x0 + 0.004 + (x1 - x0 - 0.008) * u
+            nwcf.box(part, (sx * xd, yr - 0.0105, (z0 + z1) * 0.5), (0.006, 0.008, z1 - z0 - 0.004),
+                     "black_gloss")
     _bumper(part, front=False)
     _plate(part, (0.0, yr - 0.0035, 0.627), front=False)
     # Twin exhaust tips at the far left rear corner (rear photo, camera-matched).
@@ -798,33 +854,53 @@ def draw_regions(key, size):
     orm = Image.new("RGB", (w, h), (255, 60, 0))
     emi = Image.new("RGB", (w, h), (0, 0, 0))
     da, do, de = ImageDraw.Draw(alb), ImageDraw.Draw(orm), ImageDraw.Draw(emi)
-    if key == "tex_headlight":
+    if key in ("tex_headlight", "tex_headlight_hi"):
+        # Reflector behind a clear lens: silver radial gradient, dark bulb
+        # shield, lens pattern (low beam: vertical flutes + lower prisms;
+        # high beam: concentric Fresnel rings). Only a faint glow.
         cx, cy = w / 2, h / 2
-        for k in range(60, 0, -1):
-            r = cx * k / 60
-            t = k / 60
-            g = int(150 + 90 * (0.5 + 0.5 * math.cos(t * 22.0)))
-            da.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(g, g, min(255, g + 6)))
-            do.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(255, int(18 + 30 * t), 200))
-        for k in range(-6, 7):
-            y = cy + k * h / 14
-            da.line((0, y, w, y), fill=(235, 238, 242), width=1)
-        da.ellipse((cx - w * 0.16, cy - h * 0.16, cx + w * 0.16, cy + h * 0.16), fill=(250, 248, 236))
-        de.ellipse((cx - w * 0.46, cy - h * 0.46, cx + w * 0.46, cy + h * 0.46), fill=(90, 86, 70))
-        de.ellipse((cx - w * 0.20, cy - h * 0.20, cx + w * 0.20, cy + h * 0.20), fill=(255, 246, 214))
-        emi = emi.filter(ImageFilter.GaussianBlur(w * 0.05))
-        da.ellipse((0, 0, w - 1, h - 1), outline=(60, 62, 66), width=max(2, w // 64))
+        for k in range(64, 0, -1):
+            t = k / 64
+            g = int(146 + 74 * (1.0 - t) + 20 * math.cos(t * 9.0))
+            da.ellipse((cx - cx * t, cy - cy * t, cx + cx * t, cy + cy * t), fill=(g, g, min(255, g + 8)))
+            do.ellipse((cx - cx * t, cy - cy * t, cx + cx * t, cy + cy * t), fill=(255, int(30 + 40 * t), 210))
+        if key == "tex_headlight":
+            step = max(3, w // 26)
+            for x in range(0, w, step):
+                da.line((x, 0, x, h), fill=(205, 208, 214), width=1)
+                da.line((x + step // 2, 0, x + step // 2, h), fill=(96, 98, 104), width=1)
+            for k in range(1, 6):
+                y = cy + k * h * 0.075
+                da.line((w * 0.12, y, w * 0.88, y), fill=(170, 172, 178), width=1)
+            da.rectangle((cx - w * 0.30, cy - h * 0.035, cx + w * 0.30, cy + h * 0.035), outline=(150, 152, 158))
+        else:
+            for k in range(1, 11):
+                r = cx * k / 11
+                da.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(208, 210, 216), width=1)
+        da.ellipse((cx - w * 0.11, cy - h * 0.11, cx + w * 0.11, cy + h * 0.11), fill=(46, 46, 50))
+        da.ellipse((cx - w * 0.11, cy - h * 0.11, cx + w * 0.11, cy + h * 0.11), outline=(190, 190, 196), width=2)
+        de.ellipse((cx - w * 0.40, cy - h * 0.40, cx + w * 0.40, cy + h * 0.40), fill=(10, 10, 9))
+        de.ellipse((cx - w * 0.16, cy - h * 0.16, cx + w * 0.16, cy + h * 0.16), fill=(34, 33, 28))
+        emi = emi.filter(ImageFilter.GaussianBlur(w * 0.04))
+        da.ellipse((0, 0, w - 1, h - 1), outline=(40, 42, 46), width=max(2, w // 48))
     elif key == "tex_tail":
-        split = int(w * 0.22)
-        da.rectangle((0, 0, split, h), fill=(205, 206, 210))
-        da.rectangle((split, 0, w, h), fill=(150, 8, 12))
-        for k in range(0, h, max(4, h // 12)):
-            da.line((split, k, w, k), fill=(110, 4, 8), width=2)
-            da.line((0, k, split, k), fill=(175, 176, 180), width=2)
-        da.rectangle((split - 3, 0, split + 3, h), fill=(20, 18, 20))
-        da.rectangle((0, 0, w - 1, h - 1), outline=(18, 16, 18), width=4)
-        do.rectangle((0, 0, w, h), fill=(255, 30, 0))
-        de.rectangle((split + 6, 8, w - 8, h - 8), fill=(120, 6, 8))
+        # E30 facelift lamp: inner reverse (clear), tail / brake (red),
+        # outer segment (deeper red); horizontal optic ribs everywhere.
+        s1, s2 = int(w * 0.22), int(w * 0.70)
+        da.rectangle((0, 0, s1, h), fill=(196, 198, 204))
+        da.rectangle((s1, 0, s2, h), fill=(168, 10, 16))
+        da.rectangle((s2, 0, w, h), fill=(118, 6, 12))
+        rib = max(4, h // 14)
+        for k in range(0, h, rib):
+            da.line((0, k, s1, k), fill=(150, 152, 160), width=2)
+            da.line((s1, k, s2, k), fill=(120, 6, 10), width=2)
+            da.line((s2, k, w, k), fill=(84, 4, 8), width=2)
+            da.line((s1, k + rib // 2, s2, k + rib // 2), fill=(196, 30, 36), width=1)
+        for x in range(s1 + 10, s2 - 6, 22):
+            for y in range(10, h - 6, 22):
+                da.ellipse((x - 3, y - 3, x + 3, y + 3), outline=(205, 40, 46))
+        do.rectangle((0, 0, w, h), fill=(255, 26, 0))
+        de.rectangle((s1 + 6, 8, s2 - 6, h - 8), fill=(70, 4, 6))
         emi = emi.filter(ImageFilter.GaussianBlur(4))
     elif key == "tex_plate":
         da.rectangle((0, 0, w, h), fill=(236, 236, 230))

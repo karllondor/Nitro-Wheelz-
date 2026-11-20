@@ -1,3 +1,17 @@
+## [0.1.26] — E30 Blessed visual refinement pass v0.2  — TEST BUILD, not approved until the owner reviews it on the phone
+Report: docs/car_factory/E30_VISUAL_REFINEMENT_v0.2.md (BEFORE / AFTER views, close-ups, race cameras, photo-camera comparison, measurements).
+- Bonnet: rounder nose, more crown, soft creases, separate shark-nose visor over the grille (the old leaning end cap pushed yellow wedges into the grille).
+- A-pillars body-coloured (wider pillar, painted opening walls, slimmer 15 mm seal).
+- New factory paint shader `nitro_car_paint` (E30 only; Lada / RYU-32 keep `diecast_paint`): panel light / shadow, paint depth, crisp clear coat, no milky film. Blessed Yellow #F2C40C -> #EFBA0D (old saved hex mapped). Scene lights unchanged.
+- Front bumper profile + rounder corners; black grille panel under the bonnet lip; lamps with housing cup, thin chrome ring, recessed lens, low / high beam lens patterns, faint glow only.
+- Tail lamps: framed, convex, three segments with dividers and ribs.
+- Signature wheels: wide polished step lip, deep polished dish, concave face with real vent pockets, domed centre.
+- Rubbing strips with rounded ends; darker glass (cage still visible); E30 18 % larger in the garage card (fits over a full turn).
+- Car 38 266 -> 41 288 triangles (budget 42 000), draw calls 8 -> 8; body GLB 1.03 -> 1.06 MB, Signature wheel 92 -> 109 KB. Dimensions, wheelbase, wheel pivots, paint UVs, handling, audio and scoring unchanged.
+- Tests: e30_factory_car_test checks the new paint shader and that the zoomed car stays inside the garage card. Tool: tests/capture_e30_views.gd (identical garage views + close-ups).
+- NOT RUN: phone review.
+- Android versionCode 26 / versionName 0.1.26.
+
 ## [0.1.25] — Terrain-first Track Builder (Japan / Poland / Ireland, 8 landscapes)  — TEST BUILD for owner review
 Per docs/research/procedural_world/CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md. Report with every result marked PASS / FAIL / NOT RUN: docs/terrain_builder/TERRAIN_BUILDER_REPORT.md.
 - **New terrain-first builder** (`TRACK BUILDER > TERRAIN BUILDER`, `scenes/terrain_builder.tscn`): choose COUNTRY -> LANDSCAPE -> event (PRACTICE / CLUB / PRO) -> **GENERATE TERRAIN** (again = new landscape) -> look around (drag orbit, pinch zoom, two-finger pan + twist rotate, VIEW 3D / TOP / LOW) -> DRAW ROAD on 56 m tiles draped on the terrain (green on grade / amber cut-fill-walls-bridge / red refused with the reason) -> terrain adapts automatically -> SAVE / DRIVE. DRAW, ERASE, UNDO, REDO, CLEAR, LOOP / ROUTE, CLOSE (auto-connects the ends over buildable tiles), AUTO (random buildable loop or route), FIT. Saved tracks reopen with EDIT (DRIVE list and results).

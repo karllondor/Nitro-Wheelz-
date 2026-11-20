@@ -8,7 +8,8 @@ class_name NitroGlbCar
 ##   materials NW_Paint (swappable colour), NW_Atlas (all other opaque parts,
 ##   textures in the GLB), NW_Glass; empties wheel_FL/FR/RL/RR at the hubs.
 ## Wheels are separate GLBs (assets/cars/wheels), chosen by the cosmetics.
-const PAINT_SHADER = preload("res://assets/shaders/diecast_paint.gdshader")
+# v0.2: factory cars use their own paint shader (Lada / RYU-32 keep diecast_paint)
+const PAINT_SHADER = preload("res://assets/shaders/nitro_car_paint.gdshader")
 const ATLAS_SHADER = preload("res://assets/shaders/nitro_car_atlas.gdshader")
 const GLASS_SHADER = preload("res://assets/shaders/nitro_car_glass.gdshader")
 const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")

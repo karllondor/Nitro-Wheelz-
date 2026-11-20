@@ -58,6 +58,12 @@ static func sanitize(choice: Dictionary, profile: Dictionary) -> Dictionary:
         out["paint_finish"] = sig.get("paint_finish","solid")
     if not Color.html_is_valid(str(out.get("paint_color_hex",""))):
         out["paint_color_hex"] = sig.get("paint_color_hex","#ffffff")
+    # Retuned palette colours (e.g. E30 v0.2 Blessed Yellow) keep their name.
+    var aliases: Dictionary = block(profile).get("paint_aliases",{})
+    var hex: String = str(out.get("paint_color_hex","")).to_upper()
+    for old in aliases.keys():
+        if str(old).to_upper() == hex:
+            out["paint_color_hex"] = str(aliases[old])
     return out
 
 static func save(variant: String, choice: Dictionary) -> void:

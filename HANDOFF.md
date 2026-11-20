@@ -1,4 +1,8 @@
-# Nitro Wheelz — v0.1.25 Terrain-first Track Builder (test build, awaiting owner review)
+# Nitro Wheelz — v0.1.26 E30 visual refinement v0.2 (test build) on top of v0.1.25 Terrain-first Track Builder
+
+## E30 VISUAL REFINEMENT v0.2 (v0.1.26)
+- Read docs/car_factory/E30_VISUAL_REFINEMENT_v0.2.md. One revertable commit. Rebuild: tools/car_factory/blender/build_e30_blessed.py + build_wheels.py (bpy 5.3.0), views: tests/capture_e30_views.gd.
+- STOP POINT: owner reviews the E30 on the phone; nothing is approved yet.
 
 ## TERRAIN-FIRST TRACK BUILDER (v0.1.25)
 - Read docs/terrain_builder/TERRAIN_BUILDER_REPORT.md first (what works, every check as PASS / FAIL / NOT RUN, measurements, reference comparison, limits). Architecture: docs/research/procedural_world/TERRAIN_FIRST_ARCHITECTURE.md.

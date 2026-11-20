@@ -13,13 +13,13 @@
   },
   "wheel_signature_e30": {
     "file": "wheel_signature_e30.glb",
-    "glb_bytes": 91732,
+    "glb_bytes": 108536,
     "name": "SIGNATURE",
-    "note": "Source-matched approximation: deep polished lip and silver face are visible in the photos; the exact face design and size are NOT confirmed.",
+    "note": "Source-matched approximation (v0.2): wide polished step lip, deep dish and a recessed silver face are visible in the photos; the exact face design and size are NOT confirmed.",
     "outer_face_offset_m": 0.1115,
     "rim_half_width_m": 0.1075,
     "rim_radius_m": 0.2032,
-    "triangles": 2400,
+    "triangles": 2944,
     "tyre_radius_m": 0.29,
     "tyre_width_m": 0.205
   }
