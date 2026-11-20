@@ -1,4 +1,7 @@
 # NITRO WHEELZ
+
+> **2026-11-20 TRACK WORLD DESIGN UPDATE (documentation only):** [Approved terrain-first Track Builder specification](docs/research/procedural_world/CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md) and [49 visual concepts + regional folders on Google Drive](docs/references/drift_tracks/README.md). Japan, Poland and Ireland are targeted, with eight terrain archetypes and closed + open tracks. Existing v0.1.23 gameplay remains a test build; **the new 3D terrain generator is not yet implemented** and Phase A's roadside generic house placement was rejected visually.
+
 ### JAPAN DRIFT NIGHTS
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
