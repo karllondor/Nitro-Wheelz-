@@ -4,23 +4,23 @@
 
 ## Google Drive hosting (do not import >30 MB archives into Claude chat)
 
-**Source:** [Nitro Wheelz Drive project folder](https://drive.google.com/drive/folders/1pvMDmAA1eh5SzHmvF9wCy1dKILA-Cjyb) under `colabcreatorstudio@gmail.com`; organized in `Visual References/<country>/<location>/{Visualizations,Assets}`. Google Drive is the byte host; GitHub tracks this index, the research and requirements. The files below were shared read-only with `karllondor@gmail.com`; if the folder itself is not browsable under that account, open these directly from **Shared with me**. Do not claim that the target account owns the folder.
+**Source:** [Nitro Wheelz Drive project folder](https://drive.google.com/drive/folders/1H7X-yXy61SczcEWz9ESTj5nYTSjmfwoo), **owned by `karllondor@gmail.com`**, with [Visual References](https://drive.google.com/drive/folders/1Rsah31rODprQKNlUzaC9RSe2GHX3SmVt) sorted by country/location and [12 Claude ZIP packs](https://drive.google.com/drive/folders/1Dtrh0Rm59azqvKqwoeJ41gsKkPGBrFBc). Google Drive hosts original image bytes; GitHub tracks this index and research.
 
-### Claude-safe ZIP archives (all <19 MB)
+**Access note:** The file-transfer connector cannot enable anonymous \"Anyone with the link\" access on a personal Google Drive. These are now on the correct owning account; until the owner selects Google Drive **Share → General access → Anyone with the link → Viewer** on the project folder, Claude CLI may still encounter login barriers. Do not claim public access has been verified.\n\n### Claude-safe ZIP archives (all <19 MB)
 
 | Region / group | Archive link | Files in archive |
 | --- | --- | --- |
-| Overview / global concept boards / index / manifest | [Overview](https://drive.google.com/file/d/1NPbubmIlljOsj3Fhi8O3qI5jgckwScrX/view?usp=drivesdk) | 13 |
-| Ireland — Coastal Cliffs | [Irish Coast](https://drive.google.com/file/d/1IC5JpvU73kuhNicOGtinYuUPzhPOvE66/view?usp=drivesdk) | 5 |
-| Japan — City Track | [Japan City](https://drive.google.com/file/d/1vNR07V0jHawuatYUgGP7hFr_nqxkxYRm/view?usp=drivesdk) | 4 |
-| Japan — Sakura Circuit | [Sakura part 1](https://drive.google.com/file/d/1oJKDsl4AqHIBhpSiLUEW4_zmRYc9tXAc/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/1vDtYkyvAUgm7K3RY69-ZZvL5x2Z3YvPm/view?usp=drivesdk) | 11 |
-| Japan — Touge Mountain | [Touge part 1](https://drive.google.com/file/d/16NBQTMZwzvAT0w7B7F71RhhSA6kA3RfP/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/1Qg3YD2ptZwodoN_Up0FQ0aEPFMb7Dx3T/view?usp=drivesdk) | 11 |
-| Japan — General architecture | [Japan overview](https://drive.google.com/file/d/1yyBPAXGW4Dr7o537fkhMeze5FlbveMor/view?usp=drivesdk) | 2 |
-| Poland — Ojców Canyon / Golden Autumn | [Ojców part 1](https://drive.google.com/file/d/1Ve_vHNcKkM75_TNFfWdB8DBX0P8jxpdO/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/1XMCYGmGs9vzdV_lKZZ159Zng93jJoQHu/view?usp=drivesdk) | 6 |
-| Poland — Tatry Mountain | [Tatry](https://drive.google.com/file/d/16SZdrX5QvLVdl7KVEDjRwOlDhVC8mB1e/view?usp=drivesdk) | 4 |
-| Wales — Welsh Highlands (future reference only) | [Wales](https://drive.google.com/file/d/1Zsn3o0S4crD5oUpXzUG-NUVju6CpA--N/view?usp=drivesdk) | 1 |
+| Overview / global concept boards / index / manifest | [Overview](https://drive.google.com/file/d/1s6VWcun-o0twqfpUv2WlXZSyLYq2bnWE/view?usp=drivesdk) | 13 |
+| Ireland — Coastal Cliffs | [Irish Coast](https://drive.google.com/file/d/1E_qArS7Gecflf5mKsosvY628Fd1iygw9/view?usp=drivesdk) | 5 |
+| Japan — City Track | [Japan City](https://drive.google.com/file/d/1ZhyvgkGxnlZUoJT3G_TTXPGc4d-YTetH/view?usp=drivesdk) | 4 |
+| Japan — Sakura Circuit | [Sakura part 1](https://drive.google.com/file/d/1tXqNMQ-BR6JW-8Pt9RtDouZTjj8lwROk/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/1E-yMycO4GRONYDpGbT_wc1jFFssKADTF/view?usp=drivesdk) | 11 |
+| Japan — Touge Mountain | [Touge part 1](https://drive.google.com/file/d/1u_mrAKmeNeaWboVGZtNCewepn57gOApr/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/19SJXLHHSZqTBNLmHkq67MVfEzAHANX63/view?usp=drivesdk) | 11 |
+| Japan — General architecture | [Japan overview](https://drive.google.com/file/d/1nOm5qcrsL0JZliv6hd1ysPhQaJlZmKRf/view?usp=drivesdk) | 2 |
+| Poland — Ojców Canyon / Golden Autumn | [Ojców part 1](https://drive.google.com/file/d/1eiKLNCVUgIAUjWq98zzVI62whDhZ3oxJ/view?usp=drivesdk), [part 2](https://drive.google.com/file/d/1H78o3psQMqdl0zDtbO7fVBI5evvuJfHD/view?usp=drivesdk) | 6 |
+| Poland — Tatry Mountain | [Tatry](https://drive.google.com/file/d/1osMIWUkKZMuGzzDomLawYAynXekKYivY/view?usp=drivesdk) | 4 |
+| Wales — Welsh Highlands (future reference only) | [Wales](https://drive.google.com/file/d/1JtAkWt9KilMszUofZIYoYbB1cBiXRUqZ/view?usp=drivesdk) | 1 |
 
-[Drive pack manifest JSON](https://drive.google.com/file/d/1b1vi25Zi4qhAOTNejn_CFNCEEQ05s1aw/view?usp=drivesdk) — full ZIP membership. [49-image SHA-256 manifest](https://drive.google.com/file/d/10fosN0gMV5Eir-xENkh7HmpRNZp0-9Wf/view?usp=drivesdk) — verifies every PNG.
+[Drive pack manifest JSON](https://drive.google.com/file/d/1qfP80SblR5-H21Jbk0rFaVJf3Gef6a7B/view?usp=drivesdk) — full ZIP membership. [49-image SHA-256 manifest](MANIFEST.csv) — versioned in GitHub; original also stored in the new Drive `Visual References` folder.
 
 ### Library inventory
 

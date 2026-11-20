@@ -2,7 +2,7 @@
 
 Five general/mixed-region PNG boards are hosted on Drive. They may combine several themes and must not override geographically specific design rules.
 
-- [Overview / global concepts / index archive](https://drive.google.com/file/d/1NPbubmIlljOsj3Fhi8O3qI5jgckwScrX/view?usp=drivesdk)
+- [Overview / global concepts / index archive](https://drive.google.com/file/d/1s6VWcun-o0twqfpUv2WlXZSyLYq2bnWE/view?usp=drivesdk)
 - [SHA manifest](../MANIFEST.csv)
 - [Main index](../README.md)
 
