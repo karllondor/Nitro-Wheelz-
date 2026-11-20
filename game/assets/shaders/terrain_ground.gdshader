@@ -31,6 +31,13 @@ uniform vec2 city_phase = vec2(0.0, 0.0);
 uniform float city_side_w = 12.0;
 uniform float city_ave_w = 21.0;
 uniform float city_walk = 2.8;
+// Builder: buildability markers painted ON the ground (they used to be flat
+// quads that sank into slopes). One texel per tile: rgb = colour, a = on.
+uniform float tiles = 0.0;
+uniform sampler2D tile_tex : filter_nearest, repeat_disable;
+uniform vec2 tile_origin = vec2(-336.0, -448.0);
+uniform vec2 tile_count = vec2(12.0, 16.0);
+uniform float tile_size = 56.0;
 varying vec3 wpos;
 varying vec3 wnrm;
 
@@ -124,6 +131,20 @@ void fragment() {
 		vec2 v = vec2(-city_u.y, city_u.x);
 		vec2 l = vec2(dot(wpos.xz, city_u), dot(wpos.xz, v));
 		col = mix(col, city_ground(col, l), smoothstep(0.4, 0.9, COLOR.a));
+	}
+	if (tiles > 0.5) {
+		vec2 cell = (wpos.xz - tile_origin) / tile_size;
+		if (cell.x >= 0.0 && cell.y >= 0.0 && cell.x < tile_count.x && cell.y < tile_count.y) {
+			vec4 tc = texture(tile_tex, (floor(cell) + 0.5) / tile_count);
+			vec2 q = abs(fract(cell) - 0.5);
+			float aa = max(fwidth(cell.x), 0.002) * 1.5;
+			// Rounded square (30 % of the tile) with a light rim.
+			float dq = length(max(q - vec2(0.11), 0.0)) - 0.04;
+			float inside = 1.0 - smoothstep(-aa, aa, dq);
+			float rim = (1.0 - smoothstep(-aa, aa, abs(dq + 0.012) - 0.010)) * inside;
+			col = mix(col, tc.rgb, inside * 0.72 * tc.a);
+			col = mix(col, vec3(1.0), rim * 0.35 * tc.a);
+		}
 	}
 	float d = a * 0.6 + b * 0.4;
 	ALBEDO = col * (1.0 - detail_strength * 0.5 + detail_strength * d);

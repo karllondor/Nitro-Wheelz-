@@ -9,6 +9,7 @@ class_name NitroTerrainField
 ## tiles; dramatic relief (peaks, canyon walls, sea cliffs) sits around it or
 ## crosses it as a feature the road can follow. `height` = `base` + the
 ## local road deformation written by NitroTerrainWorld (only near the road).
+const STEPS = preload("res://scripts/world/step_runner.gd")
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 
 const STEP: float = 8.0
@@ -230,28 +231,40 @@ func _raw_local(x: float, z: float) -> float:
     return h
 
 func bake() -> void:
-    var t0: int = Time.get_ticks_usec()
-    nx = int(round(HALF_X*2.0/STEP))+1
-    nz = int(round(HALF_Z*2.0/STEP))+1
-    var n: int = nx*nz
-    base.resize(n)
-    rock.resize(n)
-    forest.resize(n)
-    tint.resize(n)
-    snow.resize(n)
-    water.resize(n)
-    for j in range(nz):
-        var z: float = -HALF_Z+float(j)*STEP
-        for i in range(nx):
-            base[j*nx+i] = raw_height(-HALF_X+float(i)*STEP,z)
-    height = base.duplicate()
-    for j in range(nz):
-        var z2: float = -HALF_Z+float(j)*STEP
-        for i in range(nx):
-            var x2: float = -HALF_X+float(i)*STEP
-            var k: int = j*nx+i
-            _masks(k,i,j,x2,z2)
-    bake_ms = float(Time.get_ticks_usec()-t0)/1000.0
+    STEPS.run_now(bake_steps())
+
+## bake() as steps (rows in bands) for frame-sliced loading.
+func bake_steps() -> Array:
+    var steps: Array = []
+    var t0: Array = [0]
+    steps.append(func():
+        t0[0] = Time.get_ticks_usec()
+        nx = int(round(HALF_X*2.0/STEP))+1
+        nz = int(round(HALF_Z*2.0/STEP))+1
+        var n: int = nx*nz
+        base.resize(n)
+        rock.resize(n)
+        forest.resize(n)
+        tint.resize(n)
+        snow.resize(n)
+        water.resize(n))
+    var band: int = 12
+    var rows: int = int(round(HALF_Z*2.0/STEP))+1
+    for j0 in range(0,rows,band):
+        steps.append(func():
+            for j in range(j0,mini(j0+band,nz)):
+                var z: float = -HALF_Z+float(j)*STEP
+                for i in range(nx):
+                    base[j*nx+i] = raw_height(-HALF_X+float(i)*STEP,z))
+    steps.append(func(): height = base.duplicate())
+    for j1 in range(0,rows,band):
+        steps.append(func():
+            for j in range(j1,mini(j1+band,nz)):
+                var z2: float = -HALF_Z+float(j)*STEP
+                for i in range(nx):
+                    _masks(j*nx+i,i,j,-HALF_X+float(i)*STEP,z2))
+    steps.append(func(): bake_ms = float(Time.get_ticks_usec()-t0[0])/1000.0)
+    return steps
 
 func _masks(k: int, i: int, j: int, x: float, z: float) -> void:
     var h: float = base[k]

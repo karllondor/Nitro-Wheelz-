@@ -7,6 +7,7 @@ extends SceneTree
 ## close-up and the Irish cliff shelf. Output: OUT_DIR (env) or user://.
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const TT = preload("res://scripts/world/terrain/terrain_track.gd")
+const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const BUILDER = preload("res://scenes/terrain_builder.tscn")
 const RACE = preload("res://scenes/race.tscn")
 const DT: float = 1.0/120.0
@@ -74,6 +75,34 @@ func _run() -> void:
             b.cam_pitch = 30.0
             b.goal_pitch = 30.0
             await _shot("%s_3_paddock" % a)
+        # Bridges: side view of the longest bridge (stone arches in Poland /
+        # Ireland, concrete in Japan), camera low beside the valley.
+        var rcls: PackedInt32Array = b.world.road.get("class",PackedInt32Array())
+        var rs: Array = b.world.road.get("samples",[])
+        var rh: PackedFloat32Array = b.world.road.get("heights",PackedFloat32Array())
+        var best_run: Array = []
+        var run: Array = []
+        for ri in range(rcls.size()+1):
+            if ri < rcls.size() and rcls[ri] == 4:
+                run.append(ri)
+            else:
+                if run.size() > best_run.size():
+                    best_run = run
+                run = []
+        if best_run.size() > 0:
+            var mi: int = best_run[best_run.size()/2]
+            var mp: Vector2 = rs[mi]
+            var nn: Vector2 = PROFILE._normal(rs,mi,bool(b.world.road["closed"]))
+            var span_m: float = float(best_run.size())*4.6
+            var dist: float = clampf(span_m*1.1,45.0,140.0)
+            var cp: Vector2 = mp+nn*dist
+            var gy: float = maxf(b.world.height_at(cp.x,cp.y),rh[mi]-14.0)
+            b.set_process(false)
+            b.camera.position = Vector3(cp.x,gy+5.0,cp.y)
+            b.camera.v_offset = 0.0
+            b.camera.look_at(Vector3(mp.x,rh[mi]-6.0,mp.y),Vector3.UP)
+            await _shot("%s_6_bridge" % a)
+            b.set_process(true)
         var ms: Dictionary = b.world.mesh_stats()
         var path: String = "user://nitro_track_capture_%s.json" % a
         if not b._write(path,"capture "+a,"capture_"+a):

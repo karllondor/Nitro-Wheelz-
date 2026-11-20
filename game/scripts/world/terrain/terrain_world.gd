@@ -14,6 +14,7 @@ class_name NitroTerrainWorld
 ##  * sea cliffs are true vertical faces (grid vertices snapped onto the cliff
 ##    line + a dedicated rock face mesh);
 ##  * sea plane, horizon ring, sky, sun and fog per archetype.
+const STEPS = preload("res://scripts/world/step_runner.gd")
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
@@ -71,7 +72,24 @@ func chunk_counts() -> Vector2i:
 
 ## Build everything (terrain first; road comes later with set_road()).
 func build() -> void:
-    var t0: int = Time.get_ticks_usec()
+    STEPS.run_now(build_steps())
+
+## build() as steps (one per terrain / scenery chunk) for frame-sliced
+## loading with a moving loading animation.
+func build_steps() -> Array:
+    var steps: Array = [_build_begin]
+    var cc: Vector2i = chunk_counts()
+    for cz in range(cc.y):
+        for cx in range(cc.x):
+            var id := Vector2i(cx,cz)
+            steps.append(func(): _build_chunk(id))
+    steps.append(_build_after_chunks)
+    return steps
+
+var _build_t0: int = 0
+
+func _build_begin() -> void:
+    _build_t0 = Time.get_ticks_usec()
     for child in get_children():
         remove_child(child)
         child.queue_free()
@@ -103,10 +121,8 @@ func build() -> void:
         _build_lighting()
     _build_far_ring()
     _build_water()
-    var cc: Vector2i = chunk_counts()
-    for cz in range(cc.y):
-        for cx in range(cc.x):
-            _build_chunk(Vector2i(cx,cz))
+
+func _build_after_chunks() -> Array:
     if field.relief == "coast":
         _build_cliff_face()
     structures = Node3D.new()
@@ -117,9 +133,10 @@ func build() -> void:
     add_child(scenery)
     scenery.setup(self)
     scenery.draw_range = scenery_range
-    scenery.rebuild_all()
-    last_stats = {"build_ms":float(Time.get_ticks_usec()-t0)/1000.0,"bake_ms":field.bake_ms,
-        "chunks":chunk_nodes.size()}
+    var more: Array = scenery.rebuild_steps()
+    more.append(func(): last_stats = {"build_ms":float(Time.get_ticks_usec()-_build_t0)/1000.0,"bake_ms":field.bake_ms,
+        "chunks":chunk_nodes.size()})
+    return more
 
 # ------------------------------------------------------------ road adapt
 
@@ -127,6 +144,20 @@ func build() -> void:
 ## Returns {"dirty": [chunk ids], "ms": time, "class": per-sample classes}.
 func set_road(samples: Array[Vector2], halfwidths: PackedFloat32Array, heights: PackedFloat32Array,
         closed: bool) -> Dictionary:
+    STEPS.run_now(set_road_steps(samples,halfwidths,heights,closed))
+    return road_result
+
+## Result of the last set_road() / set_road_steps() run.
+var road_result: Dictionary = {}
+
+## set_road() as steps: classify + deform, then one step per rebuilt
+## terrain chunk, structures, then the scenery chunks that changed.
+func set_road_steps(samples: Array[Vector2], halfwidths: PackedFloat32Array, heights: PackedFloat32Array,
+        closed: bool) -> Array:
+    return [func(): return _set_road_begin(samples,halfwidths,heights,closed)]
+
+func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, heights: PackedFloat32Array,
+        closed: bool) -> Array:
     var t0: int = Time.get_ticks_usec()
     road = {}
     var cls := PackedInt32Array()
@@ -142,13 +173,18 @@ func set_road(samples: Array[Vector2], halfwidths: PackedFloat32Array, heights: 
         for cx in range(cc.x):
             var id := Vector2i(cx,cz)
             if _chunk_hash(id) != int(chunk_hash.get(id,-1)):
-                _build_chunk(id)
                 dirty.append(id)
-    _build_structures()
-    if scenery != null:
-        scenery.on_road_changed(dirty)
-    last_stats = {"dirty":dirty.size(),"ms":float(Time.get_ticks_usec()-t0)/1000.0}
-    return {"dirty":dirty,"ms":last_stats["ms"],"class":cls,"summary":road.get("summary",{})}
+    var more: Array = []
+    for id2 in dirty:
+        more.append(func(): _build_chunk(id2))
+    more.append(func():
+        _build_structures()
+        var tail: Array = scenery.on_road_changed_steps(dirty) if scenery != null else []
+        tail.append(func():
+            last_stats = {"dirty":dirty.size(),"ms":float(Time.get_ticks_usec()-t0)/1000.0}
+            road_result = {"dirty":dirty,"ms":last_stats["ms"],"class":cls,"summary":road.get("summary",{})})
+        return tail)
+    return more
 
 func _deform() -> void:
     var h: PackedFloat32Array = field.base.duplicate()
@@ -215,6 +251,7 @@ func _deform() -> void:
                     best_c[k] = cls[i] if t < 0.5 else cls[j]
                     touched[k] = true
     var coast: bool = field.relief == "coast"
+    var canyon: bool = field.relief == "canyon"
     var rocky: bool = str(field.info["rock_kind"]) in ["granite","limestone","basalt"]
     var urban: bool = field.relief == "urban"
     for k in touched.keys():
@@ -226,6 +263,16 @@ func _deform() -> void:
             continue
         if coast and field.water[k] == 1:
             continue
+        if canyon:
+            # v0.1.27: the road never fills or cuts the stream channel; it
+            # crosses on a bridge (class 4) and the water runs on under it.
+            var kx: float = -FIELD.HALF_X+float(k%nx)*FIELD.STEP
+            var kz: float = -FIELD.HALF_Z+float(k/nx)*FIELD.STEP
+            if absf(field.stream_offset(kx,kz)) < PROFILE.STREAM_CHANNEL_M:
+                # Only clear the deck: banks under the bridge drop below it.
+                if d2 <= best_w[k]+3.0:
+                    h[k] = minf(field.base[k],best_h[k]-ROAD_SINK-2.4)
+                continue
         var orig: float = field.base[k]
         var road_h: float = best_h[k]-ROAD_SINK
         var c: int = best_c[k]
@@ -654,35 +701,38 @@ func _build_structures() -> void:
                 var key: String = "cut_wall_m" if cur["kind"] == "cut" else ("fill_wall_m" if cur["kind"] == "fill" else "cliff_wall_m")
                 count[key] = float(count[key])+Vector3(prev["top"]).distance_to(cur["top"])
             prev = cur
-    # Bridges: deck slab + girders + piers.
-    var segs: int = n if closed else n-1
-    var since_pier: float = 999.0
-    for i2 in range(segs):
-        var j2: int = (i2+1)%n
-        if cls[i2] != 4 and cls[j2] != 4:
-            since_pier = 999.0
+    # Bridges. v0.1.27 (owner reference: Polish stone bridges and viaducts):
+    # Poland / Ireland get masonry ARCH bridges whose arches grow with the
+    # height of the valley (low stream bridges: two or three flat arches;
+    # deep valleys: tall piers with round arches, like a railway viaduct);
+    # Japan keeps the concrete slab + wall piers.
+    var arch_style: bool = str(field.info["country"]) != "japan"
+    var runs: Array = []
+    var cur_run: Array = []
+    for i2 in range(n):
+        if cls[i2] == 4:
+            cur_run.append(i2)
+        elif not cur_run.is_empty():
+            runs.append(cur_run)
+            cur_run = []
+    if not cur_run.is_empty():
+        runs.append(cur_run)
+    for run in runs:
+        # Include one sample either side so the bridge meets the embankment.
+        var idx: Array = []
+        var first: int = int(run[0])
+        var last: int = int(run[run.size()-1])
+        if first > 0 or closed:
+            idx.append((first-1+n)%n)
+        idx.append_array(run)
+        if last < n-1 or closed:
+            idx.append((last+1)%n)
+        if idx.size() < 2:
             continue
-        var li: Vector2 = samples[i2]-nrms[i2]*(hw[i2]+1.2)
-        var ri: Vector2 = samples[i2]+nrms[i2]*(hw[i2]+1.2)
-        var lj: Vector2 = samples[j2]-nrms[j2]*(hw[j2]+1.2)
-        var rj: Vector2 = samples[j2]+nrms[j2]*(hw[j2]+1.2)
-        var yi: float = rh[i2]-1.6
-        var yj: float = rh[j2]-1.6
-        _quad(st,Vector3(li.x,yi,li.y),Vector3(lj.x,yj,lj.y),Vector3(rj.x,yj,rj.y),Vector3(ri.x,yi,ri.y),Color(0.52,0.52,0.53))
-        _quad(st,Vector3(li.x,yi,li.y),Vector3(lj.x,yj,lj.y),Vector3(lj.x,rh[j2]+0.05,lj.y),Vector3(li.x,rh[i2]+0.05,li.y),Color(0.66,0.66,0.67))
-        _quad(st,Vector3(ri.x,yi,ri.y),Vector3(rj.x,yj,rj.y),Vector3(rj.x,rh[j2]+0.05,rj.y),Vector3(ri.x,rh[i2]+0.05,ri.y),Color(0.66,0.66,0.67))
-        var seg_len: float = samples[i2].distance_to(samples[j2])
-        count["bridge_m"] = float(count["bridge_m"])+seg_len
-        since_pier += seg_len
-        if since_pier >= 26.0:
-            since_pier = 0.0
-            var pp: Vector2 = samples[i2]
-            var ground: float = field.base_at(pp.x,pp.y)
-            if field.is_water(pp.x,pp.y):
-                ground = minf(ground,-2.0)
-            if ground < yi-1.0:
-                _pier(st,pp,nrms[i2],hw[i2],ground-1.0,yi,Color(0.60,0.60,0.61))
-                count["pier"] = int(count["pier"])+1
+        if arch_style:
+            _arch_bridge(st,samples,hw,rh,nrms,idx,wall_col,count)
+        else:
+            _slab_bridge(st,samples,hw,rh,nrms,idx,count)
     var mesh: ArrayMesh = st.commit()
     if mesh.get_surface_count() == 0:
         structures.set_meta("counts",count)
@@ -737,6 +787,143 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, col:
         st.set_normal(nrm)
         st.add_vertex(p)
 
+## Concrete deck slab + girders + wall piers (Japan).
+func _slab_bridge(st: SurfaceTool, samples: Array[Vector2], hw: PackedFloat32Array, rh: PackedFloat32Array,
+        nrms: Array[Vector2], idx: Array, count: Dictionary) -> void:
+    var since_pier: float = 999.0
+    for k in range(idx.size()-1):
+        var i2: int = idx[k]
+        var j2: int = idx[k+1]
+        var li: Vector2 = samples[i2]-nrms[i2]*(hw[i2]+1.2)
+        var ri: Vector2 = samples[i2]+nrms[i2]*(hw[i2]+1.2)
+        var lj: Vector2 = samples[j2]-nrms[j2]*(hw[j2]+1.2)
+        var rj: Vector2 = samples[j2]+nrms[j2]*(hw[j2]+1.2)
+        var yi: float = rh[i2]-1.6
+        var yj: float = rh[j2]-1.6
+        _quad(st,Vector3(li.x,yi,li.y),Vector3(lj.x,yj,lj.y),Vector3(rj.x,yj,rj.y),Vector3(ri.x,yi,ri.y),Color(0.52,0.52,0.53))
+        _quad(st,Vector3(li.x,yi,li.y),Vector3(lj.x,yj,lj.y),Vector3(lj.x,rh[j2]+0.05,lj.y),Vector3(li.x,rh[i2]+0.05,li.y),Color(0.66,0.66,0.67))
+        _quad(st,Vector3(ri.x,yi,ri.y),Vector3(rj.x,yj,rj.y),Vector3(rj.x,rh[j2]+0.05,rj.y),Vector3(ri.x,rh[i2]+0.05,ri.y),Color(0.66,0.66,0.67))
+        var seg_len: float = samples[i2].distance_to(samples[j2])
+        count["bridge_m"] = float(count["bridge_m"])+seg_len
+        since_pier += seg_len
+        if since_pier >= 26.0:
+            since_pier = 0.0
+            var pp: Vector2 = samples[i2]
+            var ground: float = field.base_at(pp.x,pp.y)
+            if field.is_water(pp.x,pp.y):
+                ground = minf(ground,-2.0)
+            if ground < yi-1.0:
+                _pier(st,pp,nrms[i2],hw[i2],ground-1.0,yi,Color(0.60,0.60,0.61))
+                count["pier"] = int(count["pier"])+1
+
+## Masonry arch bridge / viaduct along samples idx: spandrel walls with the
+## arch openings cut out, arch barrels, piers with a string course at the
+## springing line, parapets with coping. Arch span and rise follow the
+## clearance (deeper valley = bigger, rounder arches on taller piers).
+func _arch_bridge(st: SurfaceTool, samples: Array[Vector2], hw: PackedFloat32Array, rh: PackedFloat32Array,
+        nrms: Array[Vector2], idx: Array, stone: Color, count: Dictionary) -> void:
+    var m: int = idx.size()
+    var s_at := PackedFloat32Array()
+    s_at.resize(m)
+    var clear_max: float = 0.0
+    for k in range(m):
+        if k > 0:
+            s_at[k] = s_at[k-1]+samples[idx[k-1]].distance_to(samples[idx[k]])
+        var p: Vector2 = samples[idx[k]]
+        var g: float = field.height_at(p.x,p.y)
+        if field.is_water(p.x,p.y):
+            g = minf(g,-1.0)
+        clear_max = maxf(clear_max,rh[idx[k]]-1.2-g)
+    var total: float = s_at[m-1]
+    if total < 4.0:
+        return
+    var want: float = clampf(clear_max*0.9,9.0,26.0)
+    var arches: int = maxi(1,int(round(total/want)))
+    var span: float = total/float(arches)
+    var rise: float = minf(span*0.5,maxf(1.6,clear_max*0.6))
+    var crown: float = 0.9
+    var tone: Color = stone.lerp(Color(0.66,0.62,0.55),0.5)
+    var dark: Color = tone.darkened(0.22)
+    var intr := PackedFloat32Array()
+    intr.resize(m)
+    for k2 in range(m):
+        var u: float = fposmod(s_at[k2],span)
+        if k2 == m-1:
+            u = span
+        var x: float = (u-span*0.5)/(span*0.5)
+        var y_spring: float = rh[idx[k2]]-1.2-crown-rise
+        intr[k2] = y_spring+rise*sqrt(maxf(0.0,1.0-x*x))
+    for k3 in range(m-1):
+        var i: int = idx[k3]
+        var j: int = idx[k3+1]
+        var sh: Color = tone.lightened(0.05*float((k3*7)%3)-0.04)
+        for side in [-1.0,1.0]:
+            var a: Vector2 = samples[i]+nrms[i]*side*(hw[i]+1.0)
+            var b: Vector2 = samples[j]+nrms[j]*side*(hw[j]+1.0)
+            # Spandrel wall from the arch line up to the parapet top.
+            _quad(st,Vector3(a.x,intr[k3],a.y),Vector3(b.x,intr[k3+1],b.y),Vector3(b.x,rh[j]+1.0,b.y),Vector3(a.x,rh[i]+1.0,a.y),sh)
+            # Parapet coping.
+            var ai: Vector2 = samples[i]+nrms[i]*side*(hw[i]+0.4)
+            var bi: Vector2 = samples[j]+nrms[j]*side*(hw[j]+0.4)
+            _quad(st,Vector3(ai.x,rh[i]+1.0,ai.y),Vector3(bi.x,rh[j]+1.0,bi.y),Vector3(b.x,rh[j]+1.0,b.y),Vector3(a.x,rh[i]+1.0,a.y),tone.lightened(0.12))
+            _quad(st,Vector3(ai.x,rh[i]+0.05,ai.y),Vector3(bi.x,rh[j]+0.05,bi.y),Vector3(bi.x,rh[j]+1.0,bi.y),Vector3(ai.x,rh[i]+1.0,ai.y),sh.darkened(0.05))
+        # Arch barrel (soffit).
+        var l0: Vector2 = samples[i]-nrms[i]*(hw[i]+1.0)
+        var r0: Vector2 = samples[i]+nrms[i]*(hw[i]+1.0)
+        var l1: Vector2 = samples[j]-nrms[j]*(hw[j]+1.0)
+        var r1: Vector2 = samples[j]+nrms[j]*(hw[j]+1.0)
+        _quad(st,Vector3(l0.x,intr[k3],l0.y),Vector3(l1.x,intr[k3+1],l1.y),Vector3(r1.x,intr[k3+1],r1.y),Vector3(r0.x,intr[k3],r0.y),dark)
+        count["bridge_m"] = float(count["bridge_m"])+samples[i].distance_to(samples[j])
+    # Piers (and abutments at both ends) at every springing point.
+    var pier_t: float = clampf(span*0.16,1.8,3.6)
+    for q in range(arches+1):
+        var sq: float = span*float(q)
+        var k4: int = 0
+        while k4 < m-2 and s_at[k4+1] < sq:
+            k4 += 1
+        var f: float = clampf((sq-s_at[k4])/maxf(s_at[k4+1]-s_at[k4],0.01),0.0,1.0)
+        var pa: Vector2 = samples[idx[k4]]
+        var pb: Vector2 = samples[idx[k4+1]]
+        var pp: Vector2 = pa.lerp(pb,f)
+        var nn: Vector2 = nrms[idx[k4]].lerp(nrms[idx[k4+1]],f).normalized()
+        var deck: float = lerpf(rh[idx[k4]],rh[idx[k4+1]],f)
+        var spring: float = deck-1.2-crown-rise
+        # Lowest ground under the pier footprint (terrain as adapted).
+        var ground: float = INF
+        for o in [-1.0,0.0,1.0]:
+            var gp: Vector2 = pp+nn*o*(lerpf(hw[idx[k4]],hw[idx[k4+1]],f)+1.0)
+            ground = minf(ground,field.height_at(gp.x,gp.y))
+        if field.is_water(pp.x,pp.y):
+            ground = minf(ground,-1.5)
+        var w2: float = lerpf(hw[idx[k4]],hw[idx[k4+1]],f)+1.0
+        var t := Vector2(-nn.y,nn.x)
+        var end_pier: bool = q == 0 or q == arches
+        var top: float = deck+1.0 if end_pier else spring+0.4
+        var half_t: float = pier_t*(0.9 if end_pier else 0.5)
+        if ground < top-0.5:
+            # Tall piers batter out towards the ground.
+            var flare: float = 1.0+clampf((spring-ground)/60.0,0.0,0.25)
+            _box_xz(st,pp,nn,t,w2+0.3,half_t,ground-1.5,spring,tone.darkened(0.06),w2*flare+0.3,half_t*flare)
+            if not end_pier:
+                _box_xz(st,pp,nn,t,w2+0.55,half_t+0.25,spring-0.35,spring+0.05,tone.lightened(0.10),w2+0.55,half_t+0.25)
+            count["pier"] = int(count["pier"])+1
+
+## Upright box around p: half sizes along nrm (across) and t (along), with
+## optional larger half sizes at the bottom (battered pier).
+func _box_xz(st: SurfaceTool, p: Vector2, nrm: Vector2, t: Vector2, half_n: float, half_t: float, y0: float, y1: float,
+        col: Color, bot_n: float = -1.0, bot_t: float = -1.0) -> void:
+    var bn: float = half_n if bot_n < 0.0 else bot_n
+    var bt: float = half_t if bot_t < 0.0 else bot_t
+    var top_c: Array = [p-nrm*half_n-t*half_t,p+nrm*half_n-t*half_t,p+nrm*half_n+t*half_t,p-nrm*half_n+t*half_t]
+    var bot_c: Array = [p-nrm*bn-t*bt,p+nrm*bn-t*bt,p+nrm*bn+t*bt,p-nrm*bn+t*bt]
+    for k in range(4):
+        var a: Vector2 = bot_c[k]
+        var b: Vector2 = bot_c[(k+1)%4]
+        var c: Vector2 = top_c[(k+1)%4]
+        var d: Vector2 = top_c[k]
+        _quad(st,Vector3(a.x,y0,a.y),Vector3(b.x,y0,b.y),Vector3(c.x,y1,c.y),Vector3(d.x,y1,d.y),col.darkened(0.06*float(k%2)))
+    _quad(st,Vector3(top_c[0].x,y1,top_c[0].y),Vector3(top_c[1].x,y1,top_c[1].y),Vector3(top_c[2].x,y1,top_c[2].y),Vector3(top_c[3].x,y1,top_c[3].y),col.lightened(0.08))
+
 func _pier(st: SurfaceTool, p: Vector2, nrm: Vector2, hw: float, y0: float, y1: float, col: Color) -> void:
     # Wall pier across the deck (typical concrete viaduct pier).
     var t := Vector2(-nrm.y,nrm.x)
@@ -769,13 +956,26 @@ func _build_lighting() -> void:
     sky.sky_material = sky_mat
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(sky_info["horizon"]).lerp(Color.WHITE,0.3)
-    env.ambient_light_energy = float(sky_info["ambient"])
+    # v0.1.27 colour pass (owner: terrain races looked desaturated next to
+    # the classic tracks): a cooler, lower ambient so asphalt and shadows
+    # stay deep, linear tone mapping like the classic tracks, a touch of
+    # saturation, and DEPTH fog that starts 220 m away, so the road and the
+    # first rows of trees (all the top-down camera sees) are never hazed;
+    # aerial perspective stays on the distant mountains.
+    env.ambient_light_color = Color(sky_info["horizon"]).lerp(Color(sky_info["top"]),0.35).lerp(Color.WHITE,0.15)
+    env.ambient_light_energy = float(sky_info["ambient"])*0.82
     env.fog_enabled = true
+    env.fog_mode = Environment.FOG_MODE_DEPTH
+    env.fog_depth_begin = 220.0
+    env.fog_depth_end = 2400.0
+    env.fog_depth_curve = 1.4
     env.fog_light_color = Color(sky_info["fog"])
-    env.fog_density = float(sky_info["fog_density"])
+    env.fog_density = clampf(float(sky_info["fog_density"])*480.0,0.35,0.75)
     env.fog_sky_affect = 0.25
-    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+    env.adjustment_enabled = true
+    env.adjustment_saturation = 1.12
+    env.adjustment_contrast = 1.05
     _fog_base = env.fog_density
     var we := WorldEnvironment.new()
     we.name = "Sky and fog"

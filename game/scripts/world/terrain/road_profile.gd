@@ -15,7 +15,9 @@ class_name NitroRoadProfile
 ##   4 BRIDGE  5 CLIFF BARRIER  6 UNBUILDABLE (red, with a reason)
 const VERGE: float = 3.6
 const MARGIN: float = 4.4           # barrier + maintenance strip
-const BRIDGE_FILL_M: float = 12.0
+## v0.1.27: more than 6 m of fill under the road becomes a bridge (the
+## owner prefers bridges to high embankments; the valley stays natural).
+const BRIDGE_FILL_M: float = 6.0
 const MAX_PIER_M: float = 42.0
 const FILL_WALL_M: float = 4.5
 const CUT_WALL_M: float = 7.0
@@ -24,6 +26,8 @@ const CLIFF_CLEAR_M: float = 2.0    # road edge + verge + barrier margin must st
 const SMOOTH_M: float = 34.0
 const NAMES: Array[String] = ["GRADE","CUT/FILL","CUT WALL","FILL WALL","BRIDGE","CLIFF BARRIER","UNBUILDABLE"]
 const SEVERITY: Array[int] = [0,0,1,1,1,1,2]
+## Half-width of the stream channel (bed + banks) that a road must bridge.
+const STREAM_CHANNEL_M: float = 11.0
 
 static func arc(samples: Array[Vector2], closed: bool) -> PackedFloat32Array:
     var s := PackedFloat32Array()
@@ -181,6 +185,8 @@ static func classify(field, samples: Array[Vector2], halfwidths: PackedFloat32Ar
             under_lo = minf(under_lo,field.base_at(q.x,q.y))
             if field.is_water(q.x,q.y):
                 wet = true
+            elif field.relief == "canyon" and absf(field.stream_offset(q.x,q.y)) < STREAM_CHANNEL_M:
+                wet = true      # v0.1.27: the whole stream channel is bridged, never filled
         for side in [-1.0,1.0]:
             var e: Vector2 = p+nrm*side*(hw+VERGE+MARGIN)
             beyond_hi = maxf(beyond_hi,field.base_at(e.x,e.y))

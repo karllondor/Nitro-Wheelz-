@@ -24,7 +24,7 @@ for spec in import smoke_test input_test driving_test mobile_visual_test track_d
     if [ "$spec" = import ]; then
         timeout 45s "$GODOT_BIN" --headless --path game --editor --import 2>&1 | tee "$LOG_DIR/$spec.log"
     else
-        timeout "$LIMIT" "$GODOT_BIN" --headless --path game --script "res://tests/$spec.gd" 2>&1 | tee "$LOG_DIR/$spec.log"
+        timeout "$LIMIT" "$GODOT_BIN" --headless --audio-driver Dummy --path game --script "res://tests/$spec.gd" 2>&1 | tee "$LOG_DIR/$spec.log"
     fi
     if grep -Eq 'SCRIPT ERROR|ERROR:|FAIL:' "$LOG_DIR/$spec.log"; then
         echo "FAIL: Godot reported runtime/parse errors in $spec" >&2

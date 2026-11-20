@@ -36,6 +36,9 @@ func _world(a: String, seed_value: int, mode: String = "club") -> NitroTerrainWo
     w.build()
     return w
 
+var city_mix: String = ""
+var roadside: PackedStringArray = []
+
 func _run() -> void:
     var t0: int = Time.get_ticks_msec()
     # --- locality of road adaptation
@@ -135,9 +138,30 @@ func _run() -> void:
         if cl < need-0.01:
             _fail("%s: scenery inside the safety strip (%.2f m)" % [a,cl])
             return
-        if a == "jp_city" and int(wa.scenery.summary()["counts"].get("City blocks",0)) == 0:
-            _fail("City track needs city blocks")
-            return
+        if a == "jp_city":
+            if int(wa.scenery.summary()["counts"].get("City blocks",0)) == 0:
+                _fail("City track needs city blocks")
+                return
+            # v0.1.27: varied districts, not one repeated block type.
+            var ck: Dictionary = wa.scenery.summary()["city"]
+            var kinds: int = 0
+            for kk in ["tower","offices","department","core","mid","outer","park","park_shrine","plaza"]:
+                if int(ck.get(kk,0)) > 0:
+                    kinds += 1
+            if kinds < 4:
+                _fail("City needs at least 4 kinds of blocks (%s)" % [ck])
+                return
+            city_mix = str(ck)
+        else:
+            # v0.1.27 roadside planting: present, and only behind the barrier.
+            var rs: Array = wa.scenery.min_roadside_clearance()
+            if int(rs[1]) == 0:
+                _fail("%s: roadside planting expected beside the road" % a)
+                return
+            if float(rs[0]) < PROFILE.VERGE+SCEN.ROADSIDE_MIN_M-0.01:
+                _fail("%s: roadside planting %.2f m from the road edge (inside the verge)" % [a,float(rs[0])])
+                return
+            roadside.append("%s %d" % [str(CAT.info(a)["short"]),int(rs[1])])
         if str(CAT.info(a)["country"]) == "ireland" and int(wa.scenery.venue_info.get("stone_walls",0)) == 0:
             _fail("%s: Irish roads need dry-stone walls" % a)
             return
@@ -217,8 +241,8 @@ func _run() -> void:
         return
     tm.queue_free()
     DirAccess.remove_absolute(path)
-    print("PASS: terrain adaptation local only (%d terrain vertices changed, none beyond %.0f m of the road, %d of %d chunks rebuilt), road removal restores the terrain, walls/bridges on the pass, safety strip %.1f m kept on all 8 archetypes, one venue per world practice<club<=pro vertices (%s), city blocks, Irish stone walls, DNA broad phase == full scan on %d tracks (%d invalid), legacy flat tracks stay flat, missing knot heights re-solved (max %.2f m) - %.1f s" % [
-        changed,reach,(res["dirty"] as Array).size(),cc.x*cc.y,need,", ".join(venue_sizes),compared,invalid,worst,
+    print("PASS: terrain adaptation local only (%d terrain vertices changed, none beyond %.0f m of the road, %d of %d chunks rebuilt), road removal restores the terrain, walls/bridges on the pass, safety strip %.1f m kept on all 8 archetypes, one venue per world practice<club<=pro vertices (%s), city blocks (%s), roadside planting behind the barrier (%s), Irish stone walls, DNA broad phase == full scan on %d tracks (%d invalid), legacy flat tracks stay flat, missing knot heights re-solved (max %.2f m) - %.1f s" % [
+        changed,reach,(res["dirty"] as Array).size(),cc.x*cc.y,need,", ".join(venue_sizes),city_mix,", ".join(roadside),compared,invalid,worst,
         float(Time.get_ticks_msec()-t0)/1000.0])
     quit(0)
 

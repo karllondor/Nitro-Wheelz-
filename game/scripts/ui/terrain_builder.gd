@@ -188,35 +188,19 @@ func _rebuild_overlay() -> void:
     for child in overlay_root.get_children():
         overlay_root.remove_child(child)
         child.queue_free()
-    # Buildability squares (one MultiMesh, coloured per tile).
-    var mm := MultiMesh.new()
-    mm.transform_format = MultiMesh.TRANSFORM_3D
-    mm.use_colors = true
-    var quad := PlaneMesh.new()
-    quad.size = Vector2(GRID.CELL_M,GRID.CELL_M)*0.30
-    mm.mesh = quad
-    mm.instance_count = grid.cols*grid.rows
-    var k: int = 0
+    # Buildability squares: painted by the terrain shader, so they always
+    # lie ON the ground (v0.1.27; flat quads used to sink into slopes).
+    var img := Image.create(grid.cols,grid.rows,false,Image.FORMAT_RGBA8)
     for y in range(grid.rows):
         for x in range(grid.cols):
-            var c := Vector2i(x,y)
-            var w: Vector2 = grid.world_of(c)
-            var st: int = int(build_map[c]["state"])
-            var col: Color = [Color(0.25,0.95,0.45,0.70),Color(1.0,0.72,0.12,0.75),Color(1.0,0.18,0.20,0.75)][st]
-            var h: float = world.height_at(w.x,w.y)+1.2
-            mm.set_instance_transform(k,Transform3D(Basis(),Vector3(w.x,h,w.y)))
-            mm.set_instance_color(k,col)
-            k += 1
-    var mat := StandardMaterial3D.new()
-    mat.vertex_color_use_as_albedo = true
-    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    var node := MultiMeshInstance3D.new()
-    node.name = "Buildability dots"
-    node.multimesh = mm
-    node.material_override = mat
-    overlay_root.add_child(node)
+            var st: int = int(build_map[Vector2i(x,y)]["state"])
+            img.set_pixel(x,y,[Color(0.25,0.95,0.45,1.0),Color(1.0,0.72,0.12,1.0),Color(1.0,0.18,0.20,1.0)][st])
+    var half0 := Vector2(grid.cols,grid.rows)*GRID.CELL_M*0.5
+    world.ground_mat.set_shader_parameter("tile_tex",ImageTexture.create_from_image(img))
+    world.ground_mat.set_shader_parameter("tile_origin",-half0)
+    world.ground_mat.set_shader_parameter("tile_count",Vector2(grid.cols,grid.rows))
+    world.ground_mat.set_shader_parameter("tile_size",GRID.CELL_M)
+    _show_tiles(stage == "build")
     # Tile grid lines draped on the terrain.
     var st2 := SurfaceTool.new()
     st2.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -238,6 +222,11 @@ func _rebuild_overlay() -> void:
     ln.name = "Tile grid"
     ln.mesh = lines
     overlay_root.add_child(ln)
+
+func _show_tiles(on: bool) -> void:
+    overlay_root.visible = on
+    if world != null and world.ground_mat != null:
+        world.ground_mat.set_shader_parameter("tiles",1.0 if on else 0.0)
 
 func _drape(st: SurfaceTool, a: Vector2, b: Vector2, width: float) -> void:
     var d: Vector2 = (b-a)
@@ -482,7 +471,7 @@ func _enter_setup() -> void:
     stage = "setup"
     setup_box.visible = true
     build_box.visible = false
-    overlay_root.visible = false
+    _show_tiles(false)
     view_index = 0
     _set_view("3D")
     _fit()
@@ -495,7 +484,7 @@ func _enter_build() -> void:
     stage = "build"
     setup_box.visible = false
     build_box.visible = true
-    overlay_root.visible = true
+    _show_tiles(true)
     _set_view("TOP" if grid.tile_count() == 0 else "3D")
     _fit()
     _update_status()
@@ -1045,7 +1034,6 @@ func _rebuild_preview() -> void:
     for child in road_root.get_children():
         road_root.remove_child(child)
         child.queue_free()
-    var grade: float = float(CAT.info(archetype)["grade"])
     var index: int = 0
     for part in grid.components():
         var order: Array[Vector2i] = []
@@ -1058,7 +1046,7 @@ func _rebuild_preview() -> void:
         var hw := PackedFloat32Array()
         hw.resize(samples.size())
         hw.fill(GRID.WIDTH_M*0.5)
-        var h: PackedFloat32Array = PROFILE.solve(world.field,samples,hw,closed,grade)
+        var h: PackedFloat32Array = _draped_heights(samples,closed)
         var piece: NitroDriftTrack = TRACK.new()
         piece.name = "Road piece %d" % index
         piece.with_props = false
@@ -1066,6 +1054,42 @@ func _rebuild_preview() -> void:
         piece.build_from_samples(samples,GRID.WIDTH_M*0.5,closed,"terrain_preview_%d" % index,false,h)
         road_root.add_child(piece)
         index += 1
+
+## Preview heights for road pieces the terrain is NOT adapted to yet (while
+## a stroke is drawn, unjoined pieces): laid on the current ground across
+## the full road width, lightly smoothed, never below it. (The graded
+## profile is only used once the terrain is cut / filled for it, otherwise
+## the preview sank into hills.)
+func _draped_heights(samples: Array[Vector2], closed: bool) -> PackedFloat32Array:
+    var n: int = samples.size()
+    var raw := PackedFloat32Array()
+    raw.resize(n)
+    var hw: float = GRID.WIDTH_M*0.5
+    for i in range(n):
+        var a: Vector2 = samples[(i-1+n)%n] if (closed or i > 0) else samples[i]
+        var b: Vector2 = samples[(i+1)%n] if (closed or i < n-1) else samples[i]
+        var t: Vector2 = (b-a).normalized() if b != a else Vector2.RIGHT
+        var nrm := Vector2(-t.y,t.x)
+        var top: float = -INF
+        for o in [-1.0,-0.5,0.0,0.5,1.0]:
+            var q: Vector2 = samples[i]+nrm*o*hw
+            top = maxf(top,world.height_at(q.x,q.y))
+        raw[i] = top+0.25
+    var out := PackedFloat32Array(raw)
+    for i2 in range(n):
+        var acc: float = 0.0
+        var wsum: float = 0.0
+        for d in range(-2,3):
+            var j: int = i2+d
+            if closed:
+                j = (j+n)%n
+            elif j < 0 or j >= n:
+                continue
+            var wgt: float = 3.0-absf(float(d))
+            acc += raw[j]*wgt
+            wsum += wgt
+        out[i2] = maxf(acc/wsum,raw[i2])
+    return out
 
 ## Full terrain adaptation for the drawn road (one connected piece): the
 ## saved data (with knot heights) -> Track DNA -> the race road + terrain.

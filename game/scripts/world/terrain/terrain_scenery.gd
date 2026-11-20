@@ -15,12 +15,14 @@ class_name NitroTerrainScenery
 ##    skyline). City blocks stand back from the road, never on road tiles;
 ##  * safety exclusion: nothing solid within road half-width + verge +
 ##    barrier margin + run-off of the road.
+const STEPS = preload("res://scripts/world/step_runner.gd")
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const MODS = preload("res://scripts/world/scenery_modules.gd")
 const VEG_SHADER = preload("res://assets/shaders/terrain_vegetation.gdshader")
 const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
+const CITY_SHADER = preload("res://assets/shaders/city_facade.gdshader")
 
 const SAFETY_M: float = 6.0          # run-off beyond verge + barrier margin
 const ROAD_CELL: float = 32.0
@@ -42,7 +44,36 @@ const SPECIES: Dictionary = {
     "windswept":{"shape":"lean","col":Color(0.28,0.42,0.20),"h":[4.0,6.5]},
     "oak":{"shape":"round","col":Color(0.30,0.48,0.21),"h":[12.0,17.0]},
     "hawthorn":{"shape":"bush","col":Color(0.32,0.50,0.22),"h":[3.0,4.6]},
+    # v0.1.27 roadside planting (behind the barrier, seen from the top-down
+    # race camera): low, soft items only.
+    "azalea":{"shape":"bush","col":Color(0.92,0.36,0.62),"h":[0.9,1.5]},
+    "flowers_pink":{"shape":"flowers","col":Color(1.0,0.62,0.80),"h":[1.6,2.6]},
+    "flowers_white":{"shape":"flowers","col":Color(0.96,0.95,0.88),"h":[1.4,2.4]},
+    "flowers_gold":{"shape":"flowers","col":Color(0.98,0.80,0.24),"h":[1.4,2.4]},
+    "heather":{"shape":"flowers","col":Color(0.62,0.36,0.64),"h":[1.8,2.8]},
+    "fern":{"shape":"mat","col":Color(0.26,0.48,0.20),"h":[0.7,1.2]},
+    "bush_green":{"shape":"bush","col":Color(0.28,0.46,0.22),"h":[1.0,1.8]},
+    "bush_autumn":{"shape":"bush","col":Color(0.90,0.48,0.14),"h":[1.0,1.8]},
+    "bush_red":{"shape":"bush","col":Color(0.80,0.24,0.12),"h":[0.9,1.6]},
+    "dwarf_pine_low":{"shape":"mat","col":Color(0.20,0.36,0.19),"h":[1.0,1.8]},
+    "spruce_young":{"shape":"tiers","col":Color(0.12,0.27,0.18),"h":[2.6,4.2]},
+    "gorse_low":{"shape":"bush","col":Color(0.80,0.74,0.22),"h":[0.9,1.6]},
+    "hawthorn_low":{"shape":"bush","col":Color(0.32,0.50,0.22),"h":[1.2,2.0]},
 }
+## Roadside mix per landscape: [kind, weight]; "stone" = small rock of the
+## region's geology. Density = items per road sample and side.
+const ROADSIDE: Dictionary = {
+    "jp_sakura":{"mix":[["azalea",0.35],["flowers_pink",0.40],["stone",0.25]],"density":0.55},
+    "jp_forest":{"mix":[["fern",0.45],["bush_green",0.30],["stone",0.25]],"density":0.60},
+    "jp_touge":{"mix":[["bush_green",0.40],["fern",0.30],["stone",0.30]],"density":0.55},
+    "pl_ojcow":{"mix":[["bush_autumn",0.30],["bush_red",0.20],["flowers_white",0.20],["stone",0.30]],"density":0.55},
+    "pl_tatry":{"mix":[["dwarf_pine_low",0.35],["stone",0.40],["spruce_young",0.25]],"density":0.60},
+    "ie_coast":{"mix":[["heather",0.40],["gorse_low",0.30],["stone",0.30]],"density":0.55},
+    "ie_hills":{"mix":[["hawthorn_low",0.30],["gorse_low",0.25],["flowers_white",0.20],["stone",0.25]],"density":0.50},
+}
+## Soft planting may stand this far beyond the verge (behind the barrier);
+## trees, boulders and buildings keep the full safety strip.
+const ROADSIDE_MIN_M: float = 0.9
 const TRUNK := Color(0.30,0.22,0.16)
 
 var world: NitroTerrainWorld
@@ -58,10 +89,12 @@ var venue_rect: Rect2 = Rect2()
 var venue_info: Dictionary = {}
 var landmark_info: Array = []
 var counts: Dictionary = {}
+var city_kinds: Dictionary = {}           # chunk -> {block kind: count} (Japan City)
 var _meshes: Dictionary = {}
 var _veg_mat: ShaderMaterial
 var _shadow_mat: ShaderMaterial
 var _rock_mat: StandardMaterial3D
+var _city_mat: ShaderMaterial
 var _mats: Array = []
 var landmark_node: Node3D
 var venue_node: Node3D
@@ -88,14 +121,29 @@ func setup(w: NitroTerrainWorld) -> void:
     _rock_mat.vertex_color_use_as_albedo = true
     _rock_mat.roughness = 0.95
     _mats = MODS.materials()
+    _city_mat = ShaderMaterial.new()
+    _city_mat.shader = CITY_SHADER
 
 # ------------------------------------------------------------------ build
 
 func rebuild_all() -> void:
+    STEPS.run_now(rebuild_steps())
+
+func rebuild_steps() -> Array:
+    var steps: Array = [_rebuild_begin]
+    var cc: Vector2i = world.chunk_counts()
+    for cz in range(cc.y):
+        for cx in range(cc.x):
+            var id := Vector2i(cx,cz)
+            steps.append(func(): _build_chunk(id))
+    return steps
+
+func _rebuild_begin() -> void:
     for child in get_children():
         remove_child(child)
         child.queue_free()
     chunk_nodes.clear()
+    city_kinds.clear()
     keep_out.clear()
     landmark_info.clear()
     counts = {}
@@ -108,15 +156,21 @@ func rebuild_all() -> void:
     venue_node.name = "Venue"
     add_child(venue_node)
     _build_venue()
-    var cc: Vector2i = world.chunk_counts()
-    for cz in range(cc.y):
-        for cx in range(cc.x):
-            _build_chunk(Vector2i(cx,cz))
 
 ## Called by the world after a road edit with the chunks whose terrain
 ## changed; also refreshes every chunk whose nearby road segments changed
 ## (exclusion) and the chunks under the old / new venue.
 func on_road_changed(dirty: Array) -> Array:
+    var ids: Array = []
+    STEPS.run_now([func():
+        var steps: Array = on_road_changed_steps(dirty)
+        steps.append(func(): ids.append_array(last_changed))
+        return steps])
+    return ids
+
+var last_changed: Array = []
+
+func on_road_changed_steps(dirty: Array) -> Array:
     var old_sig: Dictionary = road_sig.duplicate()
     var old_venue: Rect2 = _venue_bounds()
     _index_road()
@@ -135,9 +189,11 @@ func on_road_changed(dirty: Array) -> Array:
         for r in [old_venue,new_venue]:
             for id4 in _chunks_of_rect(r):
                 todo[id4] = true
+    last_changed = todo.keys()
+    var steps: Array = []
     for id5 in todo.keys():
-        _build_chunk(id5)
-    return todo.keys()
+        steps.append(func(): _build_chunk(id5))
+    return steps
 
 func _venue_bounds() -> Rect2:
     var out := Rect2()
@@ -272,6 +328,8 @@ func _build_chunk(id: Vector2i) -> void:
                 continue
             if relief == "coast" and field.coast_distance(x,z) < 6.0:
                 continue
+            if relief == "urban" and field.mask_at(field.tint,x,z) < 0.45 and field.base_at(x,z) < 12.0:
+                continue      # city: trees only in parks / up the hills (+ avenue trees)
             var sp: String = _pick_species(rng,x,z)
             var spec: Dictionary = SPECIES[sp]
             var hr: Array = spec["h"]
@@ -283,9 +341,10 @@ func _build_chunk(id: Vector2i) -> void:
                 continue
             _add_tree(per,shadows,sp,x,z,h,rng)
     _scatter_rocks(node,id,x0,z0,span)
+    _roadside(node,id,x0,z0,span,per,shadows)
     _field_lines(per,shadows,node,x0,z0,span)
     if relief == "urban":
-        _city_blocks(node,id,x0,z0,span)
+        _city_district(node,id,x0,z0,span,per,shadows)
     var keys: Array = per.keys()
     keys.sort()
     for sp2 in keys:
@@ -332,6 +391,103 @@ func _ground_normal(x: float, z: float) -> Vector3:
     var dx: float = (field.height_at(x+4.0,z)-field.height_at(x-4.0,z))/8.0
     var dz: float = (field.height_at(x,z+4.0)-field.height_at(x,z-4.0))/8.0
     return Vector3(-dx,1.0,-dz).normalized()
+
+## v0.1.27 roadside band (owner: from the top-down camera the road was just
+## grey): low shrubs, flowers, ferns and small stones 0.9-6 m beyond the
+## verge, i.e. behind the barrier, plus a forest edge row of trees right at
+## the safety strip where the land is wooded.
+func _roadside(node: Node3D, id: Vector2i, x0: float, z0: float, span: float, per: Dictionary,
+        shadows: Array[Transform3D]) -> void:
+    var road: Dictionary = world.road
+    var arch: String = str(world.desc.get("archetype",""))
+    if road.is_empty() or not ROADSIDE.has(arch):
+        return
+    var samples: Array[Vector2] = road["samples"]
+    var hw: PackedFloat32Array = road["halfwidths"]
+    var cls: PackedInt32Array = road["class"]
+    var closed: bool = road["closed"]
+    var n: int = samples.size()
+    var conf: Dictionary = ROADSIDE[arch]
+    var mix: Array = conf["mix"]
+    var dens: float = float(conf["density"])
+    var rng: RandomNumberGenerator = _rng_for(id,9)
+    var rect := Rect2(x0,z0,span,span)
+    var soft: Dictionary = {}         # kind -> [xforms, colours]
+    var stones: Array = [[],[]]
+    var rock_col: Color = Color(info["ground"]["rock"])
+    for i in range(n):
+        if not rect.has_point(samples[i]):
+            continue
+        if cls[i] >= 4:
+            continue                     # bridges / cliff edges: nothing beside the deck
+        var nrm: Vector2 = PROFILE._normal(samples,i,closed)
+        var t := Vector2(nrm.y,-nrm.x)
+        for side in [-1.0,1.0]:
+            if rng.randf() > dens:
+                continue
+            var d: float = hw[i]+PROFILE.VERGE+rng.randf_range(ROADSIDE_MIN_M,6.0)
+            var p: Vector2 = samples[i]+nrm*side*d+t*rng.randf_range(-2.0,2.0)
+            if road_clearance(p) < PROFILE.VERGE+ROADSIDE_MIN_M or field.is_water(p.x,p.y):
+                continue
+            if field.relief == "coast" and field.coast_distance(p.x,p.y) < 4.0:
+                continue
+            var bad: bool = false
+            for r in keep_out+venue_keep:
+                if (r as Rect2).has_point(p):
+                    bad = true
+            if bad:
+                continue
+            var kind: String = _pick_weighted(mix,rng)
+            var y: float = field.height_at(p.x,p.y)
+            if kind == "stone":
+                var sc: float = rng.randf_range(0.45,1.1)
+                var bs := Basis(Vector3.UP,rng.randf_range(0,TAU)).scaled(Vector3(sc*rng.randf_range(0.9,1.4),sc*rng.randf_range(0.6,1.0),sc))
+                stones[0].append(Transform3D(bs,Vector3(p.x,y-0.12*sc,p.y)))
+                var c: Color = rock_col.lightened(rng.randf_range(-0.12,0.10))
+                if arch == "jp_forest":
+                    c = c.lerp(Color(0.30,0.42,0.22),0.45)
+                stones[1].append(c)
+                continue
+            var spec: Dictionary = SPECIES[kind]
+            var hr: Array = spec["h"]
+            var h: float = rng.randf_range(float(hr[0]),float(hr[1]))
+            var b2 := Basis(Vector3.UP,rng.randf_range(0,TAU)).scaled(Vector3(h*rng.randf_range(0.85,1.2),h,h*rng.randf_range(0.85,1.2)))
+            if not soft.has(kind):
+                soft[kind] = [[],[]]
+            soft[kind][0].append(Transform3D(b2,Vector3(p.x,y-0.05,p.y)))
+            var col: Color = Color(spec["col"]).lightened(rng.randf_range(-0.08,0.10))
+            if kind == "bush_autumn" and rng.randf() < 0.4:
+                col = Color(0.96,0.72,0.20).lightened(rng.randf_range(-0.08,0.08))
+            soft[kind][1].append(col)
+        # Forest edge: a tree row right at the safety strip where it is wooded.
+        if float(info["forest"]) > 0.3 and i % 3 == 0:
+            for side2 in [-1.0,1.0]:
+                var q: Vector2 = samples[i]+nrm*side2*(hw[i]+PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M+rng.randf_range(2.5,7.0))
+                if field.mask_at(field.forest,q.x,q.y) < 0.18 or rng.randf() > 0.7 or field.is_water(q.x,q.y):
+                    continue
+                var sp: String = _pick_species(rng,q.x,q.y)
+                var hr2: Array = SPECIES[sp]["h"]
+                var th: float = rng.randf_range(float(hr2[0]),float(hr2[1]))
+                if _blocked(q,th*0.22) or field.slope_at(q.x,q.y) > 1.1:
+                    continue
+                _add_tree(per,shadows,sp,q.x,q.y,th,rng)
+    var keys: Array = soft.keys()
+    keys.sort()
+    for k in keys:
+        _multimesh(node,"Roadside "+str(k),_species_mesh(str(k)),_veg_mat,soft[k][0],soft[k][1])
+    if not (stones[0] as Array).is_empty():
+        _multimesh(node,"Roadside stones",_rock_mesh("boulder"),_rock_mat,stones[0],stones[1],false)
+
+func _pick_weighted(mix: Array, rng: RandomNumberGenerator) -> String:
+    var total: float = 0.0
+    for m in mix:
+        total += float(m[1])
+    var r: float = rng.randf()*total
+    for m2 in mix:
+        r -= float(m2[1])
+        if r <= 0.0:
+            return str(m2[0])
+    return str(mix[mix.size()-1][0])
 
 func _scatter_rocks(node: Node3D, id: Vector2i, x0: float, z0: float, span: float) -> void:
     var kind: String = str(info["rock_kind"])
@@ -445,63 +601,410 @@ func _wall_piece(acc, a: Vector3, b: Vector3, col: Color) -> void:
     acc.quad(b+side+Vector3(0,-0.4,0),a+side+Vector3(0,-0.4,0),a+side*0.7+Vector3(0,top,0),b+side*0.7+Vector3(0,top,0),col.darkened(0.08))
     acc.quad(a-side*0.7+Vector3(0,top,0),b-side*0.7+Vector3(0,top,0),b+side*0.7+Vector3(0,top,0),a+side*0.7+Vector3(0,top,0),col.lightened(0.06))
 
-## Japanese city: blocks of mid-rise buildings set back from the road
-## (>= verge + barrier margin + 14 m), parks stay open.
-func _city_blocks(node: Node3D, id: Vector2i, x0: float, z0: float, span: float) -> void:
-    var acc = MODS.Acc.new()
-    var rng: RandomNumberGenerator = _rng_for(id,3)
-    var block: float = 44.0
-    var n: int = int(span/block)
-    var built: int = 0
-    var facades: Array[Color] = [Color(0.80,0.79,0.76),Color(0.68,0.70,0.72),Color(0.86,0.83,0.76),
-        Color(0.56,0.58,0.62),Color(0.74,0.66,0.58),Color(0.90,0.90,0.88)]
-    for b in range(n):
-        for a in range(n):
-            var cx: float = x0+(float(a)+0.5)*block
-            var cz: float = z0+(float(b)+0.5)*block
-            if field.mask_at(field.tint,cx,cz) > 0.45 or field.is_water(cx,cz):
+## Japan City (v0.1.27): the street grid painted by the ground shader is
+## filled block by block. Zones from a downtown centre: towers, office pairs
+## and a department store in the core; mansions with balcony bands, offices
+## and shop rows (awnings, fascia + vertical signs) in the middle ring;
+## shotengai shop rows, convenience stores and car parks outside; parks
+## with small shrines. Side streets get utility poles with wires, avenues
+## street trees, avenue crossings traffic signals. Buildings are snapped to
+## the 3 m window module of the facade shader and keep the road safety strip.
+const CITY_RES: Array[Color] = [Color(0.86,0.84,0.80),Color(0.78,0.74,0.66),Color(0.70,0.70,0.72),
+    Color(0.62,0.52,0.44),Color(0.84,0.80,0.72),Color(0.72,0.76,0.74),Color(0.80,0.70,0.66)]
+const CITY_OFFICE: Array[Color] = [Color(0.74,0.75,0.77),Color(0.62,0.64,0.68),Color(0.82,0.80,0.76),Color(0.52,0.56,0.62)]
+const CITY_TOWER: Array[Color] = [Color(0.58,0.64,0.70),Color(0.70,0.72,0.74),Color(0.46,0.52,0.58)]
+const CITY_AWNING: Array[Color] = [Color(0.80,0.16,0.14),Color(0.14,0.36,0.62),Color(0.16,0.50,0.30),
+    Color(0.92,0.62,0.12),Color(0.32,0.30,0.30),Color(0.88,0.86,0.82)]
+const CITY_SIGN: Array[Color] = [Color(0.95,0.80,0.20),Color(0.90,0.24,0.24),Color(0.30,0.64,0.95),
+    Color(0.95,0.95,0.90),Color(0.36,0.84,0.46),Color(0.95,0.46,0.66)]
+const CITY_ROOF := Color(0.46,0.46,0.47)
+
+func _city_district(node: Node3D, id: Vector2i, x0: float, z0: float, span: float,
+        per: Dictionary, shadows: Array[Transform3D]) -> void:
+    var g: Dictionary = field.city_grid()
+    var pitch: Vector2 = g["pitch"]
+    var off: Vector2 = g["off"]
+    var lo := Vector2(INF,INF)
+    var hi := Vector2(-INF,-INF)
+    for c in [Vector2(x0,z0),Vector2(x0+span,z0),Vector2(x0,z0+span),Vector2(x0+span,z0+span)]:
+        var l: Vector2 = field.city_local(c)
+        lo = Vector2(minf(lo.x,l.x),minf(lo.y,l.y))
+        hi = Vector2(maxf(hi.x,l.x),maxf(hi.y,l.y))
+    var cb := _CityBuild.new()
+    var kinds: Dictionary = {}
+    for iv in range(int(floor((lo.y-off.y)/pitch.y))-1,int(ceil((hi.y-off.y)/pitch.y))+1):
+        for iu in range(int(floor((lo.x-off.x)/pitch.x))-1,int(ceil((hi.x-off.x)/pitch.x))+1):
+            var la: Array = field.city_line(0,iu)
+            var lb: Array = field.city_line(0,iu+1)
+            var lc: Array = field.city_line(1,iv)
+            var ld: Array = field.city_line(1,iv+1)
+            var u0: float = float(la[0])+float(la[1])*0.5
+            var u1: float = float(lb[0])-float(lb[1])*0.5
+            var v0: float = float(lc[0])+float(lc[1])*0.5
+            var v1: float = float(ld[0])-float(ld[1])*0.5
+            var cw: Vector2 = field.city_world(Vector2((u0+u1)*0.5,(v0+v1)*0.5))
+            if cw.x < x0 or cw.x >= x0+span or cw.y < z0 or cw.y >= z0+span:
                 continue
-            if absf(cx) > FIELD.HALF_X-30.0 or absf(cz) > FIELD.HALF_Z-30.0:
+            if absf(cw.x) > FIELD.HALF_X-24.0 or absf(cw.y) > FIELD.HALF_Z-24.0:
                 continue
-            var lots: int = rng.randi_range(1,3)
-            for l in range(lots):
-                var w: float = rng.randf_range(12.0,20.0)
-                var d: float = rng.randf_range(12.0,18.0)
-                var px: float = cx+rng.randf_range(-block*0.5+w*0.5+3.0,block*0.5-w*0.5-3.0)
-                var pz: float = cz+rng.randf_range(-block*0.5+d*0.5+3.0,block*0.5-d*0.5-3.0)
-                var ok: bool = true
-                for corner in [Vector2(-w,-d),Vector2(w,-d),Vector2(w,d),Vector2(-w,d),Vector2.ZERO]:
-                    var q: Vector2 = Vector2(px,pz)+corner*0.5
-                    if road_clearance(q) < PROFILE.VERGE+PROFILE.MARGIN+14.0:
-                        ok = false
-                        break
-                    for r in keep_out+venue_keep:
-                        if (r as Rect2).has_point(q):
-                            ok = false
-                if not ok:
-                    continue
-                var gy: float = INF
-                for corner2 in [Vector2(-w,-d),Vector2(w,-d),Vector2(w,d),Vector2(-w,d)]:
-                    gy = minf(gy,field.height_at(px+corner2.x*0.5,pz+corner2.y*0.5))
-                var floors: int = rng.randi_range(2,9) if l == 0 else rng.randi_range(2,5)
-                var top: float = gy+0.5+float(floors)*3.3
-                acc.set_frame([Vector2(px-w*0.5,pz-d*0.5),Vector2.RIGHT,Vector2.DOWN*-1.0])
-                var fc: Color = facades[rng.randi_range(0,facades.size()-1)]
-                acc.box(0.0,w,0.0,d,gy-1.0,top,fc,false,Color(0.42,0.43,0.45))
-                # window bands
-                for f in range(floors):
-                    var y: float = gy+1.4+float(f)*3.3
-                    acc.box(-0.05,w+0.05,-0.05,d+0.05,y,y+1.1,Color(0.20,0.26,0.32))
-                # roof equipment
-                acc.box(w*0.2,w*0.45,d*0.3,d*0.6,top,top+2.2,Color(0.55,0.56,0.57))
-                built += 1
-    if built > 0:
-        var mi := MeshInstance3D.new()
-        mi.name = "City blocks"
-        mi.mesh = acc.commit(_mats[0],_mats[1])
-        mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-        node.add_child(mi)
-        counts["city_buildings"] = int(counts.get("city_buildings",0))
+            var rng := RandomNumberGenerator.new()
+            rng.seed = FIELD.hash_seed(seed_value*31+iu*7919+iv*104729,"city",5)
+            var near: bool = absf(cw.x) < FIELD.PLAY_HALF_X+70.0 and absf(cw.y) < FIELD.PLAY_HALF_Z+70.0
+            var k: String = _city_block(cb,rng,u0,u1,v0,v1,cw,near,g)
+            kinds[k] = int(kinds.get(k,0))+1
+            if near:
+                _city_street_kit(cb,rng,u0,u1,v0,v1,bool(lc[2]),bool(la[2]),per,shadows)
+    city_kinds[id] = kinds
+    if cb.pos.is_empty() and cb.gpos.is_empty():
+        return
+    var mi := MeshInstance3D.new()
+    mi.name = "City blocks"
+    mi.mesh = cb.commit(_city_mat,_mats[1],_chunk_centre)
+    mi.position = _chunk_centre
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    if draw_range > 0.0:
+        # Buildings are big silhouettes: they draw further than trees.
+        mi.visibility_range_end = draw_range*1.6
+    node.add_child(mi)
+
+## One block between four streets; returns its kind.
+func _city_block(cb: _CityBuild, rng: RandomNumberGenerator, u0: float, u1: float, v0: float, v1: float,
+        cw: Vector2, near: bool, g: Dictionary) -> String:
+    if field.is_water(cw.x,cw.y) or field.base_at(cw.x,cw.y) > 12.5:
+        return "none"
+    # Snap the block interior to the 3 m facade module.
+    var su0: float = ceil(u0/3.0)*3.0
+    var su1: float = floor(u1/3.0)*3.0
+    var sv0: float = ceil(v0/3.0)*3.0
+    var sv1: float = floor(v1/3.0)*3.0
+    if su1-su0 < 18.0 or sv1-sv0 < 18.0:
+        return "none"
+    if field.mask_at(field.tint,cw.x,cw.y) > 0.45:
+        if near and rng.randf() < 0.45:
+            _city_shrine(cb,rng,field.city_local(cw))
+            return "park_shrine"
+        return "park"
+    var dd: float = cw.distance_to(g["downtown"])
+    var roll: float = rng.randf()
+    if dd < 180.0 and roll < 0.72:
+        if roll < 0.34:
+            return "tower" if _city_tower(cb,rng,su0,su1,sv0,sv1,near) else "plaza"
+        if roll < 0.56:
+            return "department" if _city_department(cb,rng,su0,su1,sv0,sv1,near) else "plaza"
+        # Office pair facing both long streets, plaza between.
+        var d: float = minf(snappedf((sv1-sv0)*0.40,3.0),21.0)
+        _city_lot(cb,rng,"office",[Vector2(su0,sv0),Vector2(1,0),Vector2(0,1)],0.0,su1-su0,d,near)
+        _city_lot(cb,rng,"office",[Vector2(su1,sv1),Vector2(-1,0),Vector2(0,-1)],0.0,su1-su0,d,near)
+        return "offices"
+    var zone: String = "core" if dd < 180.0 else ("mid" if dd < 340.0 else "outer")
+    var row: float = clampf(snappedf((sv1-sv0)*0.40,3.0),9.0,18.0)
+    var side: float = clampf(snappedf((su1-su0)*0.40,3.0),9.0,18.0)
+    # Long rows along the U streets, then the short rows between them.
+    _city_row(cb,rng,zone,[Vector2(su0,sv0),Vector2(1,0),Vector2(0,1)],su1-su0,row,near)
+    _city_row(cb,rng,zone,[Vector2(su1,sv1),Vector2(-1,0),Vector2(0,-1)],su1-su0,row,near)
+    _city_row(cb,rng,zone,[Vector2(su0,sv1-row),Vector2(0,-1),Vector2(1,0)],(sv1-sv0)-2.0*row,side,near)
+    _city_row(cb,rng,zone,[Vector2(su1,sv0+row),Vector2(0,1),Vector2(-1,0)],(sv1-sv0)-2.0*row,side,near)
+    return zone
+
+## Lots along one block edge. fr = [origin, along, inwards] in grid space.
+func _city_row(cb: _CityBuild, rng: RandomNumberGenerator, zone: String, fr: Array, length: float,
+        depth: float, near: bool) -> void:
+    var pos: float = 0.0
+    var konbini: bool = false
+    while pos+6.0 <= length:
+        var r: float = rng.randf()
+        var kind: String = "shop"
+        match zone:
+            "core":
+                kind = "office" if r < 0.55 else ("mansion" if r < 0.80 else "shop")
+            "mid":
+                kind = "mansion" if r < 0.30 else ("office" if r < 0.48 else ("konbini" if r < 0.53 else "shop"))
+            _:
+                kind = "shop" if r < 0.62 else ("mansion" if r < 0.80 else ("konbini" if r < 0.88 else "parking"))
+        if kind == "konbini":
+            if konbini:
+                kind = "shop"
+            konbini = true
+        var fr_rng: Array = {"shop":[6.0,9.0],"mansion":[15.0,27.0],"office":[18.0,30.0],
+            "konbini":[12.0,15.0],"parking":[9.0,15.0]}[kind]
+        var f: float = minf(snappedf(rng.randf_range(float(fr_rng[0]),float(fr_rng[1])),3.0),length-pos)
+        if f < 6.0:
+            break
+        if rng.randf() < 0.07:
+            pos += 3.0          # narrow alley
+            continue
+        if kind != "parking":
+            _city_lot(cb,rng,kind,fr,pos,f,depth,near)
+        pos += f
+
+## Footprint check (grid space rectangle) and its ground: [ok, base y].
+func _city_site(fr: Array, a0: float, a1: float, b0: float, b1: float) -> Array:
+    var o: Vector2 = fr[0]
+    var r: Vector2 = fr[1]
+    var b: Vector2 = fr[2]
+    var lo_y: float = INF
+    var hi_y: float = -INF
+    var na: int = maxi(1,int(ceil((a1-a0)/6.0)))
+    var nb: int = maxi(1,int(ceil((b1-b0)/6.0)))
+    for i in range(na+1):
+        for j in range(nb+1):
+            if i != 0 and i != na and j != 0 and j != nb and (i+j)%2 == 1:
+                continue
+            var l: Vector2 = o+r*lerpf(a0,a1,float(i)/float(na))+b*lerpf(b0,b1,float(j)/float(nb))
+            var p: Vector2 = field.city_world(l)
+            if absf(p.x) > FIELD.HALF_X-6.0 or absf(p.y) > FIELD.HALF_Z-6.0:
+                return [false,0.0]
+            if road_clearance(p) < PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M+1.0:
+                return [false,0.0]
+            for rr in keep_out+venue_keep:
+                if (rr as Rect2).has_point(p):
+                    return [false,0.0]
+            if field.is_water(p.x,p.y):
+                return [false,0.0]
+            var h: float = field.height_at(p.x,p.y)
+            lo_y = minf(lo_y,h)
+            hi_y = maxf(hi_y,h)
+    if hi_y-lo_y > 4.0:
+        return [false,0.0]
+    return [true,lo_y]
+
+func _city_frame(cb: _CityBuild, fr: Array, along: float) -> void:
+    var o: Vector2 = (fr[0] as Vector2)+(fr[1] as Vector2)*along
+    cb.set_frame(field.city_world(o),field.city_world(fr[1]),field.city_world(fr[2]))
+
+## One building on a street lot: frontage f from `pos` along the edge,
+## depth d inwards (front face on the sidewalk line at v = 0).
+func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Array, pos: float, f: float,
+        d: float, near: bool) -> void:
+    var set_back: float = 6.0 if kind == "konbini" else 0.0
+    var dep: float = d
+    match kind:
+        "shop":
+            dep = minf(d,snappedf(rng.randf_range(9.0,15.0),3.0))
+        "mansion":
+            dep = minf(d,snappedf(rng.randf_range(9.0,12.0),3.0))
+        "konbini":
+            dep = minf(d-set_back,12.0)
+    if dep < 6.0:
+        return
+    var site: Array = _city_site(fr,pos-0.5,pos+f+0.5,set_back-1.6,set_back+dep)
+    if not bool(site[0]):
+        return
+    var gy: float = float(site[1])
+    _city_frame(cb,fr,pos)
+    cb.base_y = gy
+    match kind:
+        "shop":
+            var floors: int = rng.randi_range(2,4)
+            var top: float = gy+4.0+float(floors-1)*3.0+0.5
+            var col: Color = CITY_RES[rng.randi_range(0,CITY_RES.size()-1)]
+            cb.box(0.0,f,0.0,dep,gy-1.0,top,col,4,CITY_ROOF)
+            if rng.randf() < 0.3 and floors >= 3:
+                cb.box(0.0,f,3.0,dep,top,top+2.6,col.darkened(0.04),1,CITY_ROOF)
+            if near:
+                var aw: Color = CITY_AWNING[rng.randi_range(0,CITY_AWNING.size()-1)]
+                cb.box(0.3,f-0.3,-1.5,0.0,gy+2.95,gy+3.2,aw,0,aw.lightened(0.1))
+                cb.box(0.3,f-0.3,-1.6,-1.45,gy+2.6,gy+3.2,aw.darkened(0.12),0)
+                var sg: Color = CITY_SIGN[rng.randi_range(0,CITY_SIGN.size()-1)]
+                cb.box(0.4,f-0.4,-0.14,0.0,gy+3.35,gy+3.95,sg,0,Color(0,0,0,0),true)
+                if floors >= 3 and rng.randf() < 0.6:
+                    var sg2: Color = CITY_SIGN[rng.randi_range(0,CITY_SIGN.size()-1)]
+                    var sh: float = minf(top-0.6,gy+4.4+rng.randf_range(3.0,6.0))
+                    cb.box(f-1.1,f-0.7,-1.5,-0.3,gy+4.4,sh,sg2,0,Color(0,0,0,0),true)
+                _city_roof_kit(cb,rng,f,dep,top)
+        "mansion":
+            var floors2: int = rng.randi_range(5,11)
+            var top2: float = gy+float(floors2)*3.0+0.6
+            var col2: Color = CITY_RES[rng.randi_range(0,CITY_RES.size()-1)]
+            cb.box(0.0,f,0.0,dep,gy-1.0,top2,col2,1,CITY_ROOF)
+            if near:
+                var par: Color = col2.lightened(0.18)
+                for fl in range(1,floors2):
+                    var y: float = gy+float(fl)*3.0
+                    cb.box(0.0,f,-1.3,0.0,y-0.15,y+1.05,par,0)
+                var u: float = 6.0
+                while u < f-1.0:
+                    cb.box(u-0.15,u+0.15,-1.3,0.0,gy+2.85,top2-0.6,col2.darkened(0.08),0)
+                    u += 6.0
+                cb.box(f*0.5-2.0,f*0.5+2.0,-1.8,0.0,gy+2.6,gy+2.9,Color(0.85,0.85,0.84),0)
+                cb.box(f*0.30,f*0.30+3.0,dep-5.0,dep-2.0,top2,top2+3.0,col2.darkened(0.06),0,CITY_ROOF)
+                if rng.randf() < 0.6:
+                    cb.box(f*0.66,f*0.66+2.4,dep-4.4,dep-2.0,top2,top2+2.2,Color(0.72,0.74,0.76),0)
+        "office":
+            var floors3: int = rng.randi_range(7,15)
+            var top3: float = gy+4.2+float(floors3-1)*3.6+1.0
+            var col3: Color = CITY_OFFICE[rng.randi_range(0,CITY_OFFICE.size()-1)]
+            cb.box(0.0,f,0.0,dep,gy-1.0,top3,col3,2,CITY_ROOF)
+            if rng.randf() < 0.45 and f > 12.0 and dep > 12.0:
+                cb.box(3.0,f-3.0,3.0,dep-3.0,top3,top3+3.6,col3.lightened(0.04),2,CITY_ROOF)
+                top3 += 3.6
+            if near:
+                cb.box(f*0.5-3.0,f*0.5+3.0,-2.2,0.0,gy+3.4,gy+3.8,Color(0.30,0.31,0.33),0)
+                cb.box(f*0.25,f*0.6,dep*0.3,dep*0.6,top3,top3+2.4,Color(0.62,0.63,0.64),0)
+                if rng.randf() < 0.35:
+                    cb.box(f*0.75-0.15,f*0.75+0.15,dep*0.5-0.15,dep*0.5+0.15,top3,top3+9.0,Color(0.80,0.80,0.80),0)
+        "konbini":
+            var top4: float = gy+4.2
+            cb.box(0.0,f,set_back,set_back+dep,gy-1.0,top4,Color(0.92,0.92,0.90),7,CITY_ROOF)
+            var stripes: Array = [[Color(0.10,0.46,0.78),Color(0.20,0.62,0.30)],[Color(0.95,0.52,0.10),Color(0.20,0.55,0.32)],
+                [Color(0.85,0.14,0.16),Color(0.95,0.62,0.10)]]
+            var st: Array = stripes[rng.randi_range(0,stripes.size()-1)]
+            cb.box(0.0,f,set_back-0.12,set_back+0.02,gy+3.45,gy+3.80,st[0],0)
+            cb.box(0.0,f,set_back-0.12,set_back+0.02,gy+3.80,gy+4.05,st[1],0)
+            if near:
+                cb.box(0.4,0.8,0.4,0.8,gy,gy+6.0,Color(0.70,0.70,0.70),0)
+                cb.box(-0.4,1.6,0.3,0.9,gy+6.0,gy+7.6,st[0],0,Color(0,0,0,0),true)
+                # Painted parking bays (low kerb stops).
+                var u2: float = 2.6
+                while u2 < f-1.0:
+                    cb.box(u2-0.1,u2+0.1,set_back-5.2,set_back-0.6,gy+0.02,gy+0.06,Color(0.92,0.92,0.88),0)
+                    u2 += 2.6
+
+func _city_roof_kit(cb: _CityBuild, rng: RandomNumberGenerator, f: float, d: float, top: float) -> void:
+    var n: int = rng.randi_range(1,2)
+    for k in range(n):
+        var u: float = rng.randf_range(1.0,maxf(1.2,f-2.4))
+        var v: float = rng.randf_range(2.0,maxf(2.2,d-2.0))
+        cb.box(u,u+1.2,v,v+0.8,top,top+0.9,Color(0.80,0.80,0.78),0)
+
+## Downtown tower: 3-storey podium over the block, shaft with a setback
+## tier, plain crown, red aviation lights.
+func _city_tower(cb: _CityBuild, rng: RandomNumberGenerator, su0: float, su1: float, sv0: float, sv1: float,
+        near: bool) -> bool:
+    var fr: Array = [Vector2(su0,sv0),Vector2(1,0),Vector2(0,1)]
+    var w: float = su1-su0
+    var d: float = sv1-sv0
+    var site: Array = _city_site(fr,-0.5,w+0.5,-0.5,d+0.5)
+    if not bool(site[0]):
+        return false
+    var gy: float = float(site[1])
+    _city_frame(cb,fr,0.0)
+    cb.base_y = gy
+    var col: Color = CITY_OFFICE[rng.randi_range(0,CITY_OFFICE.size()-1)]
+    var pod: float = gy+4.2+2.0*3.6+1.0
+    cb.box(0.0,w,0.0,d,gy-1.0,pod,col,2,CITY_ROOF)
+    var s: float = clampf(snappedf(minf(w,d)-12.0,3.0),21.0,36.0)
+    var a0: float = snappedf((w-s)*0.5,3.0)
+    var b0: float = snappedf((d-s)*0.5,3.0)
+    var floors: int = rng.randi_range(22,40)
+    var top: float = gy+6.0+float(floors-1)*3.8
+    var tier: float = gy+6.0+float(int(float(floors)*0.68))*3.8
+    var tc: Color = CITY_TOWER[rng.randi_range(0,CITY_TOWER.size()-1)]
+    cb.box(a0,a0+s,b0,b0+s,pod-0.5,tier,tc,3,CITY_ROOF)
+    cb.box(a0+3.0,a0+s-3.0,b0+3.0,b0+s-3.0,tier,top,tc.lightened(0.05),3,CITY_ROOF)
+    cb.box(a0+4.5,a0+s-4.5,b0+4.5,b0+s-4.5,top,top+5.0,tc.lightened(0.18),0,Color(0.36,0.37,0.38))
+    if near:
+        for c in [Vector2(a0+4.8,b0+4.8),Vector2(a0+s-5.4,b0+4.8),Vector2(a0+4.8,b0+s-5.4),Vector2(a0+s-5.4,b0+s-5.4)]:
+            cb.box(c.x,c.x+0.6,c.y,c.y+0.6,top+5.0,top+5.6,Color(1.0,0.16,0.10),0,Color(0,0,0,0),true)
+        cb.box(w*0.5-4.0,w*0.5+4.0,-2.4,0.0,gy+4.2,gy+4.6,Color(0.30,0.31,0.33),0)
+    return true
+
+## Department store: big box, tall slit windows, rooftop billboard, banners.
+func _city_department(cb: _CityBuild, rng: RandomNumberGenerator, su0: float, su1: float, sv0: float, sv1: float,
+        near: bool) -> bool:
+    var fr: Array = [Vector2(su0,sv0),Vector2(1,0),Vector2(0,1)]
+    var w: float = su1-su0
+    var d: float = minf(sv1-sv0,snappedf((sv1-sv0)*0.75,3.0))
+    var site: Array = _city_site(fr,-0.5,w+0.5,-0.5,d+0.5)
+    if not bool(site[0]):
+        return false
+    var gy: float = float(site[1])
+    _city_frame(cb,fr,0.0)
+    cb.base_y = gy
+    var floors: int = rng.randi_range(6,8)
+    var top: float = gy+5.0+float(floors-1)*4.5+1.0
+    var col: Color = [Color(0.86,0.84,0.80),Color(0.80,0.74,0.64),Color(0.74,0.72,0.70)][rng.randi_range(0,2)]
+    cb.box(0.0,w,0.0,d,gy-1.0,top,col,6,CITY_ROOF)
+    if near:
+        var sg: Color = CITY_SIGN[rng.randi_range(0,CITY_SIGN.size()-1)]
+        cb.box(w*0.2,w*0.2+0.6,2.0,2.6,top,top+4.0,Color(0.40,0.40,0.42),0)
+        cb.box(w*0.8-0.6,w*0.8,2.0,2.6,top,top+4.0,Color(0.40,0.40,0.42),0)
+        cb.box(w*0.18,w*0.82,1.6,2.0,top+3.0,top+9.0,sg,0,Color(0,0,0,0),true)
+        for k in range(3):
+            var u: float = w*(0.25+0.25*float(k))
+            var bc: Color = CITY_SIGN[rng.randi_range(0,CITY_SIGN.size()-1)]
+            cb.box(u-1.0,u+1.0,-0.6,-0.2,gy+6.0,gy+6.0+minf(14.0,top-gy-8.0),bc,0,Color(0,0,0,0),true)
+        cb.box(0.0,w,-2.6,0.0,gy+4.4,gy+4.8,Color(0.26,0.27,0.29),0)
+    return true
+
+## Small shrine in a park: vermilion torii in front of a timber hall.
+func _city_shrine(cb: _CityBuild, rng: RandomNumberGenerator, c: Vector2) -> void:
+    var fr: Array = [c-Vector2(4.0,8.0),Vector2(1,0),Vector2(0,1)]
+    var site: Array = _city_site(fr,-1.0,9.0,-1.0,14.0)
+    if not bool(site[0]):
+        return
+    var gy: float = float(site[1])
+    _city_frame(cb,fr,0.0)
+    cb.base_y = gy
+    var ver := Color(0.82,0.22,0.12)
+    cb.box(0.6,1.1,0.0,0.5,gy-0.5,gy+4.6,ver,0)
+    cb.box(6.9,7.4,0.0,0.5,gy-0.5,gy+4.6,ver,0)
+    cb.box(-0.4,8.4,-0.1,0.6,gy+4.6,gy+5.2,Color(0.14,0.13,0.12),0)
+    cb.box(0.2,7.8,0.0,0.5,gy+3.7,gy+4.1,ver,0)
+    cb.box(1.0,7.0,7.0,12.0,gy-0.5,gy+3.0,Color(0.40,0.27,0.17),0)
+    cb.gable(0.4,7.6,6.4,12.6,gy+3.0,2.2,Color(0.24,0.25,0.26))
+
+## Street furniture on the block's south (U) street and west (V) street.
+func _city_street_kit(cb: _CityBuild, rng: RandomNumberGenerator, u0: float, u1: float, v0: float, v1: float,
+        south_ave: bool, west_ave: bool, per: Dictionary, shadows: Array[Transform3D]) -> void:
+    # South street: trees on avenues, poles with wires on side streets.
+    _street_side(cb,rng,[Vector2(u0,v0-1.2),Vector2(1,0),Vector2(0,-1)],u1-u0,south_ave,per,shadows)
+    _street_side(cb,rng,[Vector2(u0-1.2,v1),Vector2(0,-1),Vector2(-1,0)],v1-v0,west_ave,per,shadows)
+    if south_ave or west_ave:
+        # Traffic signals at the south-west crossing.
+        var p: Vector2 = field.city_world(Vector2(u0-1.4,v0-1.4))
+        if road_clearance(p) > PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M and not field.is_water(p.x,p.y):
+            var gy: float = field.height_at(p.x,p.y)
+            cb.set_frame(p,field.city_world(Vector2(1,0)),field.city_world(Vector2(0,1)))
+            cb.base_y = gy
+            var pole := Color(0.58,0.60,0.58)
+            cb.box(-0.14,0.14,-0.14,0.14,gy-0.3,gy+6.2,pole,0)
+            cb.box(-0.08,0.08,-5.0,0.0,gy+5.7,gy+5.9,pole,0)      # arm over the south street
+            cb.box(-0.65,0.65,-5.0,-4.6,gy+5.2,gy+5.65,Color(0.20,0.21,0.22),0)
+            var lit: Color = [Color(0.25,0.95,0.55),Color(0.98,0.18,0.12)][rng.randi_range(0,1)]
+            cb.box(-0.55,-0.25,-5.06,-5.0,gy+5.28,gy+5.58,lit,0,Color(0,0,0,0),true)
+            cb.box(-5.0,0.0,-0.08,0.08,gy+5.7,gy+5.9,pole,0)      # arm over the west street
+            cb.box(-5.0,-4.6,-0.65,0.65,gy+5.2,gy+5.65,Color(0.20,0.21,0.22),0)
+
+func _street_side(cb: _CityBuild, rng: RandomNumberGenerator, fr: Array, length: float, avenue: bool,
+        per: Dictionary, shadows: Array[Transform3D]) -> void:
+    var o: Vector2 = fr[0]
+    var r: Vector2 = fr[1]
+    if avenue:
+        var t: float = 5.0
+        while t < length-3.0:
+            var p: Vector2 = field.city_world(o+r*t)
+            if not _blocked(p,1.5) and not field.is_water(p.x,p.y):
+                _add_tree(per,shadows,"street_tree",p.x,p.y,rng.randf_range(6.0,8.0),rng)
+            t += 9.0
+        return
+    var prev: float = -1.0
+    var t2: float = 4.0
+    var k: int = 0
+    while t2 < length-2.0:
+        var p2: Vector2 = field.city_world(o+r*t2)
+        var ok: bool = road_clearance(p2) > PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M and not field.is_water(p2.x,p2.y)
+        for rr in keep_out+venue_keep:
+            if (rr as Rect2).has_point(p2):
+                ok = false
+        if ok:
+            var gy: float = field.height_at(p2.x,p2.y)
+            _city_frame(cb,fr,t2)
+            cb.base_y = gy
+            var pole := Color(0.62,0.62,0.60)
+            cb.box(-0.15,0.15,-0.15,0.15,gy-0.5,gy+9.0,pole,0)
+            cb.box(-0.06,0.06,-0.9,0.9,gy+8.2,gy+8.4,pole.darkened(0.1),0)
+            if k%2 == 0:
+                cb.box(-0.35,0.35,0.15,0.75,gy+6.2,gy+7.2,Color(0.56,0.58,0.60),0)
+            if prev >= 0.0:
+                # Wires back to the previous pole (frame-aligned, sagging a little).
+                for wy in [8.35,7.7]:
+                    cb.box(prev-t2,0.0,-0.55,-0.5,gy+wy-0.25,gy+wy-0.21,Color(0.10,0.10,0.11),0)
+            prev = t2
+        else:
+            prev = -1.0
+        k += 1
+        t2 += 26.0
 
 func _recount() -> void:
     var c: Dictionary = {}
@@ -513,6 +1016,8 @@ func _recount() -> void:
             if child is MultiMeshInstance3D:
                 var nm: String = str(child.name)
                 var key: String = "rocks" if nm.begins_with("Rocks") else ("shadows" if nm == "Tree shadows" else nm.replace("Trees ","tree_"))
+                if nm.begins_with("Roadside"):
+                    key = "roadside"
                 c[key] = int(c.get(key,0))+(child as MultiMeshInstance3D).multimesh.instance_count
             elif child is MeshInstance3D:
                 c[str(child.name)] = int(c.get(str(child.name),0))+1
@@ -1139,6 +1644,12 @@ func _species_mesh(sp: String, variant: int = 0) -> ArrayMesh:
             b.blob(Vector3(0,0.25,0),Vector3(1.4,0.35,1.1),9,3,1.0,rng)
         "bush":
             b.blob(Vector3(0,0.42,0),Vector3(0.62,0.50,0.55),8,3,1.0,rng)
+        "flowers":
+            # Low cluster of blossoms (unit radius) on the grass.
+            for kf in range(13):
+                var a: float = rng.randf_range(0,TAU)
+                var rr: float = rng.randf_range(0.0,0.48)
+                b.box(Vector3(cos(a)*rr,0.10+rng.randf_range(0.0,0.08),sin(a)*rr),Vector3(0.07,0.05,0.07),Color(1,1,1),1.0)
         "lean":
             b.cylinder(Vector3(0,0,0),0.06,0.04,0.55,5,TRUNK,0.0)
             b.blob(Vector3(0.22,0.66,0),Vector3(0.48,0.22,0.30),8,3,1.0,rng)
@@ -1202,8 +1713,29 @@ func _multimesh(parent: Node3D, label: String, mesh: Mesh, material: Material,
     parent.add_child(node)
 
 func summary() -> Dictionary:
+    var ck: Dictionary = {}
+    for id in city_kinds.keys():
+        for k in (city_kinds[id] as Dictionary).keys():
+            ck[k] = int(ck.get(k,0))+int(city_kinds[id][k])
     return {"counts":counts.duplicate(),"venue":venue_info.duplicate(true),"landmarks":landmark_info.duplicate(true),
-        "keep_out":keep_out.size()}
+        "keep_out":keep_out.size(),"city":ck}
+
+## Minimum distance from the soft roadside planting to the road edge (it
+## must stay behind the barrier: verge + ROADSIDE_MIN_M); INF if none.
+func min_roadside_clearance() -> Array:
+    var best: float = INF
+    var count: int = 0
+    for id in chunk_nodes.keys():
+        var node: Node3D = chunk_nodes[id]
+        for child in node.get_children():
+            if child is MultiMeshInstance3D and str(child.name).begins_with("Roadside"):
+                var mm: MultiMesh = (child as MultiMeshInstance3D).multimesh
+                var base: Vector3 = (child as Node3D).position
+                for k in range(mm.instance_count):
+                    var o: Vector3 = mm.get_instance_transform(k).origin+base
+                    best = minf(best,road_clearance(Vector2(o.x,o.z)))
+                    count += 1
+    return [best,count]
 
 ## Minimum distance from any solid scenery item (tree / rock / building
 ## footprint) to the road edge; used by the safety exclusion test.
@@ -1212,7 +1744,7 @@ func min_item_clearance() -> float:
     for id in chunk_nodes.keys():
         var node: Node3D = chunk_nodes[id]
         for child in node.get_children():
-            if child is MultiMeshInstance3D and str(child.name) != "Tree shadows":
+            if child is MultiMeshInstance3D and str(child.name) != "Tree shadows" and not str(child.name).begins_with("Roadside"):
                 var mm: MultiMesh = (child as MultiMeshInstance3D).multimesh
                 var base: Vector3 = (child as Node3D).position
                 for k in range(mm.instance_count):
@@ -1391,4 +1923,138 @@ class _MeshBuild:
         arr[Mesh.ARRAY_INDEX] = idx
         var mesh := ArrayMesh.new()
         mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arr)
+        return mesh
+
+## Japan City geometry: boxes in a block-aligned frame with the facade
+## style + building base in UV (city_facade.gdshader), plus unshaded signs.
+class _CityBuild:
+    var pos := PackedVector3Array()
+    var nrm := PackedVector3Array()
+    var col := PackedColorArray()
+    var uv := PackedVector2Array()
+    var idx := PackedInt32Array()
+    var gpos := PackedVector3Array()
+    var gnrm := PackedVector3Array()
+    var gcol := PackedColorArray()
+    var gidx := PackedInt32Array()
+    var o := Vector2.ZERO
+    var r := Vector2.RIGHT
+    var b := Vector2.DOWN
+    var base_y: float = 0.0
+
+    func set_frame(origin: Vector2, along: Vector2, inwards: Vector2) -> void:
+        o = origin
+        r = along
+        b = inwards
+
+    func w(u: float, v: float, y: float) -> Vector3:
+        var p: Vector2 = o+r*u+b*v
+        return Vector3(p.x,y,p.y)
+
+    func _quad(a: Vector3, bb: Vector3, c: Vector3, d: Vector3, n: Vector3, colour: Color, style: float, glow: bool) -> void:
+        # Wind so that (bb-a)x(c-a) points along n; Godot front faces are
+        # clockwise seen from outside -> indices a, c, b.
+        if (bb-a).cross(c-a).dot(n) < 0.0:
+            var t: Vector3 = bb
+            bb = d
+            d = t
+        if glow:
+            var g0: int = gpos.size()
+            for p in [a,bb,c,d]:
+                gpos.append(p)
+                gnrm.append(n)
+                gcol.append(colour)
+            gidx.append_array([g0,g0+2,g0+1,g0,g0+3,g0+2])
+            return
+        var i0: int = pos.size()
+        for p2 in [a,bb,c,d]:
+            pos.append(p2)
+            nrm.append(n)
+            col.append(colour)
+            uv.append(Vector2(base_y,style))
+        idx.append_array([i0,i0+2,i0+1,i0,i0+3,i0+2])
+
+    ## Box in the frame (u along the street, v inwards, y up); the side
+    ## faces carry the facade style, the top is a plain roof.
+    func box(u0: float, u1: float, v0: float, v1: float, y0: float, y1: float, colour: Color, style: int = 0,
+            top: Color = Color(0,0,0,0), glow: bool = false) -> void:
+        var c: Array[Vector3] = [w(u0,v0,y0),w(u1,v0,y0),w(u1,v1,y0),w(u0,v1,y0),
+            w(u0,v0,y1),w(u1,v0,y1),w(u1,v1,y1),w(u0,v1,y1)]
+        var centre: Vector3 = (c[0]+c[6])*0.5
+        var faces: Array = [[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]]
+        for fi in range(faces.size()):
+            var f: Array = faces[fi]
+            var mid: Vector3 = (c[f[0]]+c[f[1]]+c[f[2]]+c[f[3]])*0.25
+            var n: Vector3 = (mid-centre)
+            n.y = n.y if fi == 0 else 0.0
+            n = n.normalized() if n.length() > 0.0001 else Vector3.UP
+            var tint: Color = top if fi == 0 and top.a > 0.0 else colour
+            if fi > 0 and not glow:
+                tint = tint.darkened(0.05*float(fi%2))
+            _quad(c[f[0]],c[f[1]],c[f[2]],c[f[3]],n,tint,0.0 if fi == 0 else float(style),glow)
+
+    ## Gable roof along u over [u0,u1] x [v0,v1] from y0, ridge h higher.
+    func gable(u0: float, u1: float, v0: float, v1: float, y0: float, h: float, colour: Color) -> void:
+        var vm: float = (v0+v1)*0.5
+        var a0: Vector3 = w(u0,v0,y0)
+        var a1: Vector3 = w(u1,v0,y0)
+        var r0: Vector3 = w(u0,vm,y0+h)
+        var r1: Vector3 = w(u1,vm,y0+h)
+        var b0: Vector3 = w(u0,v1,y0)
+        var b1: Vector3 = w(u1,v1,y0)
+        var up := Vector3.UP
+        var n1: Vector3 = (a1-a0).cross(r0-a0).normalized()
+        if n1.dot(up) < 0.0:
+            n1 = -n1
+        var n2: Vector3 = (b1-b0).cross(r0-b0).normalized()
+        if n2.dot(up) < 0.0:
+            n2 = -n2
+        _quad(a0,a1,r1,r0,n1,colour,0.0,false)
+        _quad(b0,b1,r1,r0,n2,colour.darkened(0.08),0.0,false)
+        for e in [[a0,b0,r0],[a1,b1,r1]]:
+            var n3: Vector3 = (e[1]-e[0]).cross(e[2]-e[0]).normalized()
+            var away: Vector3 = (e[0]-(a0+a1+b0+b1)*0.25)
+            away.y = 0.0
+            if n3.dot(away) < 0.0:
+                n3 = -n3
+            var i0: int = pos.size()
+            for p in e:
+                pos.append(p)
+                nrm.append(n3)
+                col.append(colour.darkened(0.15))
+                uv.append(Vector2(base_y,0.0))
+            if (e[1]-e[0]).cross(e[2]-e[0]).dot(n3) > 0.0:
+                idx.append_array([i0,i0+2,i0+1])
+            else:
+                idx.append_array([i0,i0+1,i0+2])
+
+    func commit(mat: Material, glow_mat: Material, origin: Vector3) -> ArrayMesh:
+        var mesh := ArrayMesh.new()
+        if not pos.is_empty():
+            var p2 := PackedVector3Array()
+            p2.resize(pos.size())
+            for k in range(pos.size()):
+                p2[k] = pos[k]-origin
+            var arr: Array = []
+            arr.resize(Mesh.ARRAY_MAX)
+            arr[Mesh.ARRAY_VERTEX] = p2
+            arr[Mesh.ARRAY_NORMAL] = nrm
+            arr[Mesh.ARRAY_COLOR] = col
+            arr[Mesh.ARRAY_TEX_UV] = uv
+            arr[Mesh.ARRAY_INDEX] = idx
+            mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arr)
+            mesh.surface_set_material(mesh.get_surface_count()-1,mat)
+        if not gpos.is_empty():
+            var g2 := PackedVector3Array()
+            g2.resize(gpos.size())
+            for k2 in range(gpos.size()):
+                g2[k2] = gpos[k2]-origin
+            var arr2: Array = []
+            arr2.resize(Mesh.ARRAY_MAX)
+            arr2[Mesh.ARRAY_VERTEX] = g2
+            arr2[Mesh.ARRAY_NORMAL] = gnrm
+            arr2[Mesh.ARRAY_COLOR] = gcol
+            arr2[Mesh.ARRAY_INDEX] = gidx
+            mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arr2)
+            mesh.surface_set_material(mesh.get_surface_count()-1,glow_mat)
         return mesh
