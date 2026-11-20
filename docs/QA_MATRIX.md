@@ -28,6 +28,10 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | E30: 41 288 triangles (budget 42 000), 8 draw calls, paint / atlas / glass, dimensions unchanged, garage fit over a full turn (min margin 1.6 %) | Linux container | PASS | e30_factory_car_test |
 | Lada / RYU-32 physics bit-identical, other cars' shaders untouched | Linux container | PASS | car_profiles_test, visual_identity_test |
 | BEFORE / AFTER garage views, close-ups, race top-down + chase, v0.1 vs v0.2 from the 3 solved photo cameras | Xvfb + llvmpipe | DONE | docs/car_factory/e30_v02/ |
+| CI on 6e0bb46: Godot import + suite | GitHub Actions Linux | PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758548860 |
+| CI: Android debug APK v0.1.26 (versionCode 26), artifact id 14640406215 | GitHub Actions | BUILT, NOT INSTALLED | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758549156 |
+| CI: Web preview v0.1.26, artifact id 14641265916 | GitHub Actions | BUILT, NOT PLAYTESTED | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758548916 |
+| CI: desktop Linux + Windows, Foundation checks | GitHub Actions | BUILT / PASS | https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758548983 , https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758549136 |
 | **Phone review of the refined E30** | owner | **NOT RUN** | owner |
 
 ## v0.1.25 local evidence — Terrain-first Track Builder (Claude Code cloud container, 2026-11-20)

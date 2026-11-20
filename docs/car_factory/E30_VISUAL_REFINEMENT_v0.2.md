@@ -52,7 +52,7 @@ segments, vent tunnels 12 -> 10 segments.
 | identical BEFORE / AFTER views + close-ups + race cameras | DONE (Xvfb, llvmpipe) |
 | comparison with the three NIGHTRIDE photos (solved photo cameras, v0.1 vs v0.2) | DONE; better: black grille panel, body-coloured A-pillars, warmer paint, lamp detail, segmented tail lamps, deep polished dish |
 | phone look (screen, brightness, real GPU) | NOT RUN — owner |
-| CI Web + Android builds | see docs/QA_MATRIX.md (v0.1.26) |
+| CI on commit 6e0bb46: Godot suite PASS, Android debug APK v0.1.26 BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758549156)), Web BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44758548916)), desktop BUILT, Foundation PASS | PASS / BUILT (not installed or played) |
 
 ## Still different from the photos / not done
 
@@ -62,4 +62,4 @@ segments, vent tunnels 12 -> 10 segments.
 - Bonnet creases are deliberately subtle (4 mm); a stronger version caused uneven reflections on the 8 mm-scale
   mesh.
 
-Revert: this pass is one commit; `git revert <sha>` restores v0.1 of the car (GLBs, shaders, profile and tools).
+Revert: this pass is one commit, 6e0bb46; `git revert 6e0bb46` restores v0.1 of the car (GLBs, shaders, profile, tools, version) — the docs-only follow-up commit can stay.
