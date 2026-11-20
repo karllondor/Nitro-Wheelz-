@@ -78,7 +78,7 @@ const ARCHETYPES: Dictionary = {
     "pl_tatry":{"country":"poland","name":"TATRY MOUNTAIN","short":"TATRY",
         "grade":0.06,"grade_hint":"2–6 %","relief":"alpine","sea":false,
         "ground":{"low":Color(0.36,0.52,0.27),"high":Color(0.44,0.50,0.32),"dirt":Color(0.44,0.38,0.30),
-            "rock":Color(0.47,0.46,0.46),"snow":Color(0.94,0.95,0.98),"tint":Color(0.30,0.40,0.24),
+            "rock":Color(0.42,0.42,0.43),"snow":Color(0.86,0.88,0.92),"tint":Color(0.30,0.40,0.24),
             "shore":Color(0.50,0.50,0.48)},
         "kerb":[Color(0.10,0.33,0.80),Color(0.90,0.91,0.93)],"runoff":Color(0.34,0.68,0.66),
         "rock_kind":"granite","tint_mask":"none",

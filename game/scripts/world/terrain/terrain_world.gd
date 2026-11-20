@@ -45,6 +45,9 @@ var env: Environment
 var _fog_base: float = 0.001
 ## Race sets a draw range for vegetation / rocks (0 = everything, builder).
 var scenery_range: float = 0.0
+## Urban: distance of each terrain vertex from the road edge (street paint
+## mask; INF = far from the road).
+var road_gap: PackedFloat32Array = PackedFloat32Array()
 
 func setup(descriptor: Dictionary) -> NitroTerrainWorld:
     desc = descriptor.duplicate(true)
@@ -77,6 +80,25 @@ func build() -> void:
     ground_mat = ShaderMaterial.new()
     ground_mat.shader = GROUND_SHADER
     ground_mat.set_shader_parameter("detail",DETAIL)
+    # Rock strata by geology (v0.1.27).
+    var strata: Dictionary = {"limestone":[0.85,1.3],"granite":[0.55,0.7],"basalt":[0.75,1.6],
+        "mossy":[0.35,1.0],"earth_cut":[0.45,1.1],"none":[0.0,1.0]}
+    var sp: Array = strata.get(str(field.info["rock_kind"]),[0.4,1.0])
+    ground_mat.set_shader_parameter("strata",float(sp[0]))
+    ground_mat.set_shader_parameter("strata_scale",float(sp[1]))
+    if field.relief == "urban":
+        road_gap.resize(field.base.size())
+        road_gap.fill(INF)
+        var g: Dictionary = field.city_grid()
+        ground_mat.set_shader_parameter("city",1.0)
+        ground_mat.set_shader_parameter("city_u",g["u"])
+        ground_mat.set_shader_parameter("city_pitch",g["pitch"])
+        ground_mat.set_shader_parameter("city_off",g["off"])
+        ground_mat.set_shader_parameter("city_every",float(g["every"]))
+        ground_mat.set_shader_parameter("city_phase",Vector2(g["phase"]))
+        ground_mat.set_shader_parameter("city_side_w",float(g["side_w"]))
+        ground_mat.set_shader_parameter("city_ave_w",float(g["ave_w"]))
+        ground_mat.set_shader_parameter("city_walk",float(g["walk"]))
     if with_lighting:
         _build_lighting()
     _build_far_ring()
@@ -130,6 +152,9 @@ func set_road(samples: Array[Vector2], halfwidths: PackedFloat32Array, heights: 
 
 func _deform() -> void:
     var h: PackedFloat32Array = field.base.duplicate()
+    if field.relief == "urban":
+        road_gap.resize(h.size())
+        road_gap.fill(INF)
     if road.is_empty():
         field.height = h
         return
@@ -191,8 +216,11 @@ func _deform() -> void:
                     touched[k] = true
     var coast: bool = field.relief == "coast"
     var rocky: bool = str(field.info["rock_kind"]) in ["granite","limestone","basalt"]
+    var urban: bool = field.relief == "urban"
     for k in touched.keys():
         var d2: float = sqrt(best_d[k])
+        if urban:
+            road_gap[k] = d2-best_w[k]
         var core: float = best_w[k]+BENCH_M
         if d2 > core+INFLUENCE_M-6.0:
             continue
@@ -228,6 +256,8 @@ func _chunk_hash(id: Vector2i) -> int:
     for j in range(j0,j0+CHUNK_CELLS+1):
         for i in range(i0,i0+CHUNK_CELLS+1):
             acc = (acc*131+int(round(field.height[j*field.nx+i]*50.0))) & 0x7fffffff
+            if not road_gap.is_empty():
+                acc = (acc*7+int(round(clampf(road_gap[j*field.nx+i],0.0,20.0)))) & 0x7fffffff
     return acc
 
 # ---------------------------------------------------------------- meshes
@@ -258,6 +288,15 @@ func _ground_colour(k: int, i: int, j: int) -> Color:
     elif dd < -0.8:
         var cut_col: Color = Color(g["rock"]) if str(field.info["rock_kind"]) in ["granite","limestone","basalt"] else Color(g["dirt"])
         col = col.lerp(cut_col,clampf(-dd/3.0,0.0,0.85))          # exposed cutting
+    if field.relief == "urban":
+        # Street paint mask (alpha): not next to the race road, not on the
+        # shore, not up the hills behind the city.
+        var a: float = 1.0-smoothstep(10.0,14.0,b)
+        if not road_gap.is_empty():
+            a *= smoothstep(9.0,15.0,road_gap[k])
+        if b < FIELD.SEA_LEVEL+1.0:
+            a = 0.0
+        col.a = a
     return col
 
 func _vertex(i: int, j: int) -> Vector3:
@@ -265,11 +304,12 @@ func _vertex(i: int, j: int) -> Vector3:
     var z: float = -FIELD.HALF_Z+float(j)*FIELD.STEP
     var y: float = field.height[j*field.nx+i]
     if field.relief == "coast":
+        # Snap the grid onto the cliff line (local x, mirrored per seed).
         var d: float = field.coast_distance(x,z)
         if d >= 0.0 and d < FIELD.STEP:
-            x -= d-0.3
+            x -= (d-0.3)*field.mx
         elif d < 0.0 and d > -FIELD.STEP:
-            x += -d-0.3
+            x += (-d-0.3)*field.mx
     return Vector3(x,y,z)
 
 func _normal(i: int, j: int) -> Vector3:
@@ -424,11 +464,13 @@ func _build_water() -> void:
         var first: bool = true
         var z: float = -FIELD.HALF_Z
         while z <= FIELD.HALF_Z:
-            var v: float = z/FIELD.PLAY_HALF_Z
-            var cx: float = (field.canyon_u(v)+0.05*sin(v*7.0+field._phase*2.0))*FIELD.PLAY_HALF_X
-            var y: float = field.base_at(cx,z)+1.0
-            var l := Vector3(cx-4.6,y,z)
-            var r := Vector3(cx+4.6,y,z)
+            var cx: float = field.stream_x(z)
+            var wc: Vector2 = field.to_world(cx,z)
+            var y: float = field.base_at(wc.x,wc.y)+1.0
+            var wl: Vector2 = field.to_world(cx-4.6,z)
+            var wr: Vector2 = field.to_world(cx+4.6,z)
+            var l := Vector3(wl.x,y,wl.y)
+            var r := Vector3(wr.x,y,wr.y)
             if not first:
                 for p in [prev_l,prev_r,l,l,prev_r,r]:
                     st.set_normal(Vector3.UP)
@@ -445,41 +487,71 @@ func _build_water() -> void:
         add_child(node)
 
 func _build_cliff_face() -> void:
-    # Dedicated vertical rock face along the sea cliff (not a stretched
-    # heightfield): jittered columns from below the waterline to the top.
+    # v0.1.27: dedicated vertical rock face along the sea cliff with basalt
+    # strata (alternating bands and small ledges), a surf line at its foot
+    # and sea stacks offshore. Built in the seed's local frame, then mirrored.
     var g: Dictionary = field.info["ground"]
+    var rock: Color = Color(g["rock"])
     var st := SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var foam := SurfaceTool.new()
+    foam.begin(Mesh.PRIMITIVE_TRIANGLES)
     var z: float = -FIELD.HALF_Z-60.0
     var step: float = 5.0
+    var rows: int = 10
     var prev: Array = []
+    var prev_f: Array = []
+    var nx: float = -field.mx
     while z <= FIELD.HALF_Z+60.0:
         var x: float = field.coast_x(z)-0.45
-        var top: float = field.raw_height(x+3.0,z)-0.2
+        var wtop: Vector2 = field.to_world(x+3.0,z)
+        var top: float = field.raw_height(wtop.x,wtop.y)-0.2
         var col: Array = []
-        var rows: int = 6
         for r in range(rows+1):
             var f: float = float(r)/float(rows)
             var y: float = lerpf(-8.0,top,f)
-            var jitter: float = 1.4*field._n(5,z*1.7,y*1.3)+0.9*sin(z*0.9+y*0.5)
-            col.append(Vector3(x-maxf(0.0,jitter)-0.2,y,z))
+            var jitter: float = 1.6*field._n(5,z*1.7,y*1.3)+0.9*sin(z*0.9+y*0.5)
+            var ledge: float = 0.9 if r % 3 == 1 else 0.0            # strata ledges
+            var lx: float = x-maxf(0.0,jitter)-0.2-ledge
+            var w: Vector2 = field.to_world(lx,z)
+            col.append(Vector3(w.x,y,w.y))
         if not prev.is_empty():
             for r in range(rows):
+                var band: float = 0.86 if r % 2 == 0 else 1.0
+                var shade: float = (0.70+0.30*(float(r)/float(rows)))*band
+                var rc: Color = rock*shade
+                if r == 0:
+                    rc = rc.darkened(0.40)
                 var a: Vector3 = prev[r]
                 var b: Vector3 = col[r]
                 var c: Vector3 = col[r+1]
                 var d: Vector3 = prev[r+1]
-                var nrm := Vector3(-1.0,0.0,0.0)
-                var shade: float = 0.75+0.25*(float(r)/float(rows))
-                var rc: Color = Color(g["rock"]).darkened(0.25*(1.0-shade))
-                if r == 0:
-                    rc = rc.darkened(0.35)
                 for p in [a,b,c,a,c,d]:
                     st.set_color(rc)
-                    st.set_normal(nrm)
+                    st.set_normal(Vector3(nx,0.0,0.0))
                     st.add_vertex(p)
+        # Surf line: a white band on the water along the foot of the cliff.
+        var f0: Vector2 = field.to_world(x-0.5,z)
+        var f1: Vector2 = field.to_world(x-7.0-3.0*absf(sin(z*0.07)),z)
+        var fc: Array = [Vector3(f0.x,0.18,f0.y),Vector3(f1.x,0.18,f1.y)]
+        if not prev_f.is_empty():
+            for p in [prev_f[0],fc[0],fc[1],prev_f[0],fc[1],prev_f[1]]:
+                foam.set_color(Color(0.92,0.95,0.97,1.0))
+                foam.set_normal(Vector3.UP)
+                foam.add_vertex(p)
         prev = col
+        prev_f = fc
         z += step
+    # Sea stacks: jagged basalt columns standing offshore.
+    var rng := RandomNumberGenerator.new()
+    rng.seed = field.terrain_seed*977+13
+    var count: int = rng.randi_range(4,7)
+    for k in range(count):
+        var lz: float = rng.randf_range(-FIELD.HALF_Z*0.95,FIELD.HALF_Z*0.95)
+        var lx: float = field.coast_x(lz)-rng.randf_range(26.0,130.0)
+        var rad: float = rng.randf_range(6.0,15.0)
+        var top2: float = float(field.macro.get("cliff_h",58.0))*rng.randf_range(0.40,0.92)
+        _stack(st,field.to_world(lx,lz),rad,top2,rock,rng)
     var mesh: ArrayMesh = st.commit()
     var mat := StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo = true
@@ -490,6 +562,50 @@ func _build_cliff_face() -> void:
     node.name = "Sea cliff face"
     node.mesh = mesh
     add_child(node)
+    var fm: ArrayMesh = foam.commit()
+    var fmat := StandardMaterial3D.new()
+    fmat.vertex_color_use_as_albedo = true
+    fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    fmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    fm.surface_set_material(0,fmat)
+    var fnode := MeshInstance3D.new()
+    fnode.name = "Surf line"
+    fnode.mesh = fm
+    fnode.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(fnode)
+
+func _stack(st: SurfaceTool, c: Vector2, rad: float, top: float, rock: Color, rng: RandomNumberGenerator) -> void:
+    var sides: int = 8
+    var tiers: int = 5
+    var rings: Array = []
+    for t in range(tiers+1):
+        var f: float = float(t)/float(tiers)
+        var y: float = lerpf(-9.0,top,f)
+        var rr: float = rad*(1.0-0.28*f)
+        var ring: Array = []
+        for k in range(sides):
+            var a: float = TAU*float(k)/float(sides)
+            var j: float = rr*rng.randf_range(0.80,1.15)
+            ring.append(Vector3(c.x+cos(a)*j,y,c.y+sin(a)*j))
+        rings.append(ring)
+    for t in range(tiers):
+        var shade: Color = rock*(0.78+0.22*float(t)/float(tiers))*(0.88 if t % 2 == 0 else 1.0)
+        for k in range(sides):
+            var a: Vector3 = rings[t][k]
+            var b: Vector3 = rings[t][(k+1)%sides]
+            var d: Vector3 = rings[t+1][(k+1)%sides]
+            var e: Vector3 = rings[t+1][k]
+            var n: Vector3 = ((a+b)*0.5-Vector3(c.x,(a.y+e.y)*0.5,c.y)).normalized()
+            for p in [a,b,d,a,d,e]:
+                st.set_color(shade)
+                st.set_normal(n)
+                st.add_vertex(p)
+    var cap: Vector3 = Vector3(c.x,top+rad*0.15,c.y)
+    for k in range(sides):
+        for p in [rings[tiers][k],rings[tiers][(k+1)%sides],cap]:
+            st.set_color(Color(0.36,0.48,0.26))     # grass on the stack top
+            st.set_normal(Vector3.UP)
+            st.add_vertex(p)
 
 # ------------------------------------------------------------ structures
 

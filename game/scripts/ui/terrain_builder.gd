@@ -97,6 +97,13 @@ var setup_box: Control
 var build_box: Control
 var buttons: Dictionary = {}
 var _last_fog: float = -1.0
+var pending_panel: Panel
+var pending_label: Label
+var dim_rect: ColorRect
+# Camera line-of-sight cache (v0.1.27): effective pitch that keeps the
+# building area visible over mountain walls.
+var _cam_key: String = ""
+var view_pitch: float = 40.0
 
 func _ready() -> void:
     STYLE.ensure_settings()
@@ -331,6 +338,36 @@ func _build_ui() -> void:
     desc_label.add_theme_constant_override("outline_size",int(5.0*ui_unit))
     desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     setup_box.add_child(desc_label)
+    # Pending-generation state (v0.1.27): the old landscape is dimmed and a
+    # clear card says the new selection is not generated yet.
+    dim_rect = ColorRect.new()
+    dim_rect.name = "Pending dim"
+    dim_rect.color = Color(0.0,0.0,0.0,0.45)
+    dim_rect.position = Vector2(0.0,header_rect.end.y)
+    dim_rect.size = Vector2(s.x,y1-row_h*1.3-header_rect.end.y)
+    dim_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dim_rect.visible = false
+    ui_root.add_child(dim_rect)
+    ui_root.move_child(dim_rect,0)
+    pending_panel = Panel.new()
+    pending_panel.name = "Pending generation"
+    var pb: StyleBoxFlat = STYLE.modal_box(ui_unit)
+    pending_panel.add_theme_stylebox_override("panel",pb)
+    pending_panel.size = Vector2(s.x*0.80,s.y*0.13)
+    pending_panel.position = Vector2(s.x*0.10,header_rect.end.y+(y1-row_h*1.3-header_rect.end.y)*0.5-s.y*0.065)
+    pending_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pending_panel.visible = false
+    ui_root.add_child(pending_panel)
+    pending_label = Label.new()
+    pending_label.name = "Pending text"
+    pending_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    pending_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    pending_label.size = pending_panel.size
+    pending_label.add_theme_font_override("font",STYLE.BOLD)
+    pending_label.add_theme_font_size_override("font_size",int(17.0*ui_unit))
+    pending_label.add_theme_color_override("font_color",STYLE.WHITE)
+    pending_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pending_panel.add_child(pending_label)
     # BUILD bar: two rows.
     build_box = Control.new()
     build_box.name = "Build"
@@ -379,11 +416,26 @@ func _button(parent: Control, text: String, method: String, rect: Rect2, key: St
     buttons[key] = b
     return b
 
+## The selection differs from the landscape on screen (not generated yet).
+func is_pending() -> bool:
+    return world == null or str(world.desc.get("archetype","")) != archetype
+
 func _refresh_titles() -> void:
     if title_label == null:
         return
     var inf: Dictionary = CAT.info(archetype)
-    title_label.text = "%s • %s • SEED %d" % [str(CAT.COUNTRY_NAMES[country]),str(inf["name"]),terrain_seed]
+    var pending: bool = is_pending()
+    if pending and world != null:
+        var shown: Dictionary = CAT.info(str(world.desc.get("archetype","")))
+        title_label.text = "%s SELECTED • NOT GENERATED (SHOWING %s)" % [str(inf["name"]),str(shown["short"])]
+    else:
+        title_label.text = "%s • %s • SEED %d" % [str(CAT.COUNTRY_NAMES[country]),str(inf["name"]),terrain_seed]
+    if pending_panel != null:
+        pending_panel.visible = pending and stage == "setup"
+        dim_rect.visible = pending and stage == "setup"
+        pending_label.text = "%s • %s\nNOT GENERATED YET\nTAP  GENERATE TERRAIN" % [str(CAT.COUNTRY_NAMES[country]),str(inf["name"])]
+    if buttons.has("DRAW ROAD ▶"):
+        (buttons["DRAW ROAD ▶"] as Button).disabled = pending
     desc_label.text = "%s\nROAD GRADE %s • EVENT %s" % [str(inf["desc"]),str(inf["grade_hint"]),event_mode.to_upper()]
     for c in CAT.COUNTRIES:
         if buttons.has("country_"+c):
@@ -397,6 +449,7 @@ func _refresh_titles() -> void:
     var gen: Button = buttons.get("GENERATE TERRAIN",null)
     if gen != null:
         gen.text = "NEW LANDSCAPE ↻" if generated_key == "%s/%d" % [archetype,terrain_seed] else "GENERATE TERRAIN"
+        STYLE.style_button(gen,ui_unit,is_pending())
     if buttons.has("DRAW"):
         STYLE.style_button(buttons["DRAW"],ui_unit,mode == "draw")
         STYLE.style_button(buttons["ERASE"],ui_unit,mode == "erase")
@@ -436,6 +489,9 @@ func _enter_setup() -> void:
     _status("DRAG TO LOOK AROUND • PINCH TO ZOOM • GENERATE TERRAIN AGAIN FOR A NEW LANDSCAPE",true)
 
 func _enter_build() -> void:
+    if is_pending():
+        _status("GENERATE THE SELECTED LANDSCAPE FIRST",false)
+        return
     stage = "build"
     setup_box.visible = false
     build_box.visible = true
@@ -535,13 +591,57 @@ func _fit() -> void:
     var need: float = maxf(b.size.y,b.size.x/maxf(aspect,0.3))
     goal_dist = clampf(need*1.35/tan(deg_to_rad(camera.fov*0.5))*0.5,DIST_MIN,DIST_MAX)
 
-func _apply_camera() -> void:
-    var p: float = deg_to_rad(cam_pitch)
+func _cam_pos(pitch_deg: float) -> Vector3:
+    var p: float = deg_to_rad(pitch_deg)
     var y: float = deg_to_rad(cam_yaw)
-    var off := Vector3(sin(y)*cos(p),sin(p),cos(y)*cos(p))*cam_dist
-    camera.position = cam_target+off
+    var pos: Vector3 = cam_target+Vector3(sin(y)*cos(p),sin(p),cos(y)*cos(p))*cam_dist
     if world != null:
-        camera.position.y = maxf(camera.position.y,world.height_at(camera.position.x,camera.position.z)+12.0)
+        pos.y = maxf(pos.y,world.height_at(pos.x,pos.z)+12.0)
+    return pos
+
+## Terrain between the camera and a ground point (sampled along the ray).
+func _occluded(from: Vector3, to: Vector3) -> bool:
+    var n: int = 28
+    for k in range(1,n-2):
+        var p: Vector3 = from.lerp(to,float(k)/float(n))
+        if world.height_at(p.x,p.z) > p.y-4.0:
+            return true
+    return false
+
+## v0.1.27 FIT / occlusion: the camera rises (steeper pitch) until it sees
+## the target and the corners of the area around it over any mountain wall
+## or snow ridge, instead of looking through the terrain.
+func _clear_pitch() -> float:
+    if world == null:
+        return cam_pitch
+    var y: float = deg_to_rad(cam_yaw)
+    var fwd := Vector3(-sin(y),0.0,-cos(y))
+    var right := Vector3(cos(y),0.0,-sin(y))
+    var r: float = clampf(cam_dist*0.32,40.0,360.0)
+    var pts: Array[Vector3] = [cam_target]
+    for o in [fwd*r,-fwd*r,right*r,-right*r]:
+        var q: Vector3 = cam_target+o
+        pts.append(Vector3(q.x,world.height_at(q.x,q.z),q.z))
+    var p: float = cam_pitch
+    for _i in range(16):
+        var pos: Vector3 = _cam_pos(p)
+        var blocked: bool = false
+        for q2 in pts:
+            if _occluded(pos,q2):
+                blocked = true
+                break
+        if not blocked or p >= 86.0:
+            break
+        p = minf(p+4.0,86.0)
+    return p
+
+func _apply_camera() -> void:
+    var key: String = "%.1f|%.1f|%.1f|%.1f|%.2f|%.2f" % [cam_target.x,cam_target.z,cam_target.y,cam_dist,cam_pitch,cam_yaw]
+    if key != _cam_key:
+        _cam_key = key
+        view_pitch = _clear_pitch()
+    camera.position = _cam_pos(view_pitch)
+    camera.near = clampf(cam_dist*0.0025,0.3,4.0)
     camera.look_at(cam_target,Vector3.UP)
     if world != null:
         # Overview without haze (it washed the whole map out); a little

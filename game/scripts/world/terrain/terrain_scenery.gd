@@ -286,9 +286,13 @@ func _build_chunk(id: Vector2i) -> void:
     _field_lines(per,shadows,node,x0,z0,span)
     if relief == "urban":
         _city_blocks(node,id,x0,z0,span)
-    for sp2 in per.keys():
+    var keys: Array = per.keys()
+    keys.sort()
+    for sp2 in keys:
         var pair: Array = per[sp2]
-        _multimesh(node,"Trees %s" % sp2,_species_mesh(str(sp2)),_veg_mat,pair[0],pair[1])
+        var parts: PackedStringArray = str(sp2).split("#")
+        _multimesh(node,"Trees %s" % sp2,_species_mesh(parts[0],int(parts[1]) if parts.size() > 1 else 0),
+            _veg_mat,pair[0],pair[1])
         counts["tree_"+str(sp2)] = int(counts.get("tree_"+str(sp2),0))
     var quad := PlaneMesh.new()
     quad.size = Vector2.ONE
@@ -298,18 +302,24 @@ func _build_chunk(id: Vector2i) -> void:
 func _add_tree(per: Dictionary, shadows: Array[Transform3D], sp: String, x: float, z: float, h: float,
         rng: RandomNumberGenerator) -> void:
     var y: float = field.height_at(x,z)-0.25
-    var basis := Basis(Vector3.UP,rng.randf_range(0.0,TAU)).scaled(Vector3.ONE*h)
+    # v0.1.27 variety: own proportions per tree (slim / broad), a slight
+    # lean and one of two crown variants per species.
+    var wide: float = rng.randf_range(0.82,1.22)
+    var tall: float = rng.randf_range(0.88,1.12)
+    var lean := Basis(Vector3(rng.randf_range(-1,1),0,rng.randf_range(-1,1)).normalized(),rng.randf_range(0.0,0.07))
+    var basis := lean*Basis(Vector3.UP,rng.randf_range(0.0,TAU)).scaled(Vector3(wide*h,tall*h,wide*h))
     if sp == "windswept":
-        # Prevailing Atlantic wind from the west: lean towards +x.
-        basis = Basis(Vector3.FORWARD,-0.20)*Basis(Vector3.UP,rng.randf_range(-0.4,0.4)).scaled(Vector3.ONE*h)
-    if not per.has(sp):
-        per[sp] = [[],[]]
-    per[sp][0].append(Transform3D(basis,Vector3(x,y,z)))
+        # Prevailing Atlantic wind from the sea: lean away from the cliff.
+        basis = Basis(Vector3.FORWARD,-0.20*field.mx)*Basis(Vector3.UP,rng.randf_range(-0.4,0.4)).scaled(Vector3(wide*h,tall*h,wide*h))
+    var key: String = "%s#%d" % [sp,rng.randi_range(0,1)]
+    if not per.has(key):
+        per[key] = [[],[]]
+    per[key][0].append(Transform3D(basis,Vector3(x,y,z)))
     var col: Color = SPECIES[sp]["col"]
     col = col.lightened(rng.randf_range(-0.10,0.12))
     if sp.begins_with("autumn"):
         col = col.lerp(Color(0.95,0.62,0.18),rng.randf_range(0.0,0.25))
-    per[sp][1].append(col)
+    per[key][1].append(col)
     var nrm: Vector3 = _ground_normal(x,z)
     var r: float = h*(0.45 if SPECIES[sp]["shape"] not in ["spire","tiers","umbrella"] else 0.30)
     var up: Vector3 = nrm
@@ -328,8 +338,7 @@ func _scatter_rocks(node: Node3D, id: Vector2i, x0: float, z0: float, span: floa
     if kind == "none":
         return
     var rng: RandomNumberGenerator = _rng_for(id,2)
-    var xf: Array[Transform3D] = []
-    var cols: Array[Color] = []
+    var groups: Dictionary = {}        # variant -> [xforms, colours]
     var base_col: Color = Color(info["ground"]["rock"])
     var tries: int = 90
     for _k in range(tries):
@@ -345,20 +354,32 @@ func _scatter_rocks(node: Node3D, id: Vector2i, x0: float, z0: float, span: floa
         if _blocked(Vector2(x,z),s):
             continue
         var basis := Basis(Vector3.UP,rng.randf_range(0,TAU))*Basis(Vector3.RIGHT,rng.randf_range(-0.3,0.3))
-        var tall: float = rng.randf_range(0.55,1.0)
-        if kind == "limestone" and rk > 0.45 and rng.randf() < 0.22:
-            # Ojcow-style limestone pillar (ostaniec)
-            tall = rng.randf_range(4.0,8.5)
-            s *= 1.3
-        basis = basis.scaled(Vector3(s*rng.randf_range(0.9,1.5),s*tall,s*rng.randf_range(0.9,1.4)))
-        xf.append(Transform3D(basis,Vector3(x,field.height_at(x,z)-0.3*s,z)))
+        var tall: float = rng.randf_range(0.70,1.15)
+        var variant: String = "boulder"
+        match kind:
+            "granite":
+                variant = "slab" if rng.randf() < 0.45 else "boulder"
+            "limestone":
+                variant = "slab"
+                if rk > 0.45 and rng.randf() < 0.22:
+                    # Ojcow-style limestone pillar (ostaniec)
+                    variant = "pillar"
+                    tall = rng.randf_range(3.0,6.5)
+                    s *= 1.3
+            "basalt":
+                variant = "columns" if rng.randf() < 0.55 else "slab"
+        basis = basis.scaled(Vector3(s*rng.randf_range(0.9,1.4),s*tall,s*rng.randf_range(0.9,1.3)))
+        if not groups.has(variant):
+            groups[variant] = [[],[]]
+        groups[variant][0].append(Transform3D(basis,Vector3(x,field.height_at(x,z)-0.25*s,z)))
         var c: Color = base_col.lightened(rng.randf_range(-0.12,0.14))
         if kind == "mossy":
             c = c.lerp(Color(0.30,0.40,0.22),0.45)
-        cols.append(c)
-    if not xf.is_empty():
-        _multimesh(node,"Rocks",_rock_mesh(),_rock_mat,xf,cols,false)
-        counts["rocks"] = int(counts.get("rocks",0))
+        groups[variant][1].append(c)
+    var gk: Array = groups.keys()
+    gk.sort()
+    for v in gk:
+        _multimesh(node,"Rocks "+str(v),_rock_mesh(str(v)),_rock_mat,groups[v][0],groups[v][1],false)
 
 ## Irish field boundaries: hawthorn hedgerows (hills) / dry-stone walls
 ## (coast), following the same field pattern as the ground tint.
@@ -491,7 +512,7 @@ func _recount() -> void:
         for child in node.get_children():
             if child is MultiMeshInstance3D:
                 var nm: String = str(child.name)
-                var key: String = "rocks" if nm == "Rocks" else ("shadows" if nm == "Tree shadows" else nm.replace("Trees ","tree_"))
+                var key: String = "rocks" if nm.begins_with("Rocks") else ("shadows" if nm == "Tree shadows" else nm.replace("Trees ","tree_"))
                 c[key] = int(c.get(key,0))+(child as MultiMeshInstance3D).multimesh.instance_count
             elif child is MeshInstance3D:
                 c[str(child.name)] = int(c.get(str(child.name),0))+1
@@ -1063,13 +1084,14 @@ func _skyline(acc, rng: RandomNumberGenerator) -> void:
 
 # ----------------------------------------------------------------- meshes
 
-func _species_mesh(sp: String) -> ArrayMesh:
+func _species_mesh(sp: String, variant: int = 0) -> ArrayMesh:
     var shape: String = str(SPECIES[sp]["shape"])
-    if _meshes.has(shape):
-        return _meshes[shape]
+    var mkey: String = "%s#%d" % [shape,variant]
+    if _meshes.has(mkey):
+        return _meshes[mkey]
     var b := _MeshBuild.new()
     var rng := RandomNumberGenerator.new()
-    rng.seed = 4242+shape.hash()
+    rng.seed = 4242+shape.hash()+variant*7919
     match shape:
         "voxel":
             b.box(Vector3(0,0.22,0),Vector3(0.05,0.44,0.05),TRUNK,0.0)
@@ -1121,18 +1143,34 @@ func _species_mesh(sp: String) -> ArrayMesh:
             b.cylinder(Vector3(0,0,0),0.06,0.04,0.55,5,TRUNK,0.0)
             b.blob(Vector3(0.22,0.66,0),Vector3(0.48,0.22,0.30),8,3,1.0,rng)
     var mesh: ArrayMesh = b.commit()
-    _meshes[shape] = mesh
+    _meshes[mkey] = mesh
     return mesh
 
-func _rock_mesh() -> ArrayMesh:
-    if _meshes.has("rock"):
-        return _meshes["rock"]
+## v0.1.27 rocks by geology: faceted, angular bodies (flat-shaded facets,
+## lighter tops) instead of one smooth blob. Variants: "boulder", "slab",
+## "pillar" (limestone ostaniec), "columns" (basalt hexagonal columns).
+func _rock_mesh(variant: String = "boulder") -> ArrayMesh:
+    var mkey: String = "rock_"+variant
+    if _meshes.has(mkey):
+        return _meshes[mkey]
     var b := _MeshBuild.new()
     var rng := RandomNumberGenerator.new()
-    rng.seed = 99
-    b.blob(Vector3(0,0.35,0),Vector3(0.6,0.5,0.6),7,3,1.0,rng,0.22)
+    rng.seed = 99+variant.hash()
+    match variant:
+        "slab":
+            b.facets(Vector3(0,0.22,0),Vector3(0.85,0.32,0.62),6,3,rng,0.20)
+        "pillar":
+            b.facets(Vector3(0,0.50,0),Vector3(0.42,0.62,0.38),6,4,rng,0.16)
+            b.facets(Vector3(0.10,1.05,0.04),Vector3(0.30,0.24,0.28),5,2,rng,0.20)
+        "columns":
+            for k in range(5):
+                var a: float = TAU*float(k)/5.0
+                var c := Vector3(cos(a)*0.32,0,sin(a)*0.32) if k > 0 else Vector3.ZERO
+                b.hex_column(c,0.22,rng.randf_range(0.55,1.0))
+        _:
+            b.facets(Vector3(0,0.34,0),Vector3(0.62,0.48,0.58),6,3,rng,0.24)
     var mesh: ArrayMesh = b.commit()
-    _meshes["rock"] = mesh
+    _meshes[mkey] = mesh
     return mesh
 
 func _multimesh(parent: Node3D, label: String, mesh: Mesh, material: Material,
@@ -1284,6 +1322,64 @@ class _MeshBuild:
                     _tri(a,b,cc)
                 if r2 < rings-1:
                     _tri(a,cc,d2)
+
+    ## Angular rock: jittered ellipsoid with flat-shaded facets (each
+    ## triangle its own normal), lighter towards the top.
+    func facets(c: Vector3, radii: Vector3, seg: int, rings: int, rng: RandomNumberGenerator, jitter: float) -> void:
+        var grid: Array = []
+        for r in range(rings+1):
+            var row: Array = []
+            var phi: float = PI*float(r)/float(rings)
+            for k in range(seg):
+                var th: float = TAU*(float(k)+(0.5 if r % 2 == 1 else 0.0))/float(seg)
+                var d := Vector3(sin(phi)*cos(th),cos(phi),sin(phi)*sin(th))
+                var j: float = 1.0+rng.randf_range(-jitter,jitter) if r > 0 and r < rings else 1.0
+                var p: Vector3 = c+d*radii*j
+                if r == rings:
+                    p.y = c.y-radii.y*0.55            # flat underside sits on the ground
+                row.append(p)
+            grid.append(row)
+        for r2 in range(rings):
+            for k2 in range(seg):
+                var a: Vector3 = grid[r2][k2]
+                var b: Vector3 = grid[r2][(k2+1)%seg]
+                var cc: Vector3 = grid[r2+1][(k2+1)%seg]
+                var d2: Vector3 = grid[r2+1][k2]
+                for tri in [[a,b,cc],[a,cc,d2]]:
+                    var n: Vector3 = (tri[1]-tri[0]).cross(tri[2]-tri[0])
+                    if n.length() < 1e-6:
+                        continue
+                    n = n.normalized()
+                    if n.dot((tri[0]+tri[1]+tri[2])/3.0-c) < 0.0:
+                        n = -n
+                    var shade: float = 0.66+0.34*clampf(0.5+0.5*n.y,0.0,1.0)
+                    var i0: int = _v(tri[0],n,Color(shade,shade,shade,1.0))
+                    var i1: int = _v(tri[1],n,Color(shade,shade,shade,1.0))
+                    var i2: int = _v(tri[2],n,Color(shade,shade,shade,1.0))
+                    _tri(i0,i1,i2)
+
+    ## Basalt column: hexagonal prism with a flat, lighter top.
+    func hex_column(c: Vector3, r: float, h: float) -> void:
+        var ring: Array = []
+        for k in range(6):
+            var a: float = TAU*float(k)/6.0
+            ring.append(Vector3(cos(a)*r,0,sin(a)*r)+c)
+        for k in range(6):
+            var a2: Vector3 = ring[k]
+            var b2: Vector3 = ring[(k+1)%6]
+            var n: Vector3 = ((a2+b2)*0.5-c).normalized()
+            var col := Color(0.78,0.78,0.78,1.0)
+            var i0: int = _v(a2,n,col)
+            var i1: int = _v(b2,n,col)
+            var i2: int = _v(b2+Vector3(0,h,0),n,col)
+            var i3: int = _v(a2+Vector3(0,h,0),n,col)
+            _tri(i0,i1,i2)
+            _tri(i0,i2,i3)
+        var top: int = _v(c+Vector3(0,h,0),Vector3.UP,Color(1,1,1,1))
+        for k in range(6):
+            var i4: int = _v(ring[k]+Vector3(0,h,0),Vector3.UP,Color(1,1,1,1))
+            var i5: int = _v(ring[(k+1)%6]+Vector3(0,h,0),Vector3.UP,Color(1,1,1,1))
+            _tri(top,i4,i5)
 
     func commit() -> ArrayMesh:
         var arr: Array = []

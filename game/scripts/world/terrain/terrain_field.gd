@@ -37,6 +37,12 @@ var snow: PackedFloat32Array = PackedFloat32Array()
 var water: PackedByteArray = PackedByteArray()
 var _noise: Array[FastNoiseLite] = []
 var _phase: float = 0.0
+# v0.1.27 per-seed macro composition: mirrored layout (sea side, slope
+# direction, harbour side...), main-form parameters and large features.
+var mx: float = 1.0
+var mz: float = 1.0
+var macro: Dictionary = {}
+var features: Array = []          # [lx, lz, sigma, amplitude]
 var bake_ms: float = 0.0
 
 func _init(arch: String = "jp_sakura", seed_value: int = 1) -> void:
@@ -75,6 +81,45 @@ func _setup_noise() -> void:
         n.seed = hash_seed(terrain_seed,archetype,k)
         _noise.append(n)
     _phase = float(hash_seed(terrain_seed,archetype,99) % 6283)/1000.0
+    var rng := RandomNumberGenerator.new()
+    rng.seed = hash_seed(terrain_seed,archetype,7777)
+    mx = 1.0 if rng.randf() < 0.5 else -1.0
+    mz = 1.0 if rng.randf() < 0.5 else -1.0
+    macro = {
+        "canyon_amp":rng.randf_range(0.16,0.36),"canyon_freq":rng.randf_range(1.3,2.5),
+        "canyon_width":rng.randf_range(0.36,0.48),
+        "coast_base":rng.randf_range(-0.60,-0.40),"bay_amp":rng.randf_range(50.0,105.0),
+        "bay_len":rng.randf_range(170.0,300.0),"cliff_h":rng.randf_range(54.0,70.0),
+        "alpine_rim":rng.randf_range(0.78,1.12),"alpine_tilt":rng.randf_range(0.045,0.080),
+        "crag":rng.randf_range(0.74,0.84),
+        "touge_tilt":rng.randf_range(0.12,0.18),"touge_ridge":rng.randf_range(16.0,30.0),
+        "terrace":rng.randf_range(6.0,9.0),
+    }
+    features.clear()
+    var count: int = rng.randi_range(2,4)
+    var amp_max: float = {"rolling":20.0,"terraced":18.0,"mountainside":16.0,"urban":3.0,"canyon":8.0,
+        "alpine":22.0,"coast":12.0,"hills":30.0}.get(relief,10.0)
+    for k in range(count):
+        var lx: float = rng.randf_range(-1.05,1.05)*PLAY_HALF_X
+        var lz: float = rng.randf_range(-1.05,1.05)*PLAY_HALF_Z
+        var amp: float = rng.randf_range(0.45,1.0)*amp_max*(1.0 if rng.randf() < 0.7 else -0.7)
+        features.append([lx,lz,rng.randf_range(110.0,230.0),amp])
+
+## World <-> local macro frame (mirrors only, so distances are preserved).
+func to_local(x: float, z: float) -> Vector2:
+    return Vector2(x*mx,z*mz)
+
+func to_world(lx: float, lz: float) -> Vector2:
+    return Vector2(lx*mx,lz*mz)
+
+func _features(lx: float, lz: float) -> float:
+    var h: float = 0.0
+    for f in features:
+        var dx: float = lx-float(f[0])
+        var dz: float = lz-float(f[1])
+        var s2: float = float(f[2])*float(f[2])
+        h += float(f[3])*exp(-(dx*dx+dz*dz)/(2.0*s2))
+    return h
 
 func _n(k: int, x: float, z: float) -> float:
     return _noise[k].get_noise_2d(x,z)
@@ -87,22 +132,45 @@ static func _edge(u: float, v: float) -> float:
     return pow(pow(absf(u),4.0)+pow(absf(v),4.0),0.25)
 
 ## Coast archetype: x of the sea cliff line at z (sea is west of it).
+## (LOCAL frame: lz in, local x out; use coast_point() for world space.)
 func coast_x(z: float) -> float:
     # Bays and headlands at the 200-400 m scale (a road can follow the
     # cliff); the rock face mesh adds the small-scale jaggedness.
-    return -PLAY_HALF_X*0.50+75.0*sin(z/230.0+_phase)+26.0*_n(2,0.0,z*0.30)
+    var base: float = float(macro.get("coast_base",-0.50))
+    var amp: float = float(macro.get("bay_amp",75.0))
+    var ln: float = float(macro.get("bay_len",230.0))
+    return PLAY_HALF_X*base+amp*sin(z/ln+_phase)+26.0*_n(2,0.0,z*0.30)
+
+## World position of the cliff edge for a local z (coast archetype).
+func coast_point(lz: float, offset_land: float = 0.0) -> Vector2:
+    return to_world(coast_x(lz)+offset_land,lz)
 
 ## Ojcow: canyon centre (u units) at v.
 func canyon_u(v: float) -> float:
-    return 0.30*sin(v*1.9+_phase)
+    return float(macro.get("canyon_amp",0.30))*sin(v*float(macro.get("canyon_freq",1.9))+_phase)
+
+## Local x of the stream at local z.
+func stream_x(lz: float) -> float:
+    var v: float = lz/PLAY_HALF_Z
+    return (canyon_u(v)+0.05*sin(v*7.0+_phase*2.0))*PLAY_HALF_X
 
 func stream_offset(x: float, z: float) -> float:
     # Signed distance (m, approx.) from the Pradnik-like stream on the valley floor.
-    var v: float = z/PLAY_HALF_Z
-    var cu: float = canyon_u(v)+0.05*sin(v*7.0+_phase*2.0)
-    return x-cu*PLAY_HALF_X
+    var l: Vector2 = to_local(x,z)
+    return l.x-stream_x(l.y)
 
-func raw_height(x: float, z: float) -> float:
+func raw_height(wx: float, wz: float) -> float:
+    # Macro forms in the seed's mirrored local frame; noise in world space.
+    var l: Vector2 = to_local(wx,wz)
+    return _raw_local(l.x,l.y)+_features(l.x,l.y)*_feature_mask(l.x,l.y)
+
+func _feature_mask(lx: float, lz: float) -> float:
+    # Large features never fill the sea or the canyon floor.
+    if relief == "coast" and lx < coast_x(lz)+30.0:
+        return 0.0
+    return 1.0
+
+func _raw_local(x: float, z: float) -> float:
     var u: float = x/PLAY_HALF_X
     var v: float = z/PLAY_HALF_Z
     var e: float = _edge(u,v)
@@ -113,12 +181,14 @@ func raw_height(x: float, z: float) -> float:
             h += smoothstep(0.95,1.9,e)*(70.0+70.0*(_n(3,x,z)*0.5+0.5))
         "terraced":
             h = 30.0+24.0*_n(0,x,z)+10.0*_n(1,x,z)+18.0*_ridged(2,x,z)
-            var t: float = h/7.0
+            var step: float = float(macro.get("terrace",7.0))
+            var t: float = h/step
             var f: float = floor(t)
-            h = (f+smoothstep(0.30,0.70,t-f))*7.0
+            h = (f+smoothstep(0.30,0.70,t-f))*step
             h += smoothstep(0.95,1.9,e)*(110.0+80.0*(_n(3,x,z)*0.5+0.5))
         "mountainside":
-            h = 24.0+0.15*(PLAY_HALF_Z-z)+16.0*_n(0,x,z)+24.0*_ridged(1,x,z)-12.0
+            h = 24.0+float(macro.get("touge_tilt",0.15))*(PLAY_HALF_Z-z)+16.0*_n(0,x,z) \
+                +float(macro.get("touge_ridge",24.0))*_ridged(1,x,z)-12.0
             h += smoothstep(1.0,1.9,-v)*(240.0+120.0*_ridged(3,x,z))
             h += smoothstep(1.0,1.8,absf(u))*(120.0+80.0*_ridged(3,x,z))
             h -= smoothstep(1.0,1.6,v)*30.0
@@ -130,20 +200,26 @@ func raw_height(x: float, z: float) -> float:
             var uu: float = u-canyon_u(v)
             var d: float = absf(uu)
             var floor_h: float = 18.0+3.0*_n(0,x,z)
-            var wall: float = smoothstep(0.40,0.98,d)
+            var wall: float = smoothstep(float(macro.get("canyon_width",0.40)),0.98,d)
             h = floor_h+90.0*pow(wall,1.3)+14.0*_n(1,x,z)*wall
             h += 16.0*maxf(0.0,_ridged(2,x,z)-0.55)/0.45*smoothstep(0.15,0.55,wall)*(1.0-smoothstep(0.85,1.0,wall))
             var s: float = absf(stream_offset(x,z))
             h -= 2.2*(1.0-smoothstep(3.0,11.0,s))
         "alpine":
-            h = 60.0+0.065*(PLAY_HALF_Z-z)+11.0*_n(0,x,z)+4.0*_n(1,x,z)
+            h = 60.0+float(macro.get("alpine_tilt",0.065))*(PLAY_HALF_Z-z)+11.0*_n(0,x,z)+4.0*_n(1,x,z)
             var crag: float = _ridged(2,x,z)
-            h += 26.0*maxf(0.0,crag-0.78)/0.22
-            h += smoothstep(0.95,2.0,e)*(380.0*(0.55+0.45*_ridged(3,x,z)))
+            var ct: float = float(macro.get("crag",0.78))
+            h += 26.0*maxf(0.0,crag-ct)/(1.0-ct)
+            h += smoothstep(0.95,2.0,e)*(380.0*float(macro.get("alpine_rim",1.0))*(0.55+0.45*_ridged(3,x,z)))
         "coast":
-            var land: float = 46.0+8.0*_n(0,x,z)+4.0*_n(1,x,z)
+            # v0.1.27: taller cliffs (54-70 m by seed), a headland rise
+            # towards the edge, the sea floor dropping away offshore.
+            var cx: float = coast_x(z)
+            var dl: float = x-cx
+            var land: float = float(macro.get("cliff_h",58.0))+8.0*_n(0,x,z)+4.0*_n(1,x,z)
+            land += 6.0*(1.0-smoothstep(0.0,90.0,dl))
             land += smoothstep(1.0,1.9,maxf(u,absf(v)))*(60.0+40.0*_ridged(3,x,z))
-            h = land if x >= coast_x(z) else -7.0+2.0*_n(4,x,z)
+            h = land if dl >= 0.0 else -7.0-6.0*smoothstep(0.0,260.0,-dl)+2.0*_n(4,x,z)
         "hills":
             h = 22.0+16.0*_n(0,x,z)+7.0*_n(1,x,z)
             h += 6.0*maxf(0.0,_ridged(2,x,z)-0.62)/0.38
@@ -292,7 +368,47 @@ func slope_at(x: float, z: float) -> float:
 func coast_distance(x: float, z: float) -> float:
     if relief != "coast":
         return INF
-    return x-coast_x(z)
+    var l: Vector2 = to_local(x,z)
+    return l.x-coast_x(l.y)
+
+# ------------------------------------------------------------ city grid
+
+## v0.1.27 Japan City street grid (deterministic per seed; shared by the
+## ground shader, which paints the streets, and the scenery, which fills
+## the blocks). Grid frame: U = (cos a, sin a), V = (-sin a, cos a); street
+## lines every pitch along each axis; every n-th line is an avenue.
+var _city: Dictionary = {}
+func city_grid() -> Dictionary:
+    if not _city.is_empty():
+        return _city
+    var rng := RandomNumberGenerator.new()
+    rng.seed = hash_seed(terrain_seed,archetype,4411)
+    var ang: float = rng.randf_range(-0.38,0.38)
+    var pu: float = snappedf(rng.randf_range(66.0,84.0),3.0)
+    var pv: float = snappedf(rng.randf_range(60.0,78.0),3.0)
+    var every: int = rng.randi_range(3,4)
+    _city = {"angle":ang,"u":Vector2(cos(ang),sin(ang)),"v":Vector2(-sin(ang),cos(ang)),
+        "pitch":Vector2(pu,pv),"off":Vector2(rng.randf_range(0.0,pu),rng.randf_range(0.0,pv)),
+        "every":every,"phase":Vector2i(rng.randi_range(0,every-1),rng.randi_range(0,every-1)),
+        "side_w":12.0,"ave_w":21.0,"walk":2.8,
+        "downtown":Vector2(rng.randf_range(-0.55,0.55)*PLAY_HALF_X,rng.randf_range(-0.85,0.15)*PLAY_HALF_Z)}
+    return _city
+
+func city_local(p: Vector2) -> Vector2:
+    var g: Dictionary = city_grid()
+    return Vector2(p.dot(g["u"]),p.dot(g["v"]))
+
+func city_world(l: Vector2) -> Vector2:
+    var g: Dictionary = city_grid()
+    return (g["u"] as Vector2)*l.x+(g["v"] as Vector2)*l.y
+
+## Street line `i` on axis 0 (lines of constant U) or 1: [centre, width].
+func city_line(axis: int, i: int) -> Array:
+    var g: Dictionary = city_grid()
+    var pitch: float = float((g["pitch"] as Vector2)[axis])
+    var off: float = float((g["off"] as Vector2)[axis])
+    var ave: bool = posmod(i-int((g["phase"] as Vector2i)[axis]),int(g["every"])) == 0
+    return [off+float(i)*pitch,float(g["ave_w"]) if ave else float(g["side_w"]),ave]
 
 # ---------------------------------------------------------- buildability
 

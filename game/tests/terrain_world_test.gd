@@ -150,7 +150,8 @@ func _run() -> void:
                 while z <= z0+300.0:
                     var slope: float = (fc.coast_x(z+12.0)-fc.coast_x(z-12.0))/24.0
                     var nrm := Vector2(1.0,-slope).normalized()
-                    var q: Vector2 = Vector2(fc.coast_x(z),z)+nrm*24.0
+                    var ql: Vector2 = Vector2(fc.coast_x(z),z)+nrm*24.0      # local frame
+                    var q: Vector2 = fc.to_world(ql.x,ql.y)
                     cps.append([snappedf(q.x,0.001),snappedf(q.y,0.001)])
                     z += 50.0
                 descc = CAT.descriptor("ie_coast",sd)
