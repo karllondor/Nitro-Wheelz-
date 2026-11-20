@@ -31,7 +31,7 @@ Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/
 | Captures BEFORE / AFTER (8 regions, seeds, bridges, route ends, UI) | DONE -> docs/terrain_builder/v0127/ |
 | Frame stats + CPU times BEFORE / AFTER (llvmpipe) | MEASURED (report table) |
 | Phone / browser performance, owner review | NOT RUN |
-| CI on the v0.1.27 commit | pending at commit time (filled in by the follow-up docs commit) |
+| CI on the v0.1.27 commit aafb14c | Godot suite PASS ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44821411989)), Android debug APK v0.1.27 BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44821411729)), Web BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44821412227)), desktop BUILT ([run](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44821411867)), foundation PASS — built, not installed or played |
 
 ## v0.1.26 local evidence — E30 visual refinement pass v0.2 (Claude Code cloud container, 2026-11-20)
 | Check | Platform | Status | Evidence |

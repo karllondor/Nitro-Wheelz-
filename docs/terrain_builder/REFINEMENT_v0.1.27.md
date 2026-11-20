@@ -77,7 +77,7 @@ race draws scenery chunks only within 650 m (buildings 1040 m).
 | Check | Result |
 |---|---|
 | `tools/run_godot_checks.sh` here (import + 29 tests incl. terrain_world / terrain_scenery (city block variety, roadside planting behind the barrier) / terrain_builder / terrain_physics (route start / finish areas + start lights)) | PASS for all 29 tests (PASS lines in the log); the runner itself ended with the timeout code because `terrain_physics_test` did not exit after printing PASS (engine thread spin at exit, container only) |
-| Same suite on CI (GitHub Actions, WIP commit 688d87e) | PASS ([godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44819502701)); final v0.1.27 commit: see QA_MATRIX |
+| Same suite on CI (GitHub Actions, WIP commit 688d87e) | PASS (WIP [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44819502701); v0.1.27 commit aafb14c [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44821411989)); Android APK / Web / desktop BUILT on aafb14c (links in QA_MATRIX) |
 | `tools/check_project.py` (structure, SemVer, asset hashes) | PASS |
 | Determinism, 8 x 10 seeds distinct, buildability worst seed >= 90 tiles, loops on all 8 within grade, Irish cliff road | PASS (terrain_world_test) |
 | BEFORE / AFTER renders for all 8 regions + seeds 1-4, bridges, route ends, UI | DONE (Xvfb, llvmpipe) |
