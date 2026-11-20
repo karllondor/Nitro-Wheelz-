@@ -6,42 +6,22 @@
 **Goal:** **Choose a country and scenery subclass → GENERATE a beautiful deterministic procedural 3D landscape → intuitively draw a track over that landscape with Townscaper-like automatic local adaptation → DRIVE it immediately.**
 **Scope:** One complete integrated implementation for **JAPAN, POLAND and IRELAND**, all eight subclasses listed below, including closed loops, point-to-point courses, height-aware terrain/road and developer slope-physics options. Do not present a Japan-only prototype, a flat terrain-only experiment, or a visual mock-up as the final delivery. You can use sensible internal commits and verification order; there are NO A/B/C-scope approvals.
 
-## 0. FIRST ACTION — audit missing references, branch state and conflicting older documents
+## 0. FIRST ACTION — audit references, branch state and older documents
 
 Read IN FULL:
-- `docs/research/procedural_world/TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md` (newer, controlling technical specification)
-- `docs/research/procedural_world/NITRO_PROCEDURAL_WORLD_BIBLE.md` (valuable algorithms and original diagrams, but obsolete Phase A-only scope and generic Japanese town proposals)
-- `docs/research/procedural_world/video_frames/README.md` and its 20 JPGs from the owner's four recordings
-- `docs/research/procedural_world/PHASE_A_REPORT.md` and its before/after screenshots
-- `docs/ART_DIRECTION.md`, `README.md`, `CHANGELOG.md`, `HANDOFF.md`
-- Existing Track Builder, `track_dna.gd`, `track_grid.gd`, `drift_track.gd`, `procedural_world.gd`, `scenery_rules.gd`, `scenery_modules.gd`, physics/race code and tests.
+- `docs/research/procedural_world/TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md` (newer controlling technical specification);
+- `docs/research/procedural_world/NITRO_WHEELZ_WORLD_RESEARCH_v1.md` (research and geographic environment references);
+- `docs/references/drift_tracks/README.md` (source-controlled index of 49 original concept PNGs **HOSTED ON GOOGLE DRIVE**, 12 Claude-safe ZIP packs all under 19 MB, SHA-256 manifest in the repo, and direct file links);
+- `docs/references/drift_tracks/MANIFEST.csv` and `docs/references/drift_tracks/{japan,poland,ireland,Overview}/README.md`;
+- `docs/research/procedural_world/NITRO_PROCEDURAL_WORLD_BIBLE.md` (algorithms and original diagrams, but old Phase A-only scope and generic town proposals superseded);
+- `docs/research/procedural_world/video_frames/README.md` with its 20 teaching-video frames;
+- `docs/research/procedural_world/PHASE_A_REPORT.md`, `docs/ART_DIRECTION.md`, `README.md`, `CHANGELOG.md`, `HANDOFF.md` and actual code/tests.
 
-**Verified audit findings:** the new terrain-first specification, older Bible, four original SVG explanatory diagrams, 20 extracted teaching-video frames and Phase A tests/images exist on the dev branch. **The separate library of 49 project concept PNGs/asset boards IS NOT committed to this branch in the intended region/location hierarchy.** The original archive has been prepared separately under the exact name `Nitro_Wheelz_Drift_Tracks_All_Visualizations_PNG.zip` (49 unique PNGs, ~153 MB, `READ_ME_FIRST.txt` and `MANIFEST.csv` with SHA-256). **Do not pretend these images are in GitHub** or invent their contents if no archive is available to your workspace. Locate/ingest the owner-provided archive FIRST, otherwise report clearly that it must be supplied, mark the visual-reference import as blocked, and never declare the reference coverage complete.
+**Library delivery confirmed 2026-11-20:** 49 unique PNGs, six JPG indexes, README and SHA manifest uploaded **as individual files** in a proper country/location hierarchy on Google Drive: [Nitro Wheelz](https://drive.google.com/drive/folders/1pvMDmAA1eh5SzHmvF9wCy1dKILA-Cjyb) (owned by connected `colabcreatorstudio@gmail.com`). For `karllondor@gmail.com`, 12 individually shared, read-only **Claude-safe ZIPs** (under 19 MB each) and a pack membership index are accessible as individual files; direct URLs and folder map in `docs/references/drift_tracks/README.md`.
 
-Import the complete supplied archive preserving ORIGINAL PNG bytes/names and the manifest into `docs/references/drift_tracks/` with this hierarchy:
-```text
-docs/references/drift_tracks/
-  README.md
-  MANIFEST.csv
-  Overview/ (World_Concepts, General_Asset_Packs, Mixed_Region_Assets, indexes)
-  japan/
-    Sakura Circuit/{Visualizations,Assets}
-    Touge Mountain/{Visualizations,Assets}
-    City Track/Visualizations
-    Overview/Assets
-  poland/
-    Ojcow Canyon/{Visualizations,Assets,Concept Boards}
-    Tatry mountain/{Visualizations,Assets}
-  ireland/
-    Coastal Cliffs/{Visualizations,Assets}
-  wales/
-    Welsh Highlands/Visualizations     # reference only, not an initial playable region
-```
-The ZIP includes 49 **unique generated images**; its extra JPEG indexes/readme/manifest are ancillary. Verify 49 image count, preserve grouping, compute/compare manifest SHA-256, do NOT overwrite, deduplicate or re-render approved images. Make a concise per-location `README.md` identifying reference image, key landscape/features, gameplay geometry and things to avoid. Reference photos and AI-generated sheets are **art-direction only**, NOT editable Godot models. Implement original lightweight meshes/materials based on them, not baked scenery cutouts. Because the archive is large, use Git LFS or an appropriate binary-asset strategy (not an untracked local ZIP), and report repository size/asset storage explicitly. If publishing images in public repo poses any rights/permissions issue, do not ingest third-party photos or YouTube stills as game art; the owner's original generated concept PNGs are the intended set.
+**IMPORTANT:** Do NOT report the visuals as 'missing' or ask the owner to re-upload the 152 MB single ZIP without first testing the GitHub README / Google Drive links. If the Google Drive account cannot access the files, state precisely which permissions need action and continue code work from verified technical guidance. Full PNG bytes are deliberately hosted on Drive, **not committed as binary blobs into GitHub**. Do NOT treat AI-generated image boards as Godot 3D assets or mechanically reliable drawings.
 
-**Research document gap:** `NITRO_WHEELZ_WORLD_RESEARCH_v1.md` exists outside the verified GitHub branch; obtain and incorporate it only if available, otherwise mark it as missing. Do not claim it has been committed.
-
-**Source precedence on conflicts:** current owner decisions in this document > terrain-first spec > Phase A Bible/Phase A report. Phase A technical behavior may be reused, but its artistic choices were explicitly REJECTED. Update old docs/README/HANDOFF to label superseded assumptions, not silently contradict them.
+**Source precedence:** current owner decisions in this document > terrain-first spec > Phase A Bible/report. The Phase A technical system may be reused, but its auto-built generic roadside houses and pre-approved visual direction were explicitly rejected. Reconcile older docs rather than allowing contradictory instructions. Inspect actual latest development HEAD and any newer owner commits before changing code.
 
 ## 1. APPROVED VISION — landscape FIRST
 
