@@ -1,3 +1,9 @@
+## [0.1.28] — Japan City street circuit  — TEST BUILD (owner request after v0.1.27)
+- Buildings line the race road: a frontage row of shops (awnings, signs), mansions (balconies) and low offices faces the circuit on both sides with facades on the sidewalk right behind the verge (~5.4-6 m from the asphalt edge); gaps where grid streets meet the circuit; none over bridges / at the venue; grid blocks, poles and trees stay behind the row.
+- Chase camera rises over a building beside the road instead of entering it; facade windows start at each face's own edge.
+- Test: terrain_scenery_test checks the frontage (>= 20 buildings, nearest facade between verge + 1 m and 6 m). Everything else as v0.1.27.
+- Android versionCode 28 / versionName 0.1.28.
+
 ## [0.1.27] — Terrain Builder visual & track builder refinement (+ owner chat requests)  — TEST BUILD, not approved until the owner plays it on the phone
 Report: docs/terrain_builder/REFINEMENT_v0.1.27.md (every item, BEFORE / AFTER for all 8 regions, seeds, bridges, route ends, UI, measurements, PASS / FAIL / NOT RUN). The two phone recordings named in the brief were not received.
 - Builder camera: line-of-sight FIT (no more Tatry rock / snow walls in front of the map), smooth pitch, no overview haze; region change shows a clear NOT GENERATED card.
@@ -10,7 +16,6 @@ Report: docs/terrain_builder/REFINEMENT_v0.1.27.md (every item, BEFORE / AFTER f
 - Roadside band behind the barrier (shrubs, flowers, ferns, heather, gorse, dwarf pine, stones, forest edge), delineator posts every 20 m; colour pass (linear tone mapping, cooler ambient, saturation, depth fog from 220 m); chase camera closer / lower with speed FOV.
 - Open routes: staging paddock behind the start + parc fermé after the finish on terrain-fitted pads; start light pole with four green lamps before the start line.
 - SAVE with a name (SAVE / SAVE AS NEW), MY TRACKS list in the builder, terrain tracks redirected from the node editor to the Terrain Builder; pause menu: ▶ RESUME, RESTART + ✎ EDIT TRACK, GARAGE / MENU, SOUND & STYLE folded.
-- Japan City street circuit: a frontage row of shops / mansions / low offices lines the race road right behind the verge and sidewalk (facades ~5.4-6 m from the asphalt), grid blocks behind it; chase camera rises over buildings; facade windows aligned per face.
 - Game icon: the owner's NW crown icon (full-bleed, Android adaptive layers, project icon).
 - Tests: terrain_scenery_test (city block variety, roadside planting behind the barrier), terrain_physics_test (route start / finish areas + start lights); run_godot_checks.sh runs headless tests with `--audio-driver Dummy`. Evidence tools: capture_bridges.gd, capture_ui_v0127.gd, capture_terrain.gd (routes, bridges, frame stats).
 - NOT DONE: free-draw (Townscaper-like) drawing — evaluated only; Japan City catch fencing / rail viaduct. NOT RUN: phone / browser performance, owner review.

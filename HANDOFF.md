@@ -1,4 +1,4 @@
-# Nitro Wheelz — v0.1.27 Terrain Builder visual & track builder refinement (test build) on top of v0.1.26 E30 v0.2 and v0.1.25 Terrain-first Track Builder
+# Nitro Wheelz — v0.1.28 (Japan City street circuit) / v0.1.27 Terrain Builder visual & track builder refinement (test build) on top of v0.1.26 E30 v0.2 and v0.1.25 Terrain-first Track Builder
 
 ## TERRAIN BUILDER REFINEMENT (v0.1.27)
 - Read docs/terrain_builder/REFINEMENT_v0.1.27.md (all brief items + the owner's chat requests, BEFORE / AFTER sheets in docs/terrain_builder/v0127/, measurements, PASS / FAIL / NOT RUN). The two phone recordings named in the brief were NOT received.
