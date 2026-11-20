@@ -28,8 +28,16 @@ void fragment() {
 	float key = smoothstep(0.90, 0.985, dot(r, normalize(vec3(-0.55, 0.62, 0.56))));
 	float fill = smoothstep(0.86, 0.99, dot(r, normalize(vec3(0.70, 0.30, 0.65)))) * 0.45;
 	float strip = smoothstep(0.075, 0.0, abs(r.y - 0.80 - r.x * 0.18)) * 0.55;
-	float dome = smoothstep(-0.35, 0.95, r.y);
-	vec3 env = studio.rgb * (key * 1.25 + fill + strip) + mix(floor_tint.rgb + metal * 0.12, studio.rgb * (0.38 + metal * 0.30), dome);
+	// v0.3: world-space horizon reflection whose sharpness follows the
+	// roughness: polished lips / chrome show crisp bright-over-dark bands
+	// (reads as mirror polish), machined faces a soft gradient, so polished
+	// and satin metal finally differ.
+	vec3 rw = (INV_VIEW_MATRIX * vec4(r, 0.0)).xyz;
+	float w = mix(0.025, 0.75, clamp(rough * 1.6, 0.0, 1.0));
+	float hz = smoothstep(-w, w, rw.y + 0.03);
+	vec3 sky = studio.rgb * (0.50 + 0.30 * smoothstep(0.1, 0.9, rw.y) + metal * 0.32);
+	vec3 ground = floor_tint.rgb * mix(0.35, 1.0, rough) + metal * 0.02;
+	vec3 env = studio.rgb * (key * 1.25 + fill + strip) + mix(ground, sky, hz);
 	float f0 = mix(0.05, 0.85, metal);
 	float fres = f0 + (1.0 - f0) * pow(1.0 - ndv, 4.0);
 	vec3 tint = mix(vec3(1.0), base * 1.25 + 0.06, metal);

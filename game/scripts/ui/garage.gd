@@ -164,14 +164,95 @@ func _apply_studio() -> void:
     studio_fill.light_energy = 0.50
 
 const BASE_FOV: float = 36.0
+## v0.3 controlled framing (every car): the lens is fitted to the car's real
+## bounds so the car fills the card; the widest angle over a full turn sets
+## the floor (never clipped), narrower views (front / rear) zoom in smoothly
+## by at most GARAGE_ZOOM_IN.
+const GARAGE_FILL: float = 0.90
+const GARAGE_ZOOM_IN: float = 1.22
+var _car_corners: Array[Vector3] = []
+var _fit_tan_floor: float = 0.0
+var _fit_tan: float = 0.0
 
-## Per-car garage framing (profile "presentation.garage_zoom", default 1):
-## a narrower lens, same camera position and target.
 func _apply_zoom() -> void:
-    if camera == null:
+    if camera == null or car == null:
         return
-    var zoom: float = float((CARS.profile(active_variant).get("presentation",{}) as Dictionary).get("garage_zoom",1.0))
-    camera.fov = rad_to_deg(2.0*atan(tan(deg_to_rad(BASE_FOV*0.5))/maxf(zoom,0.5)))
+    # Silhouette points of the real car in turntable space (wheels included,
+    # contact shadow excluded): the extreme vertex in 24 plan directions for
+    # 3 height bands (cheap enough to re-fit every frame on a phone).
+    var pts: Array[Vector3] = []
+    var inv: Transform3D = turntable.global_transform.affine_inverse()
+    for n in car.find_children("*","MeshInstance3D",true,false):
+        var mi: MeshInstance3D = n
+        if mi.mesh == null or not mi.visible or str(mi.name).to_lower().contains("shadow"):
+            continue
+        var xf: Transform3D = inv*mi.global_transform
+        for si in range(mi.mesh.get_surface_count()):
+            var verts: PackedVector3Array = mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]
+            for k in range(0,verts.size(),5):
+                pts.append(xf*verts[k])
+    _car_corners.clear()
+    if pts.is_empty():
+        var box := AABB(Vector3(-0.9,0,-2.2),Vector3(1.8,1.3,4.4))
+        for i in range(8):
+            _car_corners.append(box.get_endpoint(i))
+    else:
+        var ylo: float = INF
+        var yhi: float = -INF
+        for p in pts:
+            ylo = minf(ylo,p.y)
+            yhi = maxf(yhi,p.y)
+        for band in range(3):
+            var b0: float = lerpf(ylo,yhi,float(band)/3.0)
+            var b1: float = lerpf(ylo,yhi,float(band+1)/3.0)+0.001
+            for d in range(24):
+                var dir := Vector2(cos(TAU*float(d)/24.0),sin(TAU*float(d)/24.0))
+                var best: Vector3 = Vector3.ZERO
+                var best_v: float = -INF
+                for p2 in pts:
+                    if p2.y < b0 or p2.y >= b1:
+                        continue
+                    var v: float = p2.x*dir.x+p2.z*dir.y
+                    if v > best_v:
+                        best_v = v
+                        best = p2
+                if best_v > -INF and not _car_corners.has(best):
+                    _car_corners.append(best)
+        # Highest and lowest points too.
+        for p3 in pts:
+            if p3.y >= yhi-0.001 or p3.y <= ylo+0.001:
+                _car_corners.append(p3)
+                if _car_corners.size() > 90:
+                    break
+    var saved: float = turntable.rotation.y
+    _fit_tan_floor = 0.0
+    for deg in range(0,360,10):
+        turntable.rotation.y = deg_to_rad(float(deg))
+        _fit_tan_floor = maxf(_fit_tan_floor,_needed_tan())
+    turntable.rotation.y = saved
+    _fit_tan = maxf(_needed_tan(),_fit_tan_floor/GARAGE_ZOOM_IN)
+    _frame_camera(1.0)
+
+## Horizontal half-angle tangent the car needs at the current turntable angle.
+func _needed_tan() -> float:
+    if _car_corners.is_empty():
+        return tan(deg_to_rad(BASE_FOV*0.5))
+    var aspect: float = float(preview.size.x)/maxf(float(preview.size.y),1.0)
+    var inv: Transform3D = camera.global_transform.affine_inverse()
+    var need: float = 0.0
+    for c in _car_corners:
+        var p: Vector3 = inv*(turntable.global_transform*c)
+        var depth: float = maxf(-p.z,0.1)
+        need = maxf(need,maxf(absf(p.x)/depth,absf(p.y)/depth*aspect))
+    return need/GARAGE_FILL
+
+## Fit the lens for the current angle (widen at once, zoom in smoothly).
+func _frame_camera(blend: float) -> void:
+    if camera == null or _car_corners.is_empty():
+        return
+    var want: float = maxf(_needed_tan(),_fit_tan_floor/GARAGE_ZOOM_IN)
+    _fit_tan = maxf(want,lerpf(_fit_tan,want,clampf(blend,0.0,1.0)))
+    camera.fov = rad_to_deg(2.0*atan(minf(_fit_tan,_fit_tan_floor)))
 
 func _build_turntable() -> void:
     turntable = Node3D.new()
@@ -183,10 +264,12 @@ func _build_turntable() -> void:
     # Horizontal FOV (KEEP_WIDTH): the whole 4.2 m car stays inside the tall
     # card at every turntable angle, side-on included (it was cut off).
     camera.keep_aspect = Camera3D.KEEP_WIDTH
-    camera.position = Vector3(0.0,2.3,8.6)
+    # v0.3: a little higher (collectible product shot, ~16 deg): more of the
+    # bonnet / roof shows and the car fills more of the tall card.
+    camera.position = Vector3(0.0,3.0,8.6)
     camera.fov = 36.0
     preview.add_child(camera)
-    camera.look_at(Vector3(0,0.55,0),Vector3.UP)
+    camera.look_at(Vector3(0,0.50,0),Vector3.UP)
     camera.current = true
     # Screen-space grey gradient backdrop, parented to the camera.
     var backdrop := MeshInstance3D.new()
@@ -206,6 +289,7 @@ func _build_turntable() -> void:
 func _process(delta: float) -> void:
     if turntable != null and not dragging:
         turntable.rotation.y += spin_speed*delta
+    _frame_camera(1.0-exp(-2.5*delta))
 
 func _input(event: InputEvent) -> void:
     # Drag anywhere over the card to spin the car.

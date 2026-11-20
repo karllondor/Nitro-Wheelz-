@@ -161,21 +161,23 @@ func _checks() -> String:
     garage.call("_signature")
     if not str((garage.get("version_label") as Label).text).contains("ORIGINAL"):
         return "Garage SIGNATURE must show the original state"
-    # v0.2: E30 shown ~18 % larger, still inside the card at every angle.
+    # v0.3: controlled framing fitted to the real car, still inside the card
+    # at every angle (the garage re-fits the lens every frame).
     var cam: Camera3D = garage.get("camera")
-    if absf(cam.fov-36.0) < 1.0:
-        return "E30 garage zoom (profile presentation.garage_zoom) not applied"
     var tt: Node3D = garage.get("turntable")
     var vp_size: Vector2 = Vector2((garage.get("preview") as SubViewport).size)
     var worst: float = 1.0
     var probe: Array[Vector3] = []
     for deg in range(0,360,15):
         tt.rotation.y = deg_to_rad(float(deg))
+        garage.call("_frame_camera",1.0)
         probe = _car_corners(preview)
         for corner in probe:
             var sp: Vector2 = cam.unproject_position(corner)
             worst = minf(worst,minf(minf(sp.x,vp_size.x-sp.x)/vp_size.x,minf(sp.y,vp_size.y-sp.y)/vp_size.y))
-    print("E30 garage zoom: fov %.1f deg, smallest margin to the card edge over a full turn %.1f %%" % [cam.fov,worst*100.0])
+    print("E30 garage framing: fov %.1f deg, smallest margin to the card edge over a full turn %.1f %%" % [cam.fov,worst*100.0])
+    if worst > 0.12:
+        return "Garage framing leaves too much empty card around the car (smallest margin %.3f)" % worst
     if worst < 0.01:
         return "Zoomed E30 leaves the garage card during the turn (margin %.3f)" % worst
     garage.call("_choose","red")

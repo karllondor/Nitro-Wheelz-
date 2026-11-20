@@ -1,3 +1,13 @@
+## [0.1.29] — E30 Blessed Final Visual Polish v0.3  — TEST BUILD, not approved until the owner reviews it on the phone
+Report: docs/car_factory/E30_VISUAL_POLISH_v0.3.md (audit vs the camera-matched NIGHTRIDE photos, changes, measurements, BEFORE / AFTER, lessons learned).
+- Paint (every colour / finish): clear coat reflects a world-space studio horizon, so reflection lines follow the body's curvature; shade keeps its chroma. Atlas metals: horizon reflection sharpness follows roughness (polished lip / chrome vs machined face).
+- Signature wheels: wider polished step lip, deeper dish, contact-shadow ring, more concave face (same size, pivot, offset).
+- Bumpers: upper bar with a rubber insert band, recessed lower apron, front lip, lower side wraps with a straight bottom; plate on the bar. Taller kidneys, fuller bonnet crown, deeper tail-lamp frames, rolled chrome exhaust tips.
+- Garage: controlled framing for every car (lens fitted to the real silhouette each frame, never clipped, up to 22 % closer at narrow views), slightly higher product-shot camera.
+- 41 502 triangles (budget 42 000), 8 draw calls, body GLB 1.055 MB. Dimensions, wheelbase, pivots, UV, materials, handling, audio, scoring, HUD and cameras unchanged; Lada / RYU-32 untouched.
+- New QA tool tests/capture_car_views.gd (7 views + 6 close-ups + garage + race for any car variant).
+- NOT RUN: phone review. Android versionCode 29 / versionName 0.1.29.
+
 ## [0.1.28] — Japan City street circuit  — TEST BUILD (owner request after v0.1.27)
 - Buildings line the race road: a frontage row of shops (awnings, signs), mansions (balconies) and low offices faces the circuit on both sides with facades on the sidewalk right behind the verge (~5.4-6 m from the asphalt edge); gaps where grid streets meet the circuit; none over bridges / at the venue; grid blocks, poles and trees stay behind the row.
 - Chase camera rises over a building beside the road instead of entering it; facade windows start at each face's own edge.

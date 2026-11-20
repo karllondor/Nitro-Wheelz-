@@ -90,8 +90,9 @@ def top_z(y):
 
 def crown(y):
     if y >= Y_C:
-        # v0.2: a little more transverse curvature on the bonnet
-        return 0.026 + 0.012 * smoothstep(Y_BF, Y_C, y)
+        # v0.3: a fuller transverse crown on the bonnet (photos: the bonnet
+        # catches light as one gently domed panel, not a flat lid)
+        return 0.031 + 0.014 * smoothstep(Y_BF, Y_C, y)
     if y >= Y_RW:
         return 0.0
     return 0.018
@@ -520,7 +521,7 @@ def arch_lips():
                 y = y_axle + r * math.sin(t)
                 z = ARCH_Z + r * math.cos(t)
                 pts.append((sx * (half_width(y) + 0.001), y, z))
-            nwcf.tube(part, pts, 0.009, "paint", sides=8)
+            nwcf.tube(part, pts, 0.009, "paint", sides=6)   # v0.3: 6 sides (budget), same look
     return part.to_object()
 
 
@@ -663,7 +664,8 @@ def build_front():
                        orient=lambda c: (0.0, 1.0, 0.0))
     # Kidney grille: chrome surround, black backing, vertical slats.
     for sx in (1.0, -1.0):
-        cx, cz, hw, hh, rc = sx * 0.075, 0.578, 0.056, 0.083, 0.026
+        # v0.3: taller kidneys (photos: they rise above and below the lamps)
+        cx, cz, hw, hh, rc = sx * 0.075, 0.578, 0.056, 0.089, 0.026
         loop = _rounded_rect(cx, cz, hw, hh, rc, 5)
         nwcf.tube(part, [(x, yf + 0.024, z) for x, z in loop] + [(loop[0][0], yf + 0.024, loop[0][1])],
                   0.0075, "chrome", sides=6, cap=False)
@@ -675,10 +677,12 @@ def build_front():
             nwcf.box(part, (x, yf + 0.020, cz), (0.007, 0.010, 2 * hh - 0.020), "black_gloss", bevel=0.002)
     # Front bumper (wraps to the arches) with indicators, plate and intakes.
     _bumper(part, front=True)
+    yb = Y_BF + 0.006 + BUMPER_BAR_REACH          # face of the bumper bar
     for sx in (1.0, -1.0):
-        nwcf.box(part, (sx * 0.640, HALF_L - 0.012, 0.455), (0.120, 0.012, 0.030), "amber_lens", bevel=0.004)
-    _plate(part, (-0.170, HALF_L - 0.020, 0.335), front=True)
-    nwcf.box(part, (0.0, HALF_L - 0.004, 0.215), (0.92, 0.012, 0.050), "black_gloss", bevel=0.006)
+        nwcf.box(part, (sx * 0.640, yb + 0.004, 0.455), (0.120, 0.010, 0.030), "amber_lens", bevel=0.004)
+    _plate(part, (-0.170, yb + 0.0035, 0.395), front=True)
+    # Lower intake slot in the recessed apron.
+    nwcf.box(part, (0.0, Y_BF + 0.006 + 0.031 + 0.004, 0.205), (0.92, 0.010, 0.046), "black_gloss", bevel=0.005)
     return part.to_object()
 
 
@@ -693,6 +697,23 @@ def _rounded_rect(cx, cz, hw, hh, r, seg):
     return pts
 
 
+# v0.3 bumper profiles (o = reach beyond the path, t = height fraction).
+# Photos: a pronounced upper bar with a rubber insert strip, the lower apron
+# set back under it; the front ends in a small forward lip, the rear is
+# straight. Shared by build_front() / build_rear() for the plate depth.
+BUMPER_PROFILE_FRONT = [
+    (-0.030, 1.000), (0.000, 1.006), (0.026, 1.000), (0.046, 0.982), (0.058, 0.948), (0.061, 0.900),
+    (0.061, 0.835), (0.055, 0.826), (0.055, 0.770), (0.061, 0.761), (0.061, 0.470), (0.056, 0.430),
+    (0.036, 0.414), (0.030, 0.380), (0.031, 0.180), (0.044, 0.120), (0.058, 0.064), (0.058, 0.030),
+    (0.046, 0.006), (0.024, 0.0), (0.0, -0.005), (-0.030, 0.0)]
+BUMPER_PROFILE_REAR = [
+    (-0.030, 1.000), (0.000, 1.006), (0.026, 1.000), (0.046, 0.982), (0.058, 0.948), (0.061, 0.900),
+    (0.061, 0.835), (0.055, 0.826), (0.055, 0.770), (0.061, 0.761), (0.061, 0.480), (0.056, 0.440),
+    (0.038, 0.424), (0.033, 0.390), (0.034, 0.060), (0.028, 0.012), (0.012, 0.0), (0.0, -0.005),
+    (-0.030, 0.0)]
+BUMPER_BAR_REACH = 0.061
+
+
 def _bumper(part, front):
     """Bumper lofted along a U-shaped plan path, thinner at the sides."""
     if front:
@@ -702,30 +723,29 @@ def _bumper(part, front):
     sgn = 1.0 if front else -1.0
     rc = 0.13                  # v0.2: rounder bumper corners
     path = []
-    # (x, y, outward normal x, outward normal y, reach scale)
+    # (x, y, outward normal x, outward normal y, reach scale, height kept)
     n_side = 6
     for k in range(n_side + 1):
         y = y_end + (y_face - sgn * rc - y_end) * k / n_side
-        path.append((half_width(y) + 0.004, y, 1.0, 0.0, 0.04 + 0.06 * min(1.0, k / 2.0)))
+        # v0.3: the side wrap is lower than the face (photos) with a straight
+        # bottom edge; the height grows inside the rounded corner.
+        path.append((half_width(y) + 0.004, y, 1.0, 0.0, 0.04 + 0.06 * min(1.0, k / 2.0), 0.72))
     for k in range(1, 9):
         a = math.radians(90.0 * k / 8)
         x = W + 0.004 - rc + rc * math.cos(a)
         y = y_face - sgn * rc + sgn * rc * math.sin(a)
-        path.append((x, y, math.cos(a), sgn * math.sin(a), 0.10 + 0.90 * (k / 8) ** 2))
+        path.append((x, y, math.cos(a), sgn * math.sin(a), 0.10 + 0.90 * (k / 8) ** 2,
+                     0.72 + 0.28 * smoothstep(0.0, 1.0, k / 8)))
     for k in range(1, 9):
         x = (W + 0.004 - rc) * (1.0 - k / 8)
-        path.append((x, y_face, 0.0, sgn, 1.0))
+        path.append((x, y_face, 0.0, sgn, 1.0, 1.0))
     h = z1 - z0
-    # v0.2 profile: rounded top, a moulded groove, a straight face, then the
-    # lower lip that kicks forward to a crisp but softened bottom edge.
-    prof = [(-0.030, 1.000), (0.000, 1.006), (0.022, 1.000), (0.036, 0.984), (0.043, 0.950),
-            (0.044, 0.900), (0.037, 0.884), (0.037, 0.852), (0.046, 0.836), (0.051, 0.640),
-            (0.054, 0.380), (0.060, 0.220), (0.071, 0.150), (0.075, 0.100), (0.072, 0.052),
-            (0.060, 0.012), (0.040, 0.0), (0.0, -0.005), (-0.030, 0.0)]
+    prof = BUMPER_PROFILE_FRONT if front else BUMPER_PROFILE_REAR
     rows = []
-    full = path + [(-x, y, -nx, ny, s) for x, y, nx, ny, s in reversed(path[:-1])]
-    for x, y, nx, ny, s in full:
-        rows.append([(x + nx * o * s, y + ny * o * s, z0 + h * t) for o, t in prof])
+    full = path + [(-x, y, -nx, ny, s, kp) for x, y, nx, ny, s, kp in reversed(path[:-1])]
+    for x, y, nx, ny, s, kp in full:
+        zb = z1 - h * kp
+        rows.append([(x + nx * o * s, y + ny * o * s, zb + (z1 - zb) * t) for o, t in prof])
     if not front:
         rows = [list(reversed(r)) for r in rows]
     V, faces = part.grid(rows, "black_matte", closed_u=True)
@@ -761,12 +781,12 @@ def build_rear():
         # (inner, clear), tail / brake (red) and outer (darker red) segments.
         nwcf.box(part, (sx * (x0 + x1) * 0.5, yr - 0.001, (z0 + z1) * 0.5),
                  (x1 - x0, 0.006, z1 - z0), "black_satin")
-        fw = 0.008      # frame bars proud of the lens
-        for bx, bz, bw, bh in (((x0 + x1) * 0.5, z1 + 0.002, x1 - x0 + 2 * fw, fw),
-                               ((x0 + x1) * 0.5, z0 - 0.002, x1 - x0 + 2 * fw, fw),
-                               (x0 - 0.002, (z0 + z1) * 0.5, fw, z1 - z0),
-                               (x1 + 0.002, (z0 + z1) * 0.5, fw, z1 - z0)):
-            nwcf.box(part, (sx * bx, yr - 0.007, bz), (bw, 0.014, bh), "black_satin")
+        fw = 0.010      # v0.3: deeper frame bars, the lens sits inside them
+        for bx, bz, bw, bh in (((x0 + x1) * 0.5, z1 + 0.003, x1 - x0 + 2 * fw, fw),
+                               ((x0 + x1) * 0.5, z0 - 0.003, x1 - x0 + 2 * fw, fw),
+                               (x0 - 0.003, (z0 + z1) * 0.5, fw, z1 - z0),
+                               (x1 + 0.003, (z0 + z1) * 0.5, fw, z1 - z0)):
+            nwcf.box(part, (sx * bx, yr - 0.010, bz), (bw, 0.020, bh), "black_satin")
         nu, nv = 8, 3
         rows = []
         for j in range(nv + 1):
@@ -782,16 +802,20 @@ def build_rear():
         part.grid(rows, "tex_tail", uv_fn=uvf, smooth=True, orient=lambda c: (0.0, -1.0, 0.0))
         for u in (0.22, 0.70):
             xd = x0 + 0.004 + (x1 - x0 - 0.008) * u
-            nwcf.box(part, (sx * xd, yr - 0.0105, (z0 + z1) * 0.5), (0.006, 0.008, z1 - z0 - 0.004),
+            nwcf.box(part, (sx * xd, yr - 0.0115, (z0 + z1) * 0.5), (0.007, 0.010, z1 - z0 - 0.004),
                      "black_gloss")
     _bumper(part, front=False)
     _plate(part, (0.0, yr - 0.0035, 0.627), front=False)
     # Twin exhaust tips at the far left rear corner (rear photo, camera-matched).
-    for x in (-0.700, -0.630):
-        nwcf.tube(part, [(x, -1.95, 0.215), (x, HALF_L * -1 - 0.004, 0.215)], 0.030, "exhaust", sides=16,
+    # v0.3: a real tip: pipe, flared polished end with a rolled lip, sooty bore.
+    for x in (-0.700, -0.625):
+        nwcf.tube(part, [(x, -1.95, 0.215), (x, -HALF_L + 0.030, 0.215)], 0.026, "exhaust", sides=14,
                   cap=False)
-        m = nwcf.frame_from_axis((x, -HALF_L + 0.012, 0.215), (0, 1, 0))
-        nwcf.lathe(part, m, [(0.0, 0.0), (0.0, 0.026)], "soot", segments=16,
+        m = nwcf.frame_from_axis((x, -HALF_L + 0.030, 0.215), (0, -1, 0))
+        nwcf.lathe(part, m, [(0.0, 0.027), (0.030, 0.034), (0.036, 0.036), (0.038, 0.032), (0.034, 0.029)],
+                   "chrome", segments=16, orient=lambda c, x=x: Vector((c.x - x, 0.0, c.z - 0.215)) * 4.0
+                   + Vector((0.0, -1.0, 0.0)))
+        nwcf.lathe(part, m, [(0.034, 0.029), (0.010, 0.026), (0.010, 0.0)], "soot", segments=16,
                    orient=lambda c: (0.0, -1.0, 0.0))
     return part.to_object()
 

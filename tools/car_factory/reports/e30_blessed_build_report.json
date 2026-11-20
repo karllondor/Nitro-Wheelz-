@@ -1,38 +1,38 @@
 {
   "bounds_max": [
     0.8955000042915344,
-    2.1644999980926514,
+    2.1535000801086426,
     1.315000057220459
   ],
   "bounds_min": [
     -0.8955000042915344,
-    -2.1665000915527344,
+    -2.1705000400543213,
     0.11613000184297562
   ],
   "dimensions": {
     "factory_height_m": 1.38,
     "front_overhang_m": 0.765,
     "height_m": 1.315000057220459,
-    "length_with_bumpers_m": 4.331000089645386,
+    "length_with_bumpers_m": 4.324000120162964,
     "wheelbase_m": 2.57,
     "width_body_without_mirrors_m": 1.645
   },
-  "glb_bytes": 1060232,
+  "glb_bytes": 1054924,
   "logical_faces": {
     "amber_lens": 108,
     "black_gloss": 1368,
-    "black_matte": 1802,
+    "black_matte": 1940,
     "black_satin": 1506,
     "cage": 384,
-    "chrome": 884,
-    "exhaust": 32,
+    "chrome": 1012,
+    "exhaust": 28,
     "gap": 267,
     "glass": 268,
     "interior": 935,
-    "paint": 4770,
+    "paint": 4434,
     "rubber": 228,
     "seat": 648,
-    "soot": 32,
+    "soot": 64,
     "tex_headlight": 192,
     "tex_headlight_hi": 192,
     "tex_plate": 2,
@@ -45,16 +45,16 @@
     "NW_Atlas",
     "NW_Glass"
   ],
-  "triangles": 29510,
+  "triangles": 29436,
   "triangles_per_material": {
-    "NW_Atlas": 19145,
+    "NW_Atlas": 19727,
     "NW_Glass": 536,
-    "NW_Paint": 9829
+    "NW_Paint": 9173
   },
   "uv_layers": [
     "UVMap"
   ],
-  "vertices": 16440,
+  "vertices": 16399,
   "wheel_pivots": {
     "wheel_FL": [
       -0.7120000123977661,

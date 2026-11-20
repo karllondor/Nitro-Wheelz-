@@ -207,7 +207,7 @@
     }
   },
   "presentation": {
-    "garage_zoom": 1.18,
-    "garage_zoom_note": "v0.2 owner request: car ~18 % larger in the garage card; checked to stay inside the card through a full turn."
+    "garage_framing": "auto",
+    "garage_framing_note": "v0.3: the garage fits the lens to the real car every frame (90 % of the card, widest angle of a full turn = floor, up to 22 % closer at front / rear views). The v0.2 fixed garage_zoom 1.18 is superseded."
   }
 }

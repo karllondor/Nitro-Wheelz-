@@ -1,4 +1,9 @@
-# Nitro Wheelz — v0.1.28 (Japan City street circuit) / v0.1.27 Terrain Builder visual & track builder refinement (test build) on top of v0.1.26 E30 v0.2 and v0.1.25 Terrain-first Track Builder
+# Nitro Wheelz — v0.1.29 E30 Blessed Final Visual Polish v0.3 (test build) on top of v0.1.28 Japan City street circuit / v0.1.27 Terrain Builder refinement
+
+## E30 FINAL VISUAL POLISH v0.3 (v0.1.29)
+- Read docs/car_factory/E30_VISUAL_POLISH_v0.3.md (audit, changes, measurements, lessons learned). One revertable commit. Rebuild: tools/car_factory/blender/build_e30_blessed.py + build_wheels.py (bpy 5.3.0); QA views for any car: tests/capture_car_views.gd -- <out> <variant> [race].
+- Next per the owner brief: Car Factory migration of the Lada (RED / WHITE) and RYU-32 (CLEAN / LIVERY), each as its own commit and visual acceptance.
+- STOP POINT: owner reviews the E30 v0.3 on the phone; nothing is approved yet.
 
 ## TERRAIN BUILDER REFINEMENT (v0.1.27)
 - Read docs/terrain_builder/REFINEMENT_v0.1.27.md (all brief items + the owner's chat requests, BEFORE / AFTER sheets in docs/terrain_builder/v0127/, measurements, PASS / FAIL / NOT RUN). The two phone recordings named in the brief were NOT received.

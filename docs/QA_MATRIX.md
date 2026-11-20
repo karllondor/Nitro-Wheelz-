@@ -21,6 +21,14 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.29 — E30 Blessed Final Visual Polish v0.3 (Claude Code cloud container, 2026-11-20)
+| Area | Result |
+|---|---|
+| Godot suite (import + 29 tests) incl. e30_factory_car_test (41 502 tris, 8 draw calls, garage framing 5.0 % margin over a full turn) | PASS (local) |
+| BEFORE / AFTER renders (7 views, 6 close-ups, garage, race top-down / chase, photo cameras) | DONE -> docs/car_factory/e30_v03/ |
+| CI | pending at commit time (follow-up docs commit) |
+| Phone review | NOT RUN |
+
 ## v0.1.28 — Japan City street circuit (Claude Code cloud container, 2026-11-20)
 | Area | Result |
 |---|---|

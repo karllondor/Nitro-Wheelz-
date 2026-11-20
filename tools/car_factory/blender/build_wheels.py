@@ -60,9 +60,9 @@ def rim_signature(part):
     centre and 4 nuts (4x100). Same size, hub pivot and outer offset."""
     m = nwcf.frame_from_axis((0, 0, 0), (1, 0, 0))
     seg = 36
-    lip_depth = 0.070
+    lip_depth = 0.080               # v0.3: deeper dish (was 0.070)
     face_a = HALF - lip_depth
-    r_step = RIM_R - 0.015          # inner edge of the step lip
+    r_step = RIM_R - 0.023          # v0.3: wider polished step lip (was -0.015)
     # Rolled outer flange -> flat polished lip -> step down into the dish.
     nwcf.lathe(part, m, [(HALF - 0.006, FLANGE_R + 0.001), (HALF + 0.002, FLANGE_R - 0.001),
                          (HALF + 0.004, FLANGE_R - 0.006), (HALF + 0.004, r_step + 0.004),
@@ -72,15 +72,18 @@ def rim_signature(part):
     nwcf.lathe(part, m, [(HALF + 0.001, r_step), (HALF - 0.020, r_step - 0.003),
                          (face_a + 0.010, r_step - 0.010), (face_a + 0.004, r_step - 0.013)], "rim_lip",
                segments=seg, orient=lambda c: -Vector((0, c.y, c.z)) + Vector((0.6, 0, 0)))
-    # Face: concave (outer edge forward, centre deeper), with a raised hub.
+    # v0.3: dark contact-shadow ring where the polished dish wall meets the
+    # face, then a more concave face (outer edge forward, centre deeper).
     r_f = r_step - 0.013
-    face = [(face_a + 0.004, r_f), (face_a, r_f - 0.008), (face_a - 0.004, 0.150),
-            (face_a - 0.006, 0.112), (face_a - 0.004, 0.080), (face_a + 0.004, 0.064)]
+    nwcf.lathe(part, m, [(face_a + 0.004, r_step - 0.013), (face_a + 0.002, r_f - 0.003)], "rim_dark",
+               segments=seg, orient=lambda c: (1.0, 0, 0))
+    face = [(face_a + 0.002, r_f - 0.003), (face_a - 0.001, r_f - 0.010), (face_a - 0.007, 0.140),
+            (face_a - 0.011, 0.106), (face_a - 0.008, 0.078), (face_a + 0.004, 0.064)]
     nwcf.lathe(part, m, face, "rim_silver", segments=seg, orient=lambda c: (1.0, 0, 0))
     # Vent pockets: dark tunnels sunk 25 mm into the face.
     for k in range(8):
         a = math.tau * k / 8 + math.tau / 16
-        cen = Vector((face_a - 0.0035, 0.131 * math.cos(a), 0.131 * math.sin(a)))
+        cen = Vector((face_a - 0.0085, 0.124 * math.cos(a), 0.124 * math.sin(a)))
         mm = nwcf.frame_from_axis(cen, (1, 0, 0))
         nwcf.lathe(part, mm, [(0.0015, 0.0255), (-0.022, 0.0235)], "rim_dark", segments=10,
                    orient=lambda c, cen=cen: -(c - cen) + Vector((0, 0, 0)))
@@ -144,9 +147,9 @@ def _barrel(part, m, face_a, seg):
 
 DESIGNS = {
     "wheel_signature_e30": {"name": "SIGNATURE", "builder": rim_signature, "tyre_seg": 36,
-                            "note": "Source-matched approximation (v0.2): wide polished step lip, deep dish and a "
-                                    "recessed silver face are visible in the photos; the exact face design and size "
-                                    "are NOT confirmed."},
+                            "note": "Source-matched approximation (v0.3): wide polished step lip, deep polished dish "
+                                    "with a contact-shadow ring and a concave silver face are visible in the photos; "
+                                    "the exact face design, vent count and size are NOT confirmed."},
     "wheel_nw_deep_dish": {"name": "NW DEEP DISH", "builder": rim_nw_deep_dish,
                            "note": "Nitro Wheelz original design (cosmetic only)."},
 }
