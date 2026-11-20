@@ -5,7 +5,7 @@ Every car points at one profile file in `game/cars/`. A profile has two blocks:
 - `handling`: numbers for the shared drive model (`scripts/driving/drive_model.gd`). Any key from `NitroDriveModel.TUNABLE` may be set; missing keys keep the baseline. No driving code changes per car.
 - `engine`: the procedural engine sound (`scripts/audio/engine_synth.gd`): layout, cylinders, firing pattern, revs, gearing, exhaust geometry, resonances, combustion variability, mechanical noise and loudness (no recorded sound effects since v0.1.21).
 
-Paint variants of one car share one profile (Lada red + white -> `lada_baseline.json`). Profiles are plain JSON inside the export (`include_filter="*.json"`), a few hundred bytes each.
+Paint variants of one car share one profile (Lada red + white -> `lada_baseline.json`). Car Factory cars (v0.1.24, `e30_blessed.json`) add a `model` block (GLB path, wheel radius, cosmetic camber, shadow size) and a `cosmetics` block (immutable `signature` preset, paint presets, wheel ids); cosmetics are stored per car in the garage file and never read by the drive model. Facts vs estimates vs untested tuning are recorded in `provenance`, `handling_notes` and `engine_notes`. Profiles are plain JSON inside the export (`include_filter="*.json"`), a few hundred bytes each.
 
 ## Rules
 - `lada_baseline.json` is the benchmark. Its handling values equal the v0.1.12+ tune and `car_profiles_test.gd` proves the physics trace is bit-identical to the pre-profile code and that its engine block equals the synth defaults (engine-sound fingerprint, re-recorded once for the v0.1.21 engine model). Do not edit it to tune other cars.

@@ -1,0 +1,261 @@
+{
+ "car": "e30_blessed",
+ "frame": "Blender model frame: x = car right, y = forward, z = up, metres (GLB origin at body centre, ground z = 0)",
+ "model_keypoints": {
+  "lamp_R_out": [
+   0.615,
+   2.1035,
+   0.578
+  ],
+  "lamp_R_in": [
+   0.455,
+   2.1035,
+   0.578
+  ],
+  "lamp_L_in": [
+   -0.455,
+   2.1035,
+   0.578
+  ],
+  "lamp_L_out": [
+   -0.615,
+   2.1035,
+   0.578
+  ],
+  "kidney_R": [
+   0.075,
+   2.1015,
+   0.578
+  ],
+  "kidney_L": [
+   -0.075,
+   2.1015,
+   0.578
+  ],
+  "hub_FL": [
+   -0.712,
+   1.3975,
+   0.29
+  ],
+  "hub_FR": [
+   0.712,
+   1.3975,
+   0.29
+  ],
+  "hub_RR": [
+   0.716,
+   -1.1725,
+   0.29
+  ],
+  "mirror_R": [
+   0.858,
+   0.705,
+   0.915
+  ],
+  "mirror_L": [
+   -0.858,
+   0.705,
+   0.915
+  ],
+  "ws_top_R": [
+   0.585,
+   0.37,
+   1.27
+  ],
+  "ws_top_L": [
+   -0.585,
+   0.37,
+   1.27
+  ],
+  "ws_bot_R": [
+   0.69,
+   0.85,
+   0.865
+  ],
+  "ws_bot_L": [
+   -0.69,
+   0.85,
+   0.865
+  ],
+  "tail_L": [
+   -0.522,
+   -2.085,
+   0.65
+  ],
+  "tail_R": [
+   0.522,
+   -2.085,
+   0.65
+  ],
+  "plate_rear": [
+   0.0,
+   -2.076,
+   0.627
+  ],
+  "deck_corner_L": [
+   -0.79,
+   -2.07,
+   0.828
+  ],
+  "deck_corner_R": [
+   0.79,
+   -2.07,
+   0.828
+  ]
+ },
+ "photos": {
+  "photo_02_front_drift": {
+   "size": [
+    1536,
+    860
+   ],
+   "picked_px": {
+    "lamp_R_out": [
+     305,
+     508
+    ],
+    "lamp_R_in": [
+     372,
+     508
+    ],
+    "kidney_R": [
+     510,
+     510
+    ],
+    "kidney_L": [
+     575,
+     510
+    ],
+    "lamp_L_in": [
+     748,
+     510
+    ],
+    "lamp_L_out": [
+     838,
+     512
+    ],
+    "hub_FL": [
+     1070,
+     640
+    ],
+    "mirror_R": [
+     515,
+     360
+    ],
+    "mirror_L": [
+     1135,
+     352
+    ],
+    "ws_top_R": [
+     660,
+     232
+    ],
+    "ws_top_L": [
+     1055,
+     228
+    ],
+    "ws_bot_R": [
+     565,
+     372
+    ],
+    "ws_bot_L": [
+     1068,
+     382
+    ]
+   }
+  },
+  "photo_01_front_three_quarter": {
+   "size": [
+    1309,
+    1536
+   ],
+   "picked_px": {
+    "lamp_R_out": [
+     655,
+     1063
+    ],
+    "lamp_R_in": [
+     725,
+     1058
+    ],
+    "kidney_R": [
+     858,
+     1055
+    ],
+    "kidney_L": [
+     912,
+     1055
+    ],
+    "lamp_L_in": [
+     1027,
+     1052
+    ],
+    "lamp_L_out": [
+     1085,
+     1052
+    ],
+    "hub_FR": [
+     488,
+     1165
+    ],
+    "hub_RR": [
+     210,
+     1145
+    ],
+    "ws_top_R": [
+     490,
+     812
+    ],
+    "ws_top_L": [
+     850,
+     802
+    ],
+    "ws_bot_R": [
+     485,
+     952
+    ],
+    "ws_bot_L": [
+     968,
+     948
+    ]
+   }
+  },
+  "photo_03_rear_three_quarter": {
+   "size": [
+    1536,
+    1152
+   ],
+   "picked_px": {
+    "tail_L": [
+     295,
+     652
+    ],
+    "tail_R": [
+     675,
+     648
+    ],
+    "plate_rear": [
+     465,
+     657
+    ],
+    "hub_RR": [
+     992,
+     790
+    ],
+    "hub_FR": [
+     1178,
+     735
+    ],
+    "deck_corner_L": [
+     252,
+     568
+    ],
+    "deck_corner_R": [
+     742,
+     546
+    ]
+   }
+  }
+ },
+ "note": "Pixels picked by hand on the supplied photos (about +-5 px on these low-resolution images). The photos are not in the repository (assets/references/drafts/e30_blessed_v0.1/PHOTO_MANIFEST.md)."
+}

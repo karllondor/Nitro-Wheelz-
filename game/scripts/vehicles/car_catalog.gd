@@ -9,8 +9,10 @@ class_name NitroCarCatalog
 ## the driving code; the Lada baseline stays the 1:1 reference.
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
+const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
+const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 
-const ORDER: Array[String] = ["red","white","blue"]
+const ORDER: Array[String] = ["red","white","blue","e30"]
 const CARS: Dictionary = {
     "red":{"name":"LADA 2106 DRIFT SPEC","paint":"RACING RED","short":"LADA • RED",
         "length":4.166,"wheelbase":2.424,"width":1.91,"note":"EXPOSED ENGINE",
@@ -21,6 +23,12 @@ const CARS: Dictionary = {
     "blue":{"name":"RYU-32 COUPE","paint":"DEEP BLUE","short":"RYU-32 • BLUE",
         "length":4.545,"wheelbase":2.615,"width":1.90,"note":"4.0 V8 ITB • 350 HP • 400 NM",
         "profile":"res://cars/ryu32_v8.json"},
+    # Car Factory prototype (Blender -> GLB). Cosmetics (paint, wheels) are
+    # chosen in the garage and stored apart from the handling profile.
+    "e30":{"name":"E30 BLESSED","paint":"BLESSED YELLOW","short":"E30 • BLESSED",
+        "length":4.325,"wheelbase":2.570,"width":1.645,"note":"M52B28 2.8 R6 • NA",
+        "body":"4-DOOR SEDAN","factory":true,
+        "profile":"res://cars/e30_blessed.json"},
 }
 
 const SETTINGS_PATH: String = "user://nitro_settings.cfg"
@@ -62,11 +70,15 @@ static func valid(variant: String) -> String:
 static func info(variant: String) -> Dictionary:
     return CARS[valid(variant)]
 
-## New car node for a variant (Lada red/white or the RYU-32 coupe).
+## New car node for a variant (Lada red/white, the RYU-32 coupe or a Car
+## Factory GLB car wearing its saved cosmetics: same node in garage + race).
 static func make(variant: String) -> Node3D:
     var v: String = valid(variant)
     if v == "blue":
         return COUPE.new()
+    if bool(info(v).get("factory",false)):
+        var prof: Dictionary = profile(v)
+        return FACTORY_CAR.new().setup(v,prof,COSMETICS.current(v,prof))
     var lada: NitroLadaLowPoly = LADA.new()
     lada.paint_variant = v
     return lada
@@ -92,6 +104,7 @@ static func select(variant: String) -> String:
     var chosen: String = valid(variant)
     ProjectSettings.set_setting("nitro/car_variant",chosen)
     var cfg := ConfigFile.new()
+    cfg.load(GARAGE_PATH)   # keep other sections (per-car cosmetics)
     cfg.set_value("garage","paint",chosen)
     cfg.save(GARAGE_PATH)
     return chosen

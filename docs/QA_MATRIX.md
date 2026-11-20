@@ -21,6 +21,19 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.24 local evidence — Car Factory prototype E30 Blessed (Claude Code cloud container, 2026-11-20)
+| Check | Platform | Status | Evidence |
+|---|---|---|---|
+| tools/run_godot_checks.sh (import + 24 Godot tests incl. new e30_factory_car_test) | Linux container, Godot 4.7.2 headless | PASS | local run 2026-11-20; CI on push |
+| E30 in catalog, Lada / RYU-32 profiles untouched, E30 handling = Lada baseline + wheelbase 2.570 | Linux container | PASS | e30_factory_car_test |
+| E30 model: 8 draw calls, 38.3 k triangles with wheels, length 4.331 / width 1.645 (+strips) / roof 1.315 m, wheelbase 2.570 | Linux container | PASS | e30_factory_car_test |
+| Cosmetics: SIGNATURE default, PAINT / WHEELS persist, handling unchanged, garage = race car, SIGNATURE resets | Linux container | PASS | e30_factory_car_test |
+| I6 synth: 150 Hz firing at 3000 rpm, finite non-silent output | Linux container | PASS | e30_factory_car_test |
+| Photo comparison (camera solved from keypoints) | bpy 5.3 + OpenCV + Godot, Xvfb llvmpipe | RMS 21.3 / 21.2 / 23.0 px = 2.4 / 2.6 / 2.5% of keypoint span | tools/car_factory/compare/, docs/car_factory/E30_BLESSED_PROTOTYPE.md |
+| Relative render cost (Lada / RYU-32 / E30), race scene | Xvfb + llvmpipe (software) | draw calls 212 / 213 / 188, primitives 108.6 k / 114.2 k / 94.3 k, frame 160.9 / 168.2 / 149.8 ms | tests/car_perf_probe.gd |
+| Garage / race top-down / chase screenshots | Xvfb + llvmpipe | DONE | docs/car_factory/e30/ |
+| **Android / Web FPS, memory, load time with the E30; steering-lock clearance in motion; owner visual approval** | devices / owner | **NOT RUN** | owner |
+
 ## v0.1.23 local evidence — procedural world Phase A (Claude Code cloud container, 2026-11-19)
 | Check | Platform | Status | Evidence |
 |---|---|---|---|

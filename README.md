@@ -3,7 +3,7 @@
 
 **A skill-based arcade drift racer:** Japanese-inspired circuits, difficult but learnable oversteer, clean stylized 3D and two selectable cameras. Developed in Godot 4.7.2 for Windows, Linux and Android.
 
-**Status: v0.1.23 TEST BUILD (unmerged; procedural world Phase A awaiting the owner's visual review).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
+**Status: v0.1.24 TEST BUILD (unmerged; first Car Factory car, E30 Blessed, awaiting the owner's visual review).** A first playable test build, not a finished racing game. No proprietary assets or DRIFTIT source code are used.
 
 ## Concept
 Nitro Wheelz combines:
@@ -51,7 +51,7 @@ Final branded/licensed vehicles, garage collecting, tuning, NIGHTRIDE/Drift Game
 Future official creator packs require licensing/permission. Real auto body styles shown in reference material do not grant rights to use their brands or unique liveries.
 
 ## Evidence and release
-See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.23_Platform and are never overwritten.
+See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/QA_MATRIX.md. Every test should be marked PASS/FAIL/NOT RUN. Versioned artifacts use Nitro-Wheelz_v0.1.24_Platform and are never overwritten.
 
 
 ## v0.1.9 mobile playtest
@@ -76,6 +76,9 @@ See docs/PHYSICS_REFERENCE.md, docs/ART_DIRECTION.md, docs/CONTROLS.md and docs/
 - Physics: approximately 10% reduction to yaw torque contribution and power-oversteer kick relative to v0.1.10. Handbrake flick remains unchanged.
 - Surfaces: source-derived reduced WebP samples from the two provided images (dark asphalt / sand) are tiled on the shared procedural corridor, shoulders and ground using world-space UVs. The lighter textures may repeat at close range until a later visual polish pass.
 - Tests: strict Godot import + tests for playable scenes, touch logic, pause exclusivity, loaded logo texture, asphalt/sand materials, editor Undo/dialog, and date formatting. Physical Android controls and perceived speed require owner approval.
+
+## v0.1.24 — Car Factory prototype: E30 Blessed
+- First car built with the new pipeline (Blender Python -> GLB -> Godot): a four-door E30 drift sedan in Blessed Yellow, one model for garage and race, 8 draw calls instead of 32-33. Garage prototype: SIGNATURE / PAINT / WHEELS (cosmetic only). Handling = Lada baseline + factory wheelbase (proposed tuning not applied), M52B28 inline-six synth sound. See docs/car_factory/E30_BLESSED_PROTOTYPE.md and tools/car_factory/README.md.
 
 ## v0.1.23 — Procedural world, Phase A (Japan Drift Town)
 - Track Builder 3D grows a small Japanese drift town around your road: garages, workshops that join when they stand side by side, fences, lamps, trees. The same town appears when you DRIVE. See docs/research/procedural_world/PHASE_A_REPORT.md.

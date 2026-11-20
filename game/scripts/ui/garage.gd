@@ -3,6 +3,7 @@ extends Control
 ## die-cast Lada 2106 drift spec on a slowly turning (draggable) platform.
 const CAR = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
+const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 const LOGO = preload("res://assets/brand/nitro_wheelz_logo.svg")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const BACKDROP_SHADER = preload("res://assets/shaders/studio_backdrop.gdshader")
@@ -15,6 +16,7 @@ var display: SubViewportContainer
 var spin_speed: float = 0.35
 var dragging: bool = false
 var paint_buttons: Dictionary = {}
+var cosmetic_buttons: Dictionary = {}
 var title_label: Label
 var info_label: Label
 var ui_unit: float = 1.0
@@ -58,7 +60,7 @@ func _ready() -> void:
     # Card frame with the HUD's pink neon edge.
     var card := Panel.new()
     card.position = Vector2(s.x*0.045,s.y*0.180)
-    card.size = Vector2(s.x*0.91,s.y*0.50)
+    card.size = Vector2(s.x*0.91,s.y*0.455)
     card.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var frame := StyleBoxFlat.new()
     frame.bg_color = Color(0.05,0.045,0.07)
@@ -89,7 +91,7 @@ func _ready() -> void:
 
     var info := Label.new()
     info_label = info
-    info.position = Vector2(s.x*0.05,s.y*0.695)
+    info.position = Vector2(s.x*0.05,s.y*0.645)
     info.size = Vector2(s.x*0.90,s.y*0.035)
     info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     info.add_theme_font_size_override("font_size",int(15.0*sc))
@@ -97,7 +99,7 @@ func _ready() -> void:
     add_child(info)
 
     version_label = Label.new()
-    version_label.position = Vector2(s.x*0.05,s.y*0.732)
+    version_label.position = Vector2(s.x*0.05,s.y*0.680)
     version_label.size = Vector2(s.x*0.90,s.y*0.032)
     version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     version_label.add_theme_font_override("font",STYLE.BOLD)
@@ -111,9 +113,18 @@ func _ready() -> void:
     var bw: float = (0.90-gap*float(n-1))/float(n)
     for i in range(n):
         var v: String = CARS.ORDER[i]
-        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.782,bw,0.072,
+        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.718,bw,0.068,
             _choose.bind(v),sc)
         paint_buttons[v].name = "Car "+v
+        paint_buttons[v].add_theme_font_size_override("font_size",int((18.0 if n <= 3 else 14.0)*sc))
+    # Car Factory cosmetics (prototype): SIGNATURE resets to the authentic
+    # look, PAINT and WHEELS cycle presets. Cosmetic only: never physics.
+    cosmetic_buttons["signature"] = _action("SIGNATURE",0.05,0.800,0.26,0.068,Callable(self,"_signature"),sc)
+    cosmetic_buttons["paint"] = _action("PAINT",0.33,0.800,0.30,0.068,Callable(self,"_next_paint"),sc)
+    cosmetic_buttons["wheels"] = _action("WHEELS",0.65,0.800,0.30,0.068,Callable(self,"_next_wheels"),sc)
+    for key in cosmetic_buttons.keys():
+        cosmetic_buttons[key].name = "Cosmetic "+key
+        cosmetic_buttons[key].add_theme_font_size_override("font_size",int(14.0*sc))
     _action("BACK TO MENU",0.05,0.885,0.43,0.072,Callable(self,"_back"),sc)
     _action("DRIVE",0.52,0.885,0.43,0.072,Callable(self,"_drive"),sc)
     _set_status()
@@ -215,13 +226,53 @@ func _drive() -> void:
 
 func _set_status() -> void:
     var info: Dictionary = CARS.info(active_variant)
+    var prof: Dictionary = CARS.profile(active_variant)
+    var factory: bool = COSMETICS.supported(prof)
     version_label.text = "SELECTED: "+str(info["paint"])+"  •  "+str(info["note"])
+    if factory:
+        var choice: Dictionary = COSMETICS.current(active_variant,prof)
+        version_label.text = "%s  •  %s  •  %s" % [COSMETICS.paint_name(choice,prof),
+            COSMETICS.wheel_name(choice)+" WHEELS","ORIGINAL" if COSMETICS.is_signature(choice,prof) else "CUSTOM"]
+        cosmetic_buttons["paint"].text = "PAINT: "+COSMETICS.paint_name(choice,prof)
+        cosmetic_buttons["wheels"].text = "WHEELS: "+COSMETICS.wheel_name(choice)
+    else:
+        cosmetic_buttons["paint"].text = "PAINT"
+        cosmetic_buttons["wheels"].text = "WHEELS"
+    for key in cosmetic_buttons.keys():
+        cosmetic_buttons[key].disabled = not factory
+        STYLE.style_button(cosmetic_buttons[key],ui_unit,false)
+        cosmetic_buttons[key].modulate.a = 1.0 if factory else 0.35
     if title_label != null:
         title_label.text = "GARAGE  /  "+str(info["name"])
     if info_label != null:
-        info_label.text = "BODY %.3f m   •   WHEELBASE %.3f m   •   WIDEBODY" % [float(info["length"]),float(info["wheelbase"])]
+        info_label.text = "BODY %.3f m   •   WHEELBASE %.3f m   •   %s" % [float(info["length"]),
+            float(info["wheelbase"]),str(info.get("body","WIDEBODY"))]
     for key in paint_buttons.keys():
         STYLE.style_button(paint_buttons[key],ui_unit,key == active_variant)
+
+func _signature() -> void:
+    var prof: Dictionary = CARS.profile(active_variant)
+    if not COSMETICS.supported(prof):
+        return
+    var choice: Dictionary = COSMETICS.reset_to_signature(active_variant,prof)
+    _apply_cosmetic(choice)
+
+func _next_paint() -> void:
+    var prof: Dictionary = CARS.profile(active_variant)
+    if COSMETICS.supported(prof):
+        _apply_cosmetic(COSMETICS.next_paint(active_variant,prof))
+
+func _next_wheels() -> void:
+    var prof: Dictionary = CARS.profile(active_variant)
+    if COSMETICS.supported(prof):
+        _apply_cosmetic(COSMETICS.next_wheel(active_variant,prof))
+
+## Live update of the preview: same car node, new paint / wheels only.
+func _apply_cosmetic(choice: Dictionary) -> void:
+    if car != null and car.has_method("apply_paint"):
+        car.call("apply_paint",choice)
+        car.call("apply_wheels",choice)
+    _set_status()
 
 func _spawn_car() -> void:
     if car != null:

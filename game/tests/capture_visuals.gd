@@ -9,6 +9,7 @@ extends SceneTree
 ##       --script res://tests/capture_visuals.gd -- /abs/output/dir [shots...]
 ## Shots: race_drift race_start race_chase garage_red garage_white menu editor
 ##        editor_help race_pause race_accent results race_blue race_blue_chase garage_blue builder_partial builder_loop race_built
+##        race_e30 race_e30_chase garage_e30 garage_e30_custom
 
 var out_dir: String = "user://captures"
 var shots: PackedStringArray = PackedStringArray([
@@ -46,6 +47,16 @@ func _run() -> void:
                 ProjectSettings.set_setting("nitro/car_variant","red")
             "garage_blue":
                 await _garage_shot(shot,"blue")
+            "race_e30","race_e30_chase":
+                ProjectSettings.set_setting("nitro/car_variant","e30")
+                await _race_shot(shot,"res://tracks/shin_kawa_v2.json",1 if shot.ends_with("chase") else 0,true)
+                ProjectSettings.set_setting("nitro/car_variant","red")
+            "garage_e30":
+                await _garage_shot(shot,"e30")
+            "garage_e30_custom":
+                # Cosmetic preset: pink pearl paint + NW Deep Dish wheels.
+                await _garage_shot(shot,"e30",{"paint_color_hex":"#FF2A8E","paint_finish":"pearl",
+                    "wheel_asset_id":"wheel_nw_deep_dish"})
             "garage_red":
                 await _garage_shot(shot,"red")
             "garage_white":
@@ -159,12 +170,17 @@ func _builder_shot(name: String, full_loop: bool) -> void:
     scene.queue_free()
     await process_frame
 
-func _garage_shot(name: String,variant: String) -> void:
+func _garage_shot(name: String,variant: String,cosmetic: Dictionary = {}) -> void:
     ProjectSettings.set_setting("nitro/car_variant",variant)
     var cfg := ConfigFile.new()
     cfg.set_value("garage","paint",variant)
+    for key in cosmetic.keys():
+        cfg.set_value("cosmetics_"+variant,key,cosmetic[key])
     cfg.save("user://nitro_garage.cfg")
     await _scene_shot(name,"res://scenes/garage.tscn")
+    if not cosmetic.is_empty():
+        cfg.erase_section("cosmetics_"+variant)
+        cfg.save("user://nitro_garage.cfg")
 
 func _scene_shot(name: String,path: String,after_ready: String = "") -> void:
     var node: Node = (load(path) as PackedScene).instantiate()

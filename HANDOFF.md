@@ -1,4 +1,12 @@
-# Nitro Wheelz — v0.1.23 procedural world Phase A (test build, awaiting visual review)
+# Nitro Wheelz — v0.1.24 Car Factory prototype: E30 Blessed (test build, awaiting visual review)
+
+## CAR FACTORY / E30 BLESSED (v0.1.24)
+- Read docs/car_factory/E30_BLESSED_PROTOTYPE.md (results, confirmed vs unconfirmed, comparison, performance, decisions) and docs/car_factory/CAR_FACTORY_AUDIT.md (why this pipeline).
+- Build: tools/car_factory/README.md (bpy 5.3.0 in a venv; GLBs are committed, CI only imports them).
+- Code: game/scripts/vehicles/glb_car.gd (GLB car assembly), car_cosmetics.gd (paint / wheels / signature), car_catalog.gd (variant "e30"), game/cars/e30_blessed.json, game/assets/cars/, shaders nitro_car_atlas / nitro_car_glass, garage.gd (SIGNATURE / PAINT / WHEELS row).
+- Tests: e30_factory_car_test.gd (registered). Dev tools: car_perf_probe.gd, car_camera_match_render.gd, tools/car_factory/compare/.
+- Reference package: assets/references/drafts/e30_blessed_v0.1/ (DRAFT; photos not committed).
+- STOP POINT: owner reviews the E30 before any further cars.
 
 ## PROCEDURAL WORLD PHASE A (v0.1.23)
 - Read docs/research/procedural_world/PHASE_A_REPORT.md first (architecture, evidence, measurements, limits).
@@ -24,7 +32,7 @@ BRANCH: ccr-91dad981-53kkbi, fast-forwarded from agent/nitro-v0.1.12-car-garage-
 ## TESTS
 - PASS (local, Godot 4.7.2 headless): import + smoke, input, driving, mobile_visual, track_dna, benchmark_track, generated_track, editor_results, brand_pause_surface, garage_audio, dynamic_camera, visual_identity, track_builder, drift_scoring, engine_audio. check_project.py PASS.
 - PASS: negative controls — tree clearance gate off -> visual_identity FAIL; wall penalty off -> drift_scoring FAIL; 2 pulses/rev -> engine_audio FAIL.
-- NOTE: editor_results_test appends to user://nitro_local_runs.json and expects exactly two QA runs, so a second local run fails until that file is deleted (pre-existing; CI starts clean).
+- NOTE (fixed in v0.1.24): editor_results_test used to fail on a second local run because it kept appending QA records to user://nitro_local_runs.json; it now clears its own records first.
 - RENDERED (not device): stills of race top-down/chase, garage red/white, menu, editor via Xvfb + Mesa llvmpipe.
 - NOT RUN: Android install/look/FPS/thermals, touch feel, Xbox hardware, CI for this push (check Actions by commit SHA).
 

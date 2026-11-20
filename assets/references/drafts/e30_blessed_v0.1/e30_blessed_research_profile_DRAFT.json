@@ -1,0 +1,272 @@
+{
+  "schema_version": "0.1-draft",
+  "date": "2026-11-20",
+  "status": "RESEARCH_DRAFT_NOT_APPROVED_NOT_IN_REPOSITORY",
+  "vehicle_id": "nightride_e30_blessed_yellow",
+  "name": "NIGHTRIDE E30 Blessed Yellow",
+  "base_vehicle": "BMW 3 Series E30 four-door sedan",
+  "distinguish_from": "Do not confuse with Arek 400 HP turbo E30, E30 motorcycle sculpture, or other NIGHTRIDE vehicles",
+  "reference_selection": {
+    "primary_images": [
+      "photo_01_front_three_quarter.jpg",
+      "photo_02_front_drift.jpg",
+      "photo_03_rear_three_quarter.jpg"
+    ],
+    "secondary_image": [
+      "reference_04_stylized_side_illustration.jpg"
+    ],
+    "note": "The fourth image is an illustration. Do NOT infer actual scale, exhaust hardware or suspension geometry from this artwork. Real photos take priority. Do not mix the car over different eras without user approval."
+  },
+  "confirmed_builder_history": [
+    {
+      "fact": "M52B28 2.8-liter inline-6 engine swap in NIGHTRIDE E30 328i",
+      "evidence": [
+        "SRC01",
+        "SRC02"
+      ],
+      "status": "confirmed_by_creator"
+    },
+    {
+      "fact": "Car was damaged, repaired and restored; Blessed formerly Cursed",
+      "evidence": [
+        "SRC01",
+        "SRC04",
+        "SRC05"
+      ],
+      "status": "confirmed_by_creator"
+    },
+    {
+      "fact": "Further parts were installed in 2022; exact brands unspecified in video description",
+      "evidence": [
+        "SRC02"
+      ],
+      "status": "confirmed_activity_parts_unknown"
+    },
+    {
+      "fact": "GARAGISTIC parts package featured April 2024; exact components not verified from metadata",
+      "evidence": [
+        "SRC03"
+      ],
+      "status": "confirmed_activity_parts_unknown"
+    }
+  ],
+  "factory_reference_not_specific_build": {
+    "body_length_m": 4.325,
+    "body_width_m": 1.645,
+    "body_height_m": 1.38,
+    "wheelbase_m": 2.57,
+    "engine_code": "M52B28",
+    "layout": "inline_6",
+    "displacement_cc": 2793,
+    "aspiration": "naturally_aspirated",
+    "factory_power_ps": 193,
+    "factory_torque_nm": 280,
+    "warning": "Factory baseline dimensions and power are NOT measurements of NIGHTRIDE modified car."
+  },
+  "visual_observations_user_images": {
+    "body": "yellow four-door BMW E30 sedan, black front/rear bumpers, black side molding, lowering and aggressive stance",
+    "wheels": "deep-dish rims with bright/polished lips; exact model and dimensions cannot be proven from low-resolution photos",
+    "engine_visibility": "hood appears fitted in these E30 photos; keep it fitted, unless approved original version explicitly has exposed engine",
+    "livery": "clean yellow and black, no prominent complex side livery visible in supplied real photographs",
+    "confidence": "image-based, not detailed part identification"
+  },
+  "possible_modifications_unconfirmed": [
+    {
+      "item": "Colin Star Shark 4H rims",
+      "evidence": [
+        "SRC08"
+      ],
+      "status": "third_party_caption_needs_creator_confirmation"
+    },
+    {
+      "item": "BC Racing True Rear coilover suspension",
+      "evidence": [
+        "SRC08"
+      ],
+      "status": "third_party_caption_needs_creator_confirmation"
+    },
+    {
+      "item": "M3-style front and M-Tech II-style rear bumper on later build stages",
+      "evidence": [
+        "SRC09"
+      ],
+      "status": "community_guess_not_confirmed_for_photos"
+    },
+    {
+      "item": "Exact steering angle kit, hydraulic handbrake, diff (LSD/welded), final drive ratio, spring/damper rates, wheel/tire sizes, dyno output, vehicle mass",
+      "evidence": [],
+      "status": "unknown_do_not_fabricate"
+    }
+  ],
+  "provisional_game_profile_not_actual_vehicle": {
+    "baseline": "Read active v0.1.23 car profile; do not overwrite Lada physics",
+    "engine": {
+      "layout": "I6",
+      "engine_code": "M52B28",
+      "displacement_l": 2.793,
+      "power_ps_approx_factory": 193,
+      "torque_nm_approx_factory": 280,
+      "forced_induction": false,
+      "idle_rpm_tuning_start": 850,
+      "redline_rpm_tuning_start": 6500,
+      "gear_count_tuning_start": 5,
+      "transmission_actual": "unknown"
+    },
+    "handling": {
+      "drive": "RWD",
+      "wheelbase_m": 2.57,
+      "vehicle_mass_kg_tuning_start": 1250,
+      "mass_is_not_measured": true,
+      "steering_max_deg_tuning_start": 43,
+      "front_grip_multiplier": 1.02,
+      "rear_grip_multiplier": 0.96,
+      "rear_slide_grip_factor": 0.61,
+      "countersteer_assist": "inherit_current_baseline_initially",
+      "yaw_damping_multiplier": 0.96,
+      "power_accel_multiplier": 1.04,
+      "differential": "unknown_gameplay_test_as_near_locked",
+      "tyre_data": "unknown"
+    },
+    "sound": {
+      "type": "natural_aspirated_smooth_in_line_six",
+      "rpm_driven": true,
+      "rpm_idle_to_limiter": "850 to 6500 as initial game tuning, not verified specific NIGHTRIDE car",
+      "exhaust": "throaty straight six, no auto turbo spool or blowoff",
+      "throttle_response": "crisp but torque-biased midrange",
+      "audio_clips": "use synthesis as baseline, samples optional if licensed"
+    },
+    "prototype_requirement": "Visual car factory proof-of-concept can be done independently of physics; handling changes require separate A/B test."
+  },
+  "approved_rules_from_user": {
+    "same_appearance_garage_and_track": true,
+    "hood_visibility_based_on_approved_real_version": true,
+    "do_not_add_fake_hood_close_open_variants": true,
+    "original_wheels_as_signature_preset": true,
+    "custom_wheels_and_paint_in_garage": "proposed_not_finally_approved"
+  },
+  "garage_customization_proposal": {
+    "keep_signature_preset_immutable": true,
+    "paint": [
+      "original yellow",
+      "NW preset palette",
+      "custom color later"
+    ],
+    "wheels": [
+      "signature/source-matched model",
+      "NW Deep Dish",
+      "NW Japan Oldschool Mesh",
+      "NW Retro 5-Spoke",
+      "NW Diecast Turbo Disc",
+      "NW Split-6"
+    ],
+    "separate_cosmetic_from_physics": true,
+    "save_fields": [
+      "paint_color_hex",
+      "paint_finish",
+      "wheel_asset_id",
+      "wheel_finish",
+      "livery_id"
+    ],
+    "constraints": [
+      "wheel clearance check",
+      "front/rear offsets",
+      "stock E30 4x100 is reference only; check conversion before real wheel spec claims",
+      "never alter baseline vehicle profile from cosmetic wheel swap"
+    ]
+  },
+  "sources": [
+    {
+      "id": "SRC01",
+      "title": "Our Cursed BMW E30 328i is FIXED | NIGHTRIDE",
+      "url": "https://www.youtube.com/watch?v=SK-YDJgQ2Rg",
+      "date": "2022-02-20",
+      "supports": "NIGHTRIDE states M52B28 2.8 swap, crash and repair",
+      "tier": "first_party_video_description"
+    },
+    {
+      "id": "SRC02",
+      "title": "Finally drifting our BMW E30 328i but it is still CURSED | NIGHTRIDE",
+      "url": "https://www.youtube.com/watch?v=-W3kgrtosZo",
+      "date": "2022-08-28",
+      "supports": "2.8 swapped E30 and further parts installed prior to drifting; part brands not detailed in text",
+      "tier": "first_party_video_description"
+    },
+    {
+      "id": "SRC03",
+      "title": "UPGRADING The Blessed BMW E30 | NIGHTRIDE",
+      "url": "https://www.youtube.com/watch?v=sgvzl-l29bQ",
+      "date": "2024-04-05",
+      "supports": "GARAGISTIC package mentioned; exact components not specified in public description",
+      "tier": "first_party_video_description"
+    },
+    {
+      "id": "SRC04",
+      "title": "Bringing back the Cursed Blessed BMW E30 | NIGHTRIDE",
+      "url": "https://www.youtube.com/watch?v=vW5sWKLOIUM",
+      "date": "2024-03-17",
+      "supports": "Renamed / renewed Blessed E30 project",
+      "tier": "first_party_video_description"
+    },
+    {
+      "id": "SRC05",
+      "title": "FULL STORY OF NIGHTRIDE BMW E30 | DAYRIDE",
+      "url": "https://www.youtube.com/watch?v=qPHvtorDaLM",
+      "date": "2025-03-18",
+      "supports": "Timeline: crashes, engine change, restoration",
+      "tier": "first_party_affiliated"
+    },
+    {
+      "id": "SRC06",
+      "title": "BMW E30 325i owners manual",
+      "url": "https://www.billswebspace.com/BMW%20E30%20Owner%20Manual%20%28325i-325is%29.pdf",
+      "supports": "Stock E30 dimensions length 4325 width 1645 wheelbase 2570 mm; modified dimensions differ",
+      "tier": "manufacturer_manual_mirror"
+    },
+    {
+      "id": "SRC07",
+      "title": "ADAC BMW E36 328i M52B28 specs",
+      "url": "https://www.adac.de/rund-ums-fahrzeug/autokatalog/marken-modelle/bmw/3er-reihe/e36/983365/",
+      "supports": "Factory M52B28 power 142 kW (193 PS) torque 280 Nm",
+      "tier": "independent_technical"
+    },
+    {
+      "id": "SRC08",
+      "title": "Strict Standards post shared on Tumblr",
+      "url": "https://www.tumgik.com/tag/meister%20L1",
+      "supports": "Third-party claim: Colin Star Shark 4H wheels; BC Racing True Rear coilovers",
+      "tier": "third_party_not_confirmed"
+    },
+    {
+      "id": "SRC09",
+      "title": "NIGHTRIDE E30 bumpers discussion",
+      "url": "https://www.reddit.com/r/E30/comments/1kuv5ti",
+      "supports": "Unverified community speculation about M3-style front and M-Tech II-style rear bumper",
+      "tier": "community_unverified"
+    },
+    {
+      "id": "SRC10",
+      "title": "400HP TURBO BMW E30 Drifting | NIGHTRIDE",
+      "url": "https://www.youtube.com/watch?v=h8EaLcFNM1A",
+      "date": "2020-05-17",
+      "supports": "Different BMW E30 turbo belonging to Arek, not this Blessed project",
+      "tier": "first_party_video_description"
+    },
+    {
+      "id": "SRC11",
+      "title": "NIGHTRIDE official merchandise listing",
+      "url": "https://nightride.pl/product/nightride-keychain/",
+      "supports": "Official name E30 Blessed (yellow)",
+      "tier": "first_party_website"
+    }
+  ],
+  "next_research_requirements": [
+    "Creator-confirmed wheel model and dimensions",
+    "Exact coilovers and alignment",
+    "Differential/LSD or welded and ratio",
+    "Steering angle kit details",
+    "Verified power and torque dyno data",
+    "Verified mass after swap",
+    "Manual gear ratios and final drive",
+    "Specific build era/photo matching"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "wheels": {
+    "wheel_nw_deep_dish": {
+      "file": "wheel_nw_deep_dish.glb",
+      "name": "NW DEEP DISH",
+      "note": "Nitro Wheelz original design (cosmetic only).",
+      "outer_face_offset_m": 0.1115,
+      "rim_half_width_m": 0.1075,
+      "rim_radius_m": 0.2032,
+      "tyre_radius_m": 0.29,
+      "tyre_width_m": 0.205
+    },
+    "wheel_signature_e30": {
+      "file": "wheel_signature_e30.glb",
+      "name": "SIGNATURE",
+      "note": "Source-matched approximation: deep polished lip and silver face are visible in the photos; the exact face design and size are NOT confirmed.",
+      "outer_face_offset_m": 0.1115,
+      "rim_half_width_m": 0.1075,
+      "rim_radius_m": 0.2032,
+      "tyre_radius_m": 0.29,
+      "tyre_width_m": 0.205
+    }
+  }
+}

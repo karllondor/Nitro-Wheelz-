@@ -1,0 +1,79 @@
+{
+  "bounds_max": [
+    0.8955000042915344,
+    2.1644999980926514,
+    1.315000057220459
+  ],
+  "bounds_min": [
+    -0.8955000042915344,
+    -2.1665000915527344,
+    0.11613000184297562
+  ],
+  "dimensions": {
+    "factory_height_m": 1.38,
+    "front_overhang_m": 0.765,
+    "height_m": 1.315000057220459,
+    "length_with_bumpers_m": 4.331000089645386,
+    "wheelbase_m": 2.57,
+    "width_body_without_mirrors_m": 1.645
+  },
+  "glb_bytes": 1026648,
+  "logical_faces": {
+    "amber_lens": 108,
+    "black_gloss": 1328,
+    "black_matte": 1342,
+    "black_satin": 1554,
+    "cage": 384,
+    "chrome": 804,
+    "exhaust": 32,
+    "gap": 267,
+    "glass": 480,
+    "interior": 935,
+    "paint": 4490,
+    "rubber": 277,
+    "seat": 648,
+    "soot": 32,
+    "tex_headlight": 432,
+    "tex_plate": 2,
+    "tex_tail": 12,
+    "under": 484,
+    "well": 480
+  },
+  "materials": [
+    "NW_Paint",
+    "NW_Atlas",
+    "NW_Glass"
+  ],
+  "triangles": 28666,
+  "triangles_per_material": {
+    "NW_Atlas": 18589,
+    "NW_Glass": 960,
+    "NW_Paint": 9117
+  },
+  "uv_layers": [
+    "UVMap"
+  ],
+  "vertices": 16005,
+  "wheel_pivots": {
+    "wheel_FL": [
+      -0.7120000123977661,
+      1.3975000381469727,
+      0.28999999165534973
+    ],
+    "wheel_FR": [
+      0.7120000123977661,
+      1.3975000381469727,
+      0.28999999165534973
+    ],
+    "wheel_RL": [
+      -0.7160000205039978,
+      -1.1725000143051147,
+      0.28999999165534973
+    ],
+    "wheel_RR": [
+      0.7160000205039978,
+      -1.1725000143051147,
+      0.28999999165534973
+    ]
+  }
+}

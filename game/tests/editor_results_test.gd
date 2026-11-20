@@ -216,6 +216,11 @@ func _run() -> void:
     if RESULTS.clock(46.77)!="0:46.77":
         _fail("Finish clock formatting incorrect")
         return
+    # Start from a clean QA track (earlier local runs of this suite leave records).
+    var kept: Array = RESULTS.read_runs().filter(func(r): return str(r.get("track_id","")) != "qa_local_only")
+    var store: FileAccess = FileAccess.open(RESULTS.STORAGE,FileAccess.WRITE)
+    store.store_string(JSON.stringify(kept,"  "))
+    store.close()
     if not RESULTS.save_run("qa_local_only",55.2,1100,1) or not RESULTS.save_run("qa_local_only",52.4,1400,2):
         _fail("Local result persistence failed")
         return
