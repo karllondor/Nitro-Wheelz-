@@ -152,6 +152,13 @@ func _run() -> void:
                 _fail("City needs at least 4 kinds of blocks (%s)" % [ck])
                 return
             city_mix = str(ck)
+            # v0.1.27 street circuit: buildings line the road right behind
+            # the verge + sidewalk (never on the verge or the road).
+            var fs: Dictionary = wa.scenery.summary()["frontage"]
+            if int(fs["count"]) < 20 or float(fs["min_gap"]) < PROFILE.VERGE+1.0 or float(fs["min_gap"]) > SCEN.CITY_SETBACK_M+1.0:
+                _fail("City frontage must line the road just behind the verge (%s)" % [fs])
+                return
+            city_mix += " frontage %d at %.1f m" % [int(fs["count"]),float(fs["min_gap"])]
         else:
             # v0.1.27 roadside planting: present, and only behind the barrier.
             var rs: Array = wa.scenery.min_roadside_clearance()

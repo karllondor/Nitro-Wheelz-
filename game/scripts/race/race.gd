@@ -707,8 +707,17 @@ func _update_camera_view(delta: float) -> void:
             chase_target = candidate
         else:
             chase_target = car_position-f*chase_back+Vector3.UP*(chase_height+8.0)
+    if track.terrain != null and track.terrain.scenery != null:
+        # Street circuit: rise over a building beside the road, never inside.
+        var roof: float = track.terrain.scenery.building_top_at(Vector2(chase_target.x,chase_target.z))
+        if roof > chase_target.y-2.0:
+            chase_target.y = roof+3.0
     var chase_alpha: float = 1.0-exp(-3.6*maxf(delta,0.0))
     chase.position = chase.position.lerp(chase_target,chase_alpha)
+    if track.terrain != null and track.terrain.scenery != null:
+        var roof2: float = track.terrain.scenery.building_top_at(Vector2(chase.position.x,chase.position.z))
+        if roof2 > chase.position.y-1.0:
+            chase.position.y = roof2+1.5
     if track.terrain != null:
         # Terrain clearance: never inside a cut slope or hillside.
         var ground: float = track.terrain.height_at(chase.position.x,chase.position.z)

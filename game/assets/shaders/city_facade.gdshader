@@ -7,8 +7,8 @@
 //     2 office ribbon glazing            3 tower curtain wall
 //     4 shop: shopfront + flats above    5 mansion: sliding doors
 //     6 department store: tall slits     7 convenience store: glass front
-// Window cells are 1.5 / 3 m modules aligned with the block grid (the
-// scenery snaps buildings to 3 m), so windows never cut through corners.
+// Window cells are 1.5 / 3 m modules counted from each face's own edge
+// (UV2.x); buildings are multiples of 3 m, so windows never cut corners.
 // Far away the pattern fades to its average colour (no shimmering).
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_back;
@@ -48,7 +48,7 @@ void fragment() {
 		col *= mix(0.80, 1.0, smoothstep(0.0, 5.0, y));
 		if (style > 0) {
 			vec2 t = normalize(vec2(-n.z, n.x));
-			float h = dot(wpos.xz, t);
+			float h = dot(wpos.xz, t) - UV2.x;
 			float M = 3.0;
 			float F = 3.0;
 			float g0 = 0.0;

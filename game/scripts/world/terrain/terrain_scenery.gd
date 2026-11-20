@@ -156,6 +156,8 @@ func _rebuild_begin() -> void:
     venue_node.name = "Venue"
     add_child(venue_node)
     _build_venue()
+    city_bounds.clear()
+    _plan_frontage()
 
 ## Called by the world after a road edit with the chunks whose terrain
 ## changed; also refreshes every chunk whose nearby road segments changed
@@ -175,6 +177,7 @@ func on_road_changed_steps(dirty: Array) -> Array:
     var old_venue: Array = venue_keep.duplicate()
     _index_road()
     _build_venue()
+    _plan_frontage()
     var todo: Dictionary = {}
     for id in dirty:
         todo[id] = true
@@ -329,6 +332,8 @@ func _build_chunk(id: Vector2i) -> void:
                 continue
             if relief == "urban" and field.mask_at(field.tint,x,z) < 0.45 and field.base_at(x,z) < 12.0:
                 continue      # city: trees only in parks / up the hills (+ avenue trees)
+            if relief == "urban" and road_clearance(Vector2(x,z)) < CITY_GRID_CLEAR_M:
+                continue      # the frontage row owns the strip along the race road
             var sp: String = _pick_species(rng,x,z)
             var spec: Dictionary = SPECIES[sp]
             var hr: Array = spec["h"]
@@ -723,6 +728,15 @@ const CITY_AWNING: Array[Color] = [Color(0.80,0.16,0.14),Color(0.14,0.36,0.62),C
 const CITY_SIGN: Array[Color] = [Color(0.95,0.80,0.20),Color(0.90,0.24,0.24),Color(0.30,0.64,0.95),
     Color(0.95,0.95,0.90),Color(0.36,0.84,0.46),Color(0.95,0.46,0.66)]
 const CITY_ROOF := Color(0.46,0.46,0.47)
+## v0.1.27 street circuit (owner): buildings line the race road - facades
+## stand on the sidewalk right behind the verge; the street grid's blocks
+## and furniture stay behind that frontage row.
+const CITY_SETBACK_M: float = PROFILE.VERGE+2.4
+const CITY_GRID_CLEAR_M: float = PROFILE.VERGE+2.4+20.0
+const CITY_FRONT_CAPS: Dictionary = {"shop":4,"mansion":7,"office":8}
+var frontage: Array = []                  # planned road-frontage lots (whole road)
+var city_bounds: Dictionary = {}          # chunk -> [[centre, r, b, half_u, half_v, top]]
+var _cur_chunk: Vector2i = Vector2i.ZERO
 
 func _city_district(node: Node3D, id: Vector2i, x0: float, z0: float, span: float,
         per: Dictionary, shadows: Array[Transform3D]) -> void:
@@ -737,6 +751,21 @@ func _city_district(node: Node3D, id: Vector2i, x0: float, z0: float, span: floa
         hi = Vector2(maxf(hi.x,l.x),maxf(hi.y,l.y))
     var cb := _CityBuild.new()
     var kinds: Dictionary = {}
+    _cur_chunk = id
+    city_bounds[id] = []
+    # Road frontage first (lots whose centre lies in this chunk).
+    var crect := Rect2(x0,z0,span,span)
+    for lot in frontage:
+        var lc0: Vector2 = (lot["o"] as Vector2)+(lot["t"] as Vector2)*float(lot["f"])*0.5+(lot["n"] as Vector2)*float(lot["d"])*0.5
+        if not crect.has_point(lc0):
+            continue
+        var lrng := RandomNumberGenerator.new()
+        lrng.seed = int(lot["seed"])
+        cb.set_frame(lot["o"],lot["t"],lot["n"])
+        cb.base_y = float(lot["gy"])
+        var ltop: float = _city_building(cb,lrng,str(lot["kind"]),float(lot["f"]),float(lot["d"]),0.0,float(lot["gy"]),true,CITY_FRONT_CAPS)
+        _bounds_add(cb.o,cb.r,cb.b,0.0,float(lot["f"]),0.0,float(lot["d"]),ltop)
+        kinds["frontage"] = int(kinds.get("frontage",0))+1
     for iv in range(int(floor((lo.y-off.y)/pitch.y))-1,int(ceil((hi.y-off.y)/pitch.y))+1):
         for iu in range(int(floor((lo.x-off.x)/pitch.x))-1,int(ceil((hi.x-off.x)/pitch.x))+1):
             var la: Array = field.city_line(0,iu)
@@ -771,6 +800,141 @@ func _city_district(node: Node3D, id: Vector2i, x0: float, z0: float, span: floa
         # Buildings are big silhouettes: they draw further than trees.
         mi.visibility_range_end = draw_range*1.6
     node.add_child(mi)
+
+## Street-circuit frontage plan for the whole road: lots of shops, mansions
+## and low offices facing the road on both sides, facade line at
+## CITY_SETBACK_M from the road edge, gaps where grid streets reach the road,
+## none over bridges, at the venue or off the map. Deterministic per seed.
+func _plan_frontage() -> void:
+    frontage.clear()
+    if field.relief != "urban" or world.road.is_empty():
+        return
+    var road: Dictionary = world.road
+    var samples: Array[Vector2] = road["samples"]
+    var hw: PackedFloat32Array = road["halfwidths"]
+    var cls: PackedInt32Array = road["class"]
+    var closed: bool = road["closed"]
+    var n: int = samples.size()
+    var rng := RandomNumberGenerator.new()
+    rng.seed = seed_value*7907+13
+    var boxes: Array = []
+    for side in [-1.0,1.0]:
+        var run: float = 0.0
+        var next_s: float = 0.0
+        for i in range(n):
+            if i > 0:
+                run += samples[i-1].distance_to(samples[i])
+            if run < next_s:
+                continue
+            if cls[i] >= 4:
+                next_s = run+6.0
+                continue
+            var a: Vector2 = samples[(i-1+n)%n] if (closed or i > 0) else samples[i]
+            var b: Vector2 = samples[(i+1)%n] if (closed or i < n-1) else samples[i]
+            var t: Vector2 = (b-a).normalized()
+            var nn: Vector2 = Vector2(-t.y,t.x)*side
+            var r: float = rng.randf()
+            var kind: String = "shop" if r < 0.55 else ("mansion" if r < 0.82 else "office")
+            var f: float = snappedf(rng.randf_range(6.0,9.0) if kind == "shop" else (rng.randf_range(12.0,21.0) if kind == "mansion" else rng.randf_range(15.0,24.0)),3.0)
+            var d: float = snappedf(rng.randf_range(9.0,15.0),3.0)
+            var o: Vector2 = samples[i]+nn*(hw[i]+CITY_SETBACK_M)
+            var pts: Array = [o,o+t*f,o+t*f+nn*d,o+nn*d,o+t*f*0.5+nn*d*0.5]
+            var ok: bool = true
+            var lo: float = INF
+            var hi: float = -INF
+            for k in range(pts.size()):
+                var q: Vector2 = pts[k]
+                if road_clearance(q) < (CITY_SETBACK_M-0.8 if k < 2 else CITY_SETBACK_M):
+                    ok = false
+                    break
+                if absf(q.x) > FIELD.HALF_X-8.0 or absf(q.y) > FIELD.HALF_Z-8.0 or field.is_water(q.x,q.y):
+                    ok = false
+                    break
+                for rr in keep_out+venue_keep:
+                    if (rr as Rect2).has_point(q):
+                        ok = false
+                var gh: float = field.height_at(q.x,q.y)
+                lo = minf(lo,gh)
+                hi = maxf(hi,gh)
+            if ok and hi-lo > 3.0:
+                ok = false
+            var cand: Array = [o,t,nn,f,d]
+            if ok:
+                for bx in boxes:
+                    if _rects_overlap(bx,cand):
+                        ok = false
+                        break
+            if ok and _on_grid_street(o+t*f*0.5+nn*2.0):
+                ok = false        # a side street meets the circuit here
+            if ok:
+                boxes.append(cand)
+                frontage.append({"o":o,"t":t,"n":nn,"f":f,"d":d,"kind":kind,"gy":lo,"seed":rng.randi()})
+                next_s = run+f+rng.randf_range(0.0,1.2)
+            else:
+                next_s = run+3.0
+
+func _on_grid_street(p: Vector2) -> bool:
+    var g: Dictionary = field.city_grid()
+    var l: Vector2 = field.city_local(p)
+    for axis in [0,1]:
+        var c: float = l[axis]
+        var pitch: float = float((g["pitch"] as Vector2)[axis])
+        var off: float = float((g["off"] as Vector2)[axis])
+        var line: Array = field.city_line(axis,int(round((c-off)/pitch)))
+        if absf(c-float(line[0])) < float(line[1])*0.5:
+            return true
+    return false
+
+## Two rectangles [origin, u axis, v axis, length u, length v] overlap (SAT).
+func _rects_overlap(a: Array, b: Array) -> bool:
+    var ca: Array = [a[0],(a[0] as Vector2)+(a[1] as Vector2)*float(a[3]),(a[0] as Vector2)+(a[1] as Vector2)*float(a[3])+(a[2] as Vector2)*float(a[4]),(a[0] as Vector2)+(a[2] as Vector2)*float(a[4])]
+    var cbx: Array = [b[0],(b[0] as Vector2)+(b[1] as Vector2)*float(b[3]),(b[0] as Vector2)+(b[1] as Vector2)*float(b[3])+(b[2] as Vector2)*float(b[4]),(b[0] as Vector2)+(b[2] as Vector2)*float(b[4])]
+    for ax in [a[1],a[2],b[1],b[2]]:
+        var amin: float = INF
+        var amax: float = -INF
+        var bmin: float = INF
+        var bmax: float = -INF
+        for p in ca:
+            var v: float = (p as Vector2).dot(ax)
+            amin = minf(amin,v)
+            amax = maxf(amax,v)
+        for p2 in cbx:
+            var v2: float = (p2 as Vector2).dot(ax)
+            bmin = minf(bmin,v2)
+            bmax = maxf(bmax,v2)
+        if amax <= bmin+0.2 or bmax <= amin+0.2:
+            return false
+    return true
+
+func _bounds_add(o: Vector2, r: Vector2, b: Vector2, u0: float, u1: float, v0: float, v1: float, top: float) -> void:
+    if not city_bounds.has(_cur_chunk):
+        city_bounds[_cur_chunk] = []
+    var c: Vector2 = o+r*(u0+u1)*0.5+b*(v0+v1)*0.5
+    (city_bounds[_cur_chunk] as Array).append([c,r,b,(u1-u0)*0.5+0.6,(v1-v0)*0.5+0.6,top])
+
+## Roof height of the city building at p (-INF if none): the race chase
+## camera rises over buildings instead of entering them.
+func building_top_at(p: Vector2) -> float:
+    if city_bounds.is_empty():
+        return -INF
+    var span: float = float(world.CHUNK_CELLS)*FIELD.STEP
+    var cid := Vector2i(int(floor((p.x+FIELD.HALF_X)/span)),int(floor((p.y+FIELD.HALF_Z)/span)))
+    var best: float = -INF
+    for dz in [-1,0,1]:
+        for dx in [-1,0,1]:
+            for bb in city_bounds.get(cid+Vector2i(dx,dz),[]):
+                var d: Vector2 = p-(bb[0] as Vector2)
+                if absf(d.dot(bb[1])) <= float(bb[3]) and absf(d.dot(bb[2])) <= float(bb[4]):
+                    best = maxf(best,float(bb[5]))
+    return best
+
+func frontage_summary() -> Dictionary:
+    var min_gap: float = INF
+    for lot in frontage:
+        for k in [0.0,0.5,1.0]:
+            var q: Vector2 = (lot["o"] as Vector2)+(lot["t"] as Vector2)*float(lot["f"])*k
+            min_gap = minf(min_gap,road_clearance(q))
+    return {"count":frontage.size(),"min_gap":min_gap}
 
 ## One block between four streets; returns its kind.
 func _city_block(cb: _CityBuild, rng: RandomNumberGenerator, u0: float, u1: float, v0: float, v1: float,
@@ -859,7 +1023,7 @@ func _city_site(fr: Array, a0: float, a1: float, b0: float, b1: float) -> Array:
             var p: Vector2 = field.city_world(l)
             if absf(p.x) > FIELD.HALF_X-6.0 or absf(p.y) > FIELD.HALF_Z-6.0:
                 return [false,0.0]
-            if road_clearance(p) < PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M+1.0:
+            if road_clearance(p) < CITY_GRID_CLEAR_M:
                 return [false,0.0]
             for rr in keep_out+venue_keep:
                 if (rr as Rect2).has_point(p):
@@ -898,10 +1062,20 @@ func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Arr
     var gy: float = float(site[1])
     _city_frame(cb,fr,pos)
     cb.base_y = gy
+    var top: float = _city_building(cb,rng,kind,f,dep,set_back,gy,near,{})
+    _bounds_add(cb.o,cb.r,cb.b,0.0,f,set_back,set_back+dep,top)
+
+## One street building in the current frame (u along the street, v inwards,
+## facade at v = 0). caps: optional max floors per kind (street-circuit
+## frontage stays low enough for the top-down camera). Returns the roof height.
+func _city_building(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, f: float, dep: float, set_back: float,
+        gy: float, near: bool, caps: Dictionary) -> float:
+    var roof: float = gy
     match kind:
         "shop":
-            var floors: int = rng.randi_range(2,4)
+            var floors: int = mini(rng.randi_range(2,4),int(caps.get("shop",99)))
             var top: float = gy+4.0+float(floors-1)*3.0+0.5
+            roof = top
             var col: Color = CITY_RES[rng.randi_range(0,CITY_RES.size()-1)]
             cb.box(0.0,f,0.0,dep,gy-1.0,top,col,4,CITY_ROOF)
             if rng.randf() < 0.3 and floors >= 3:
@@ -918,8 +1092,9 @@ func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Arr
                     cb.box(f-1.1,f-0.7,-1.5,-0.3,gy+4.4,sh,sg2,0,Color(0,0,0,0),true)
                 _city_roof_kit(cb,rng,f,dep,top)
         "mansion":
-            var floors2: int = rng.randi_range(5,11)
+            var floors2: int = mini(rng.randi_range(5,11),int(caps.get("mansion",99)))
             var top2: float = gy+float(floors2)*3.0+0.6
+            roof = top2
             var col2: Color = CITY_RES[rng.randi_range(0,CITY_RES.size()-1)]
             cb.box(0.0,f,0.0,dep,gy-1.0,top2,col2,1,CITY_ROOF)
             if near:
@@ -936,13 +1111,14 @@ func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Arr
                 if rng.randf() < 0.6:
                     cb.box(f*0.66,f*0.66+2.4,dep-4.4,dep-2.0,top2,top2+2.2,Color(0.72,0.74,0.76),0)
         "office":
-            var floors3: int = rng.randi_range(7,15)
+            var floors3: int = mini(rng.randi_range(7,15),int(caps.get("office",99)))
             var top3: float = gy+4.2+float(floors3-1)*3.6+1.0
             var col3: Color = CITY_OFFICE[rng.randi_range(0,CITY_OFFICE.size()-1)]
             cb.box(0.0,f,0.0,dep,gy-1.0,top3,col3,2,CITY_ROOF)
             if rng.randf() < 0.45 and f > 12.0 and dep > 12.0:
                 cb.box(3.0,f-3.0,3.0,dep-3.0,top3,top3+3.6,col3.lightened(0.04),2,CITY_ROOF)
                 top3 += 3.6
+            roof = top3
             if near:
                 cb.box(f*0.5-3.0,f*0.5+3.0,-2.2,0.0,gy+3.4,gy+3.8,Color(0.30,0.31,0.33),0)
                 cb.box(f*0.25,f*0.6,dep*0.3,dep*0.6,top3,top3+2.4,Color(0.62,0.63,0.64),0)
@@ -950,6 +1126,7 @@ func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Arr
                     cb.box(f*0.75-0.15,f*0.75+0.15,dep*0.5-0.15,dep*0.5+0.15,top3,top3+9.0,Color(0.80,0.80,0.80),0)
         "konbini":
             var top4: float = gy+4.2
+            roof = top4
             cb.box(0.0,f,set_back,set_back+dep,gy-1.0,top4,Color(0.92,0.92,0.90),7,CITY_ROOF)
             var stripes: Array = [[Color(0.10,0.46,0.78),Color(0.20,0.62,0.30)],[Color(0.95,0.52,0.10),Color(0.20,0.55,0.32)],
                 [Color(0.85,0.14,0.16),Color(0.95,0.62,0.10)]]
@@ -964,6 +1141,7 @@ func _city_lot(cb: _CityBuild, rng: RandomNumberGenerator, kind: String, fr: Arr
                 while u2 < f-1.0:
                     cb.box(u2-0.1,u2+0.1,set_back-5.2,set_back-0.6,gy+0.02,gy+0.06,Color(0.92,0.92,0.88),0)
                     u2 += 2.6
+    return roof
 
 func _city_roof_kit(cb: _CityBuild, rng: RandomNumberGenerator, f: float, d: float, top: float) -> void:
     var n: int = rng.randi_range(1,2)
@@ -1058,7 +1236,7 @@ func _city_street_kit(cb: _CityBuild, rng: RandomNumberGenerator, u0: float, u1:
     if south_ave or west_ave:
         # Traffic signals at the south-west crossing.
         var p: Vector2 = field.city_world(Vector2(u0-1.4,v0-1.4))
-        if road_clearance(p) > PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M and not field.is_water(p.x,p.y):
+        if road_clearance(p) > CITY_GRID_CLEAR_M and not field.is_water(p.x,p.y):
             var gy: float = field.height_at(p.x,p.y)
             cb.set_frame(p,field.city_world(Vector2(1,0)),field.city_world(Vector2(0,1)))
             cb.base_y = gy
@@ -1079,7 +1257,7 @@ func _street_side(cb: _CityBuild, rng: RandomNumberGenerator, fr: Array, length:
         var t: float = 5.0
         while t < length-3.0:
             var p: Vector2 = field.city_world(o+r*t)
-            if not _blocked(p,1.5) and not field.is_water(p.x,p.y):
+            if not _blocked(p,1.5) and not field.is_water(p.x,p.y) and road_clearance(p) >= CITY_GRID_CLEAR_M:
                 _add_tree(per,shadows,"street_tree",p.x,p.y,rng.randf_range(6.0,8.0),rng)
             t += 9.0
         return
@@ -1088,7 +1266,7 @@ func _street_side(cb: _CityBuild, rng: RandomNumberGenerator, fr: Array, length:
     var k: int = 0
     while t2 < length-2.0:
         var p2: Vector2 = field.city_world(o+r*t2)
-        var ok: bool = road_clearance(p2) > PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M and not field.is_water(p2.x,p2.y)
+        var ok: bool = road_clearance(p2) > CITY_GRID_CLEAR_M and not field.is_water(p2.x,p2.y)
         for rr in keep_out+venue_keep:
             if (rr as Rect2).has_point(p2):
                 ok = false
@@ -1956,7 +2134,7 @@ func summary() -> Dictionary:
         for k in (city_kinds[id] as Dictionary).keys():
             ck[k] = int(ck.get(k,0))+int(city_kinds[id][k])
     return {"counts":counts.duplicate(),"venue":venue_info.duplicate(true),"landmarks":landmark_info.duplicate(true),
-        "keep_out":keep_out.size(),"city":ck}
+        "keep_out":keep_out.size(),"city":ck,"frontage":frontage_summary()}
 
 ## Minimum distance from the soft roadside planting to the road edge (it
 ## must stay behind the barrier: verge + ROADSIDE_MIN_M); INF if none.
@@ -2174,6 +2352,7 @@ class _CityBuild:
     var nrm := PackedVector3Array()
     var col := PackedColorArray()
     var uv := PackedVector2Array()
+    var uv2 := PackedVector2Array()
     var idx := PackedInt32Array()
     var gpos := PackedVector3Array()
     var gnrm := PackedVector3Array()
@@ -2208,12 +2387,21 @@ class _CityBuild:
                 gcol.append(colour)
             gidx.append_array([g0,g0+2,g0+1,g0,g0+3,g0+2])
             return
+        # Window grid starts at the face's own edge (UV2.x), so windows line
+        # up with the corners whatever the building's orientation.
+        var off: float = 0.0
+        if absf(n.y) < 0.5:
+            var t2 := Vector2(-n.z,n.x).normalized()
+            off = INF
+            for pc in [a,bb,c,d]:
+                off = minf(off,Vector2(pc.x,pc.z).dot(t2))
         var i0: int = pos.size()
         for p2 in [a,bb,c,d]:
             pos.append(p2)
             nrm.append(n)
             col.append(colour)
             uv.append(Vector2(base_y,style))
+            uv2.append(Vector2(off,0.0))
         idx.append_array([i0,i0+2,i0+1,i0,i0+3,i0+2])
 
     ## Box in the frame (u along the street, v inwards, y up); the side
@@ -2265,6 +2453,7 @@ class _CityBuild:
                 nrm.append(n3)
                 col.append(colour.darkened(0.15))
                 uv.append(Vector2(base_y,0.0))
+                uv2.append(Vector2.ZERO)
             if (e[1]-e[0]).cross(e[2]-e[0]).dot(n3) > 0.0:
                 idx.append_array([i0,i0+2,i0+1])
             else:
@@ -2283,6 +2472,7 @@ class _CityBuild:
             arr[Mesh.ARRAY_NORMAL] = nrm
             arr[Mesh.ARRAY_COLOR] = col
             arr[Mesh.ARRAY_TEX_UV] = uv
+            arr[Mesh.ARRAY_TEX_UV2] = uv2
             arr[Mesh.ARRAY_INDEX] = idx
             mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arr)
             mesh.surface_set_material(mesh.get_surface_count()-1,mat)
