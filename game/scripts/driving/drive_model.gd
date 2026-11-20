@@ -113,6 +113,10 @@ func apply_profile(handling: Dictionary) -> Array[String]:
 
 var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
+## v0.1.25 Developer Mode terrain grade force (planar m/s^2, set by the race
+## each tick). ZERO on flat tracks and at the default 0 % preset, where the
+## step below is bit-identical to the baseline handling.
+var external_accel: Vector2 = Vector2.ZERO
 var heading: float = 0.0
 var yaw_rate: float = 0.0
 var rear_traction: float = 1.0
@@ -345,9 +349,13 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     acceleration -= velocity*speed*drag_coeff
     if handbrake > 0.10:
         acceleration -= velocity*(handbrake_decel*handbrake/maxf(speed,1.0))
+    if external_accel != Vector2.ZERO:
+        acceleration += external_accel
 
     velocity += acceleration*dt
-    if gas < 0.01 and brake < 0.01 and speed < 0.14:
+    # A car with no input stops; on a slope only while rolling resistance
+    # can hold it (grade force <= rolling drag).
+    if gas < 0.01 and brake < 0.01 and speed < 0.14 and external_accel.length_squared() <= rolling_drag*rolling_drag:
         velocity = Vector2.ZERO
     heading = wrapf(heading+yaw_rate*dt,-PI,PI)
     position += velocity*dt

@@ -161,8 +161,6 @@ func _elevation_tick(info: Dictionary, delta: float) -> void:
     road_grade = track.grade_from_info(info)
     heading_grade = road_grade*model.forward().dot(tangent)
     grade_accel = PHYS_DEV.grade_acceleration(tangent,road_grade,int(dev.get("grade_force",0)))
-    if grade_accel != Vector2.ZERO and race_started:
-        model.velocity += grade_accel*delta
     if str(dev.get("grounding","snap")) == "smooth":
         # Critically damped follow (visual): never sinks below the road.
         var k: float = 60.0
@@ -343,6 +341,9 @@ func _physics_process(delta: float) -> void:
     if race_started:
         time_elapsed += delta
 
+    # Terrain grade force (Developer Mode, 0 % default) integrated inside
+    # the model substeps; ZERO on flat tracks.
+    model.external_accel = grade_accel if race_started else Vector2.ZERO
     # Fixed 120 Hz Godot tick and two internal model substeps (240 Hz).
     model.step(delta*0.5,steer,gas,braking,handbrake)
     model.step(delta*0.5,steer,gas,braking,handbrake)

@@ -340,7 +340,12 @@ func _scatter_rocks(node: Node3D, id: Vector2i, x0: float, z0: float, span: floa
         if _blocked(Vector2(x,z),s):
             continue
         var basis := Basis(Vector3.UP,rng.randf_range(0,TAU))*Basis(Vector3.RIGHT,rng.randf_range(-0.3,0.3))
-        basis = basis.scaled(Vector3(s*rng.randf_range(0.9,1.5),s*rng.randf_range(0.55,1.0),s*rng.randf_range(0.9,1.4)))
+        var tall: float = rng.randf_range(0.55,1.0)
+        if kind == "limestone" and rk > 0.45 and rng.randf() < 0.22:
+            # Ojcow-style limestone pillar (ostaniec)
+            tall = rng.randf_range(4.0,8.5)
+            s *= 1.3
+        basis = basis.scaled(Vector3(s*rng.randf_range(0.9,1.5),s*tall,s*rng.randf_range(0.9,1.4)))
         xf.append(Transform3D(basis,Vector3(x,field.height_at(x,z)-0.3*s,z)))
         var c: Color = base_col.lightened(rng.randf_range(-0.12,0.14))
         if kind == "mossy":
@@ -577,13 +582,22 @@ func _build_venue() -> void:
         venue_rect = best["rect"]
         _pad(acc,c2,tb,nb*side2,pad_w,pad_d,float(best["lo"])-1.2,top,venue)
         _paddock_items(acc,c2,tb,nb*side2,pad_w,pad_d,top,mode,venue)
-        venue_info = {"pad":[c2.x,c2.y],"side":side2,"width":pad_w,"depth":pad_d,"top":top,
+        var corners: Array = []
+        for cu in [-0.5,0.5]:
+            for cv in [-0.5,0.5]:
+                var cq: Vector2 = c2+tb*pad_w*cu+nb*pad_d*cv
+                corners.append([cq.x,cq.y])
+        venue_info = {"pad":[c2.x,c2.y],"corners":corners,"side":side2,"width":pad_w,"depth":pad_d,"top":top,
             "drop":float(best["hi"])-float(best["lo"]),"mode":mode,"venue":venue}
     else:
         venue_info = {"pad":null,"mode":mode,"venue":venue,"reason":"NO ROOM NEXT TO THE START"}
     if mode == "pro" and venue != "touge_start":
         var gs: Dictionary = _grandstand(acc,samples,hw,rh,closed,-(float(best.get("side",1.0))))
         venue_info["grandstand"] = not gs.is_empty()
+        if gs.is_empty():
+            venue_info.erase("grandstand_corners")
+    if str(info["country"]) == "ireland":
+        venue_info["stone_walls"] = _roadside_walls(acc)
     var mi := MeshInstance3D.new()
     mi.name = "Venue %s (%s)" % [venue,mode]
     mi.mesh = acc.commit(_mats[0],_mats[1])
@@ -619,29 +633,52 @@ func _pad(acc, c: Vector2, t: Vector2, nrm: Vector2, w: float, d: float, bottom:
         acc.box(k,k+0.18,1.0,d*0.42,top,top+0.02,Color(0.92,0.92,0.90))
         k += 5.5
 
+## Paddock contents by event mode (owner reference renders: a compact pit
+## building with three numbered bays and a race-control tower, pop-up
+## tents, ambulance + fire engine on standby, flags and cones; never an
+## endless row of garages). v = 0 is the road side of the pad.
 func _paddock_items(acc, c: Vector2, t: Vector2, nrm: Vector2, w: float, d: float, top: float, mode: String, venue: String) -> void:
     acc.set_frame(_frame(c,t,nrm,w,d))
     var canopy: Array[Color] = [Color(0.92,0.20,0.22),Color(0.98,0.98,0.96),Color(0.20,0.36,0.70)]
+    var building: Color = Color(0.20,0.21,0.24)
     if venue == "paddock_eu":
         canopy = [Color(0.95,0.95,0.95),Color(0.85,0.12,0.18),Color(0.25,0.25,0.28)]
     elif venue == "paddock_ie":
         canopy = [Color(0.12,0.52,0.30),Color(0.96,0.96,0.94),Color(0.95,0.55,0.15)]
-    # Timing / race-control cabin (always).
-    acc.box(w-8.0,w-1.5,d-6.0,d-1.0,top,top+3.0,Color(0.90,0.90,0.88),false,Color(0.34,0.35,0.37))
-    acc.box(w-7.6,w-1.9,d-6.05,d-5.95,top+1.2,top+2.3,Color(0.25,0.35,0.45))
+    var big: bool = mode != "practice" and venue != "touge_start"
+    if big:
+        # Pit building: 3 bays (21 m) along the back of the pad + tower.
+        var x0: float = 2.0
+        acc.box(x0,x0+22.0,d-8.5,d-0.5,top,top+5.2,building,false,Color(0.30,0.31,0.34))
+        for bay in range(3):
+            var u0: float = x0+0.8+float(bay)*7.0
+            acc.box(u0,u0+5.6,d-8.56,d-8.5,top,top+3.6,Color(0.08,0.08,0.09))          # open bay
+            acc.box(u0+2.2,u0+3.4,d-8.6,d-8.56,top+4.0,top+4.8,Color(0.95,0.95,0.95),true) # bay number plate
+        acc.box(x0,x0+22.0,d-8.62,d-8.5,top+5.2,top+5.9,canopy[0],true)                # fascia strip
+        acc.box(x0+23.0,x0+29.0,d-7.0,d-1.0,top,top+7.0,Color(0.86,0.86,0.84),false,Color(0.30,0.31,0.33))
+        acc.box(x0+22.6,x0+29.4,d-7.4,d-0.6,top+7.0,top+9.6,Color(0.18,0.30,0.40))     # glazed control room
+        acc.box(x0+22.4,x0+29.6,d-7.6,d-0.4,top+9.6,top+10.1,Color(0.25,0.25,0.27))
+        # Ambulance + fire engine on standby near the exit.
+        acc.box(w-14.0,w-8.4,2.6,4.8,top,top+2.5,Color(0.98,0.85,0.10),false,Color(0.95,0.95,0.95))
+        acc.box(w-7.4,w-0.8,2.4,4.9,top,top+3.0,Color(0.80,0.10,0.10),false,Color(0.70,0.08,0.08))
+    else:
+        # Practice / mountain-pass start: one timing cabin.
+        acc.box(w-8.0,w-1.5,d-6.0,d-1.0,top,top+3.0,Color(0.90,0.90,0.88),false,Color(0.34,0.35,0.37))
+        acc.box(w-7.6,w-1.9,d-6.05,d-5.95,top+1.2,top+2.3,Color(0.25,0.35,0.45))
     var tents: int = 1 if mode == "practice" else (2 if mode == "club" else 4)
     if venue == "touge_start":
         tents = 0 if mode == "practice" else 1
+    var tv: float = 9.0 if big else d-7.0
     for i in range(tents):
-        var u0: float = 2.0+float(i)*9.0
-        if u0+7.0 > w-9.0:
+        var u1: float = (32.0 if big else 2.0)+float(i)*8.5
+        if u1+7.0 > w-1.0:
             break
         var col: Color = canopy[i%canopy.size()]
-        for pu in [u0,u0+6.6]:
-            for pv in [d-7.0,d-1.0]:
+        for pu in [u1,u1+6.6]:
+            for pv in [tv,tv+6.0]:
                 acc.box(pu,pu+0.12,pv,pv+0.12,top,top+2.6,Color(0.75,0.75,0.76))
-        acc.box(u0-0.2,u0+6.92,d-7.2,d-0.8,top+2.6,top+2.9,col,false,col)
-    # Cones / flags along the road side of the pad.
+        acc.box(u1-0.2,u1+6.92,tv-0.2,tv+6.2,top+2.6,top+2.9,col,false,col)
+    # Flags along the road side of the pad.
     var flags: int = 0 if mode == "practice" else (4 if mode == "club" else 8)
     for i2 in range(flags):
         var u: float = 2.0+float(i2)*(w-4.0)/maxf(float(flags-1),1.0)
@@ -650,6 +687,41 @@ func _paddock_items(acc, c: Vector2, t: Vector2, nrm: Vector2, w: float, d: floa
     for i3 in range(6):
         var u2: float = 3.0+float(i3)*2.2
         acc.box(u2,u2+0.45,2.0,2.45,top,top+0.7,Color(1.0,0.45,0.08))
+
+## Irish roads: dry-stone walls along both sides, outside the verge and
+## barrier strip (gaps at the paddock and over bridges / cliff walls).
+func _roadside_walls(acc) -> int:
+    var road: Dictionary = world.road
+    if road.is_empty():
+        return 0
+    var samples: Array[Vector2] = road["samples"]
+    var hw: PackedFloat32Array = road["halfwidths"]
+    var cls: PackedInt32Array = road["class"]
+    var closed: bool = road["closed"]
+    var n: int = samples.size()
+    var stone := Color(0.56,0.56,0.53)
+    var pieces: int = 0
+    for side in [-1.0,1.0]:
+        var prev := Vector3.INF
+        for k in range(0,n+(1 if closed else 0),2):
+            var i: int = k%n
+            var nrm: Vector2 = PROFILE._normal(samples,i,closed)
+            var q: Vector2 = samples[i]+nrm*side*(hw[i]+PROFILE.VERGE+3.2)
+            var ok: bool = cls[i] < 4 and road_clearance(q) > PROFILE.VERGE+2.0
+            for r in venue_keep:
+                if (r as Rect2).grow(4.0).has_point(q):
+                    ok = false
+            if ok and field.relief == "coast" and field.coast_distance(q.x,q.y) < 6.0:
+                ok = false
+            if not ok:
+                prev = Vector3.INF
+                continue
+            var p := Vector3(q.x,field.height_at(q.x,q.y),q.y)
+            if prev != Vector3.INF and prev.distance_to(p) < 14.0:
+                _wall_piece(acc,prev,p,stone)
+                pieces += 1
+            prev = p
+    return pieces
 
 func _gantry(acc, p: Vector2, t: Vector2, nrm: Vector2, w: float, y: float, venue: String) -> void:
     var span: float = w+2.6
@@ -703,6 +775,12 @@ func _grandstand(acc, samples: Array[Vector2], hw: PackedFloat32Array, rh: Packe
     acc.box(-1.0,len_m+1.0,2.0,depth+0.5,base+9.0,base+9.4,Color(0.92,0.92,0.94))
     var r := _rect_from(c,t,len_m,depth)
     venue_keep.append(r)
+    var corners: Array = []
+    for cu in [-0.5,0.5]:
+        for cv in [-0.5,0.5]:
+            var cq: Vector2 = c+t*len_m*cu+nrm*depth*cv
+            corners.append([cq.x,cq.y])
+    venue_info["grandstand_corners"] = corners
     return {"rect":r}
 
 # -------------------------------------------------------------- landmarks
@@ -756,6 +834,9 @@ func _build_landmarks() -> void:
                 site = _band_site(ruin_score)
                 if site != Vector2.INF:
                     _tower_house(acc,site,rng)
+            "volcano":
+                site = Vector2(-900.0,-2700.0)
+                _volcano(acc,site)
             "expressway":
                 _expressway(acc)
                 site = Vector2(0.0,FIELD.PLAY_HALF_Z+22.0)
@@ -897,6 +978,40 @@ func _tower_house(acc, site: Vector2, rng: RandomNumberGenerator) -> void:
     acc.box(-14.0,-12.8,-6.0,12.0,gy-1.0,gy+2.6,stone.lightened(0.04))
     acc.box(-14.0,0.0,12.0,13.2,gy-1.0,gy+rng.randf_range(1.2,2.6),stone.lightened(0.04))
     keep_out.append(Rect2(site-Vector2(18,12),Vector2(32,30)))
+
+## Distant snow-capped volcanic cone on the Japanese horizon (generic
+## stratovolcano silhouette, outside the playable world).
+func _volcano(acc, c: Vector2) -> void:
+    var seg: int = 28
+    var base_r: float = 1500.0
+    var top_r: float = 110.0
+    var base_y: float = -20.0
+    var top_y: float = 1050.0
+    var snow_f: float = 0.62
+    var rock := Color(0.40,0.44,0.52)
+    var snow := Color(0.96,0.97,1.0)
+    for k in range(seg):
+        var a0: float = TAU*float(k)/float(seg)
+        var a1: float = TAU*float(k+1)/float(seg)
+        var d0 := Vector2(cos(a0),sin(a0))
+        var d1 := Vector2(cos(a1),sin(a1))
+        # concave profile: wide base, steeper top
+        var mid_r: float = lerpf(base_r,top_r,0.78)
+        var mid_y: float = lerpf(base_y,top_y,snow_f)
+        var b0 := Vector3(c.x+d0.x*base_r,base_y,c.y+d0.y*base_r)
+        var b1 := Vector3(c.x+d1.x*base_r,base_y,c.y+d1.y*base_r)
+        var jag: float = 1.0+0.08*sin(float(k)*2.7)
+        var m0 := Vector3(c.x+d0.x*mid_r*jag,mid_y,c.y+d0.y*mid_r*jag)
+        var m1 := Vector3(c.x+d1.x*mid_r,mid_y,c.y+d1.y*mid_r)
+        var t0 := Vector3(c.x+d0.x*top_r,top_y,c.y+d0.y*top_r)
+        var t1 := Vector3(c.x+d1.x*top_r,top_y,c.y+d1.y*top_r)
+        acc.quad(b0,b1,m1,m0,rock)
+        acc.quad(m0,m1,t1,t0,snow)
+    var crater := Vector3(c.x,top_y-30.0,c.y)
+    for k2 in range(seg):
+        var a2: float = TAU*float(k2)/float(seg)
+        var a3: float = TAU*float(k2+1)/float(seg)
+        acc.tri(Vector3(c.x+cos(a2)*top_r,top_y,c.y+sin(a2)*top_r),Vector3(c.x+cos(a3)*top_r,top_y,c.y+sin(a3)*top_r),crater,snow.darkened(0.15))
 
 ## Elevated harbour expressway just outside the south edge of the play area.
 func _expressway(acc) -> void:

@@ -27,7 +27,7 @@ const DRAFT: String = "user://nitro_terrain_builder_draft.json"
 const DRIVE_PATH: String = "user://nitro_track_terrain_drive.json"
 const REBUILD_INTERVAL: float = 0.30
 const VIEWS: Array[String] = ["3D","TOP","LOW"]
-const VIEW_PITCH: Dictionary = {"3D":52.0,"TOP":82.0,"LOW":24.0}
+const VIEW_PITCH: Dictionary = {"3D":40.0,"TOP":82.0,"LOW":22.0}
 const DIST_MIN: float = 90.0
 const DIST_MAX: float = 1900.0
 
@@ -164,7 +164,7 @@ func generate_terrain(new_seed: bool = true) -> void:
     world.field.bake()
     add_child(world)
     world.build()
-    world.set_fog_scale(0.22)
+    world.set_fog_scale(0.12)
     build_map = world.field.build_map()
     generated_key = "%s/%d" % [archetype,terrain_seed]
     _rebuild_overlay()
@@ -336,7 +336,7 @@ func _build_ui() -> void:
     ui_root.add_child(build_box)
     _row(build_box,[["DRAW","_set_draw",null],["ERASE","_set_erase",null],["↶ UNDO","_undo",null],["↷ REDO","_redo",null],["CLEAR","_clear",null]],
         y3,row_h,left,width,"")
-    _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE LOOP","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
+    _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
         ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
     map_rect = Rect2(0.0,header_rect.end.y+s.y*0.006,s.x,y1-row_h*1.3-header_rect.end.y)
     _refresh_titles()
@@ -400,7 +400,7 @@ func _refresh_titles() -> void:
         STYLE.style_button(buttons["ERASE"],ui_unit,mode == "erase")
         (buttons["b_LOOP"] as Button).text = "LOOP" if topology == "loop" else "ROUTE"
         STYLE.style_button(buttons["b_LOOP"],ui_unit,true)
-        (buttons["b_CLOSE LOOP"] as Button).disabled = topology != "loop"
+        (buttons["b_CLOSE"] as Button).disabled = topology != "loop"
         STYLE.style_button(buttons["b_DRIVE"],ui_unit,track_ok)
 
 func _status(text: String, ok: bool) -> void:
@@ -778,10 +778,12 @@ func move_stroke(c: Vector2i) -> void:
 
 func end_stroke() -> void:
     stroke_active = false
-    if not stroke_changed and not undo_stack.is_empty():
-        undo_stack.pop_back()
-    elif stroke_changed:
-        redo_stack.clear()
+    if not stroke_changed:
+        # Nothing changed (e.g. a refused red tile): keep the message.
+        if not undo_stack.is_empty():
+            undo_stack.pop_back()
+        return
+    redo_stack.clear()
     _rebuild_preview()
     _adapt_now()
     _save_draft()
@@ -951,6 +953,7 @@ func _rebuild_preview() -> void:
         var piece: NitroDriftTrack = TRACK.new()
         piece.name = "Road piece %d" % index
         piece.with_props = false
+        piece.apply_region_style(descriptor())
         piece.build_from_samples(samples,GRID.WIDTH_M*0.5,closed,"terrain_preview_%d" % index,false,h)
         road_root.add_child(piece)
         index += 1
@@ -986,6 +989,7 @@ func _adapt_now() -> void:
         piece.name = "Race road"
         piece.with_props = false
         piece.with_environment = false
+        piece.apply_region_style(descriptor())
         road_root.add_child(piece)
         piece._apply_compiled(comp)
         var drivable: bool = (closed and topology == "loop") or (not closed and topology == "route")

@@ -6,6 +6,8 @@ const SETTINGS = preload("res://scripts/ui/settings_panel.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const SYNTH = preload("res://scripts/audio/engine_synth.gd")
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
+const PHYS_DEV = preload("res://scripts/world/terrain/physics_dev.gd")
+const TERRAIN_TRACK = preload("res://scripts/world/terrain/terrain_track.gd")
 ## Player main menu (owner audit P2): four clear choices — DRIVE, GARAGE,
 ## TRACK BUILDER, SETTINGS — each opening its own page; tools for testing
 ## (controller diagnostics) live under DEVELOPER. Portrait-first sizes,
@@ -79,6 +81,7 @@ func show_page(which: String) -> void:
         "build": _build_page()
         "settings": _settings_page()
         "dev": _dev_page()
+        "elev": _elevation_page()
         _: _main_page()
     for child in page.get_children():
         if child is Button:
@@ -163,6 +166,12 @@ static func saved_tracks() -> Array[Dictionary]:
     return out
 
 func _edit_track(path: String) -> void:
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+    if raw is Dictionary and not TERRAIN_TRACK.world_of(raw).is_empty():
+        # Terrain-first tracks reopen in the terrain builder (same world).
+        ProjectSettings.set_setting("nitro/terrain_edit_track",path)
+        _go("res://scenes/terrain_builder.tscn")
+        return
     var f: FileAccess = FileAccess.open(LAST_SAVED,FileAccess.WRITE)
     if f != null:
         f.store_string(path)
@@ -197,6 +206,7 @@ func _move(node: Control, parent: Node) -> Control:
 
 func _build_page() -> void:
     _title("TRACK BUILDER")
+    _big("TERRAIN BUILDER\nCOUNTRY • LANDSCAPE • ROAD",func(): _go("res://scenes/terrain_builder.tscn"),true).name = "Terrain builder"
     _big("BUILD • 3D TILES\nTAP TO LAY ROAD",func(): _go("res://scenes/track_builder.tscn")).name = "Builder 3D"
     _big("EDIT NODES\nSHAPE ANY CIRCUIT",func(): _go("res://scenes/track_editor.tscn")).name = "Editor nodes"
     _big("GENERATE & DRIVE\nRANDOM VALID LOOP",_random_track).name = "Generate"
@@ -229,6 +239,7 @@ func _dev_page() -> void:
         show_page("dev"))
     dbg_b.name = "Audio debug"
     STYLE.style_button(dbg_b,ui_unit,dbg_on)
+    _big("ELEVATION PHYSICS ▶\nTERRAIN TRACKS",func(): show_page("elev")).name = "Elevation physics"
     var bench_label := Label.new()
     bench_label.name = "Benchmark result"
     bench_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -246,6 +257,40 @@ func _dev_page() -> void:
     info.add_theme_color_override("font_color",STYLE.MUTED)
     page.add_child(info)
     _small("◀  BACK",func(): show_page("main"))
+
+## DEVELOPER > ELEVATION PHYSICS (terrain tracks only; flat tracks never
+## change). Local setting, switchable at any time, no regeneration.
+func _elevation_page() -> void:
+    _title("ELEVATION PHYSICS")
+    var s: Dictionary = PHYS_DEV.load_settings()
+    var grade: int = int(s["grade_force"])
+    var g: Button = _big("GRADE FORCE: %d %%" % grade,func():
+        PHYS_DEV.set_value("grade_force",PHYS_DEV.next_grade(int(PHYS_DEV.load_settings()["grade_force"])))
+        show_page("elev"))
+    g.name = "Grade force"
+    STYLE.style_button(g,ui_unit,grade > 0)
+    for item in [["camera_pitch","CAMERA PITCH"],["banking","BANKING / BODY ROLL"],["suspension","SUSPENSION (VISUAL)"],
+            ["telemetry","TELEMETRY OVERLAY"]]:
+        var key: String = str(item[0])
+        var on: bool = bool(s[key])
+        var b: Button = _big("%s: %s" % [str(item[1]),"ON" if on else "OFF"],func():
+            PHYS_DEV.set_value(key,not bool(PHYS_DEV.load_settings()[key]))
+            show_page("elev"))
+        b.name = str(item[1])
+        STYLE.style_button(b,ui_unit,on)
+    var smooth: bool = str(s["grounding"]) == "smooth"
+    var gr: Button = _big("GROUNDING: %s" % ("SMOOTH" if smooth else "SNAP"),func():
+        PHYS_DEV.set_value("grounding","snap" if str(PHYS_DEV.load_settings()["grounding"]) == "smooth" else "smooth")
+        show_page("elev"))
+    gr.name = "Grounding"
+    var note := Label.new()
+    note.text = "0 % = the flat arcade handling. Grade force adds g·sin(slope) along the road; the other switches are visual or readouts."
+    note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    note.add_theme_font_size_override("font_size",int(14*ui_unit))
+    note.add_theme_color_override("font_color",STYLE.MUTED)
+    page.add_child(note)
+    _small("◀  BACK",func(): show_page("dev"))
 
 # ------------------------------------------------------------------ helpers
 

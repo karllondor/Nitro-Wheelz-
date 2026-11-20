@@ -31,10 +31,27 @@ static func route_order(grid: NitroTrackGrid, prefer_start: Vector2i = Vector2i(
     for c in part["cells"]:
         cells.append(c)
     if bool(part["closed"]):
-        return {"order":grid.loop(),"closed":true,"parts":1}
+        return {"order":canonical_loop(grid,cells),"closed":true,"parts":1}
     if prefer_start.x >= 0 and cells.size() > 1 and cells[cells.size()-1] == prefer_start:
         cells.reverse()
     return {"order":cells,"closed":false,"parts":1}
+
+## Loop order independent of how the links were inserted (drawing, UNDO,
+## loading a file): counter-clockwise on the map, starting on the first
+## longest straight - so SAVE -> LOAD -> SAVE gives the same road.
+static func canonical_loop(grid: NitroTrackGrid, cells: Array[Vector2i]) -> Array[Vector2i]:
+    var n: int = cells.size()
+    var area: float = 0.0
+    for i in range(n):
+        var a: Vector2i = cells[i]
+        var b: Vector2i = cells[(i+1)%n]
+        area += float(a.x*b.y-b.x*a.y)
+    var ordered: Array[Vector2i] = cells.duplicate()
+    if area < 0.0:
+        ordered = [cells[0]]
+        for k in range(n-1,0,-1):
+            ordered.append(cells[k])
+    return grid._start_on_straight(ordered)
 
 ## Full saved track (schema 1 + optional world / elevation blocks).
 static func track_data(grid: NitroTrackGrid, order: Array[Vector2i], closed: bool, field: NitroTerrainField,

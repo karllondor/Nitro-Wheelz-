@@ -62,6 +62,18 @@ var world: Node3D = null
 ## inside the first tile, finish line before the end cap).
 var heights: PackedFloat32Array = PackedFloat32Array()
 var start_index: int = 0
+## Region kerb / run-off colours (terrain tracks; defaults = the approved
+## night-park blue/white kerbs and the plain dirt shoulder).
+var kerb_a: Color = KERB_BLUE
+var kerb_b: Color = KERB_WHITE
+var runoff_tint: Color = Color.WHITE
+
+func apply_region_style(desc: Dictionary) -> void:
+    var inf: Dictionary = TERRAIN_CAT.info(str(desc.get("archetype","")))
+    var k: Array = inf.get("kerb",[KERB_BLUE,KERB_WHITE])
+    kerb_a = k[0]
+    kerb_b = k[1]
+    runoff_tint = inf.get("runoff",Color.WHITE)
 var finish_index: int = -1
 var finish_progress: float = 1.0
 const OPEN_START_M: float = 18.0
@@ -91,6 +103,7 @@ func build() -> void:
         # park ground, sky and roadside props (same world as the builder).
         with_props = false
         with_environment = false
+        apply_region_style(tdesc)
     _apply_compiled(compiled)
     if not tdesc.is_empty() and track_valid:
         build_terrain(tdesc)
@@ -278,7 +291,7 @@ func _build_visuals() -> void:
     # Layering outward from the racing surface (brief: surface -> painted
     # line -> safety gap -> kerb -> outer gap -> barrier -> verge).
     _add_corridor("Compacted shoulder",_shift_edge(left_edge,-VERGE_WIDTH),
-        _shift_edge(right_edge,VERGE_WIDTH),0.018,Color.WHITE,DIRT,6.0)
+        _shift_edge(right_edge,VERGE_WIDTH),0.018,runoff_tint,DIRT,6.0)
     _add_corridor("Single continuous driving surface",left_edge,right_edge,
         0.05,ASPHALT_TINT,ASPHALT,7.0)
     _build_kerbs()
@@ -451,15 +464,21 @@ func _probe_penetration(q: Vector2, hint: int) -> Vector3:
     var limit: Vector2 = boundary+outward*(0.10-BODY_SKIN)
     var result := Vector3(outward.x,outward.y,(q-limit).dot(outward))
     if not closed_loop:
-        # Open route: end-cap barriers across the road at both ends.
-        var t0: Vector2 = (centerline[1]-centerline[0]).normalized()
-        var pen0: float = (centerline[0]+t0*(0.10+BODY_SKIN)-q).dot(t0)
-        if pen0 > result.z and pen0 > 0.0:
-            result = Vector3(-t0.x,-t0.y,pen0)
-        var te: Vector2 = (centerline[n-1]-centerline[n-2]).normalized()
-        var pen1: float = (q-(centerline[n-1]-te*(0.10+BODY_SKIN))).dot(te)
-        if pen1 > result.z and pen1 > 0.0:
-            result = Vector3(te.x,te.y,pen1)
+        # Open route: end-cap barriers across the road at both ends. Only
+        # where the probe's nearest stretch IS the first / last segment and
+        # it lies across the road width (not a world-wide half plane).
+        if index == 0:
+            var t0: Vector2 = (centerline[1]-centerline[0]).normalized()
+            var lat0: float = absf((q-centerline[0]).dot(Vector2(-t0.y,t0.x)))
+            var pen0: float = (centerline[0]+t0*(0.10+BODY_SKIN)-q).dot(t0)
+            if lat0 <= halfwidths[0]+1.0 and pen0 > result.z and pen0 > 0.0:
+                result = Vector3(-t0.x,-t0.y,pen0)
+        if index == n-2:
+            var te: Vector2 = (centerline[n-1]-centerline[n-2]).normalized()
+            var late: float = absf((q-centerline[n-1]).dot(Vector2(-te.y,te.x)))
+            var pen1: float = (q-(centerline[n-1]-te*(0.10+BODY_SKIN))).dot(te)
+            if late <= halfwidths[n-1]+1.0 and pen1 > result.z and pen1 > 0.0:
+                result = Vector3(te.x,te.y,pen1)
     return result
 
 func _add_corridor(label: String,a: Array[Vector2],b: Array[Vector2],
@@ -701,7 +720,7 @@ func _build_kerbs() -> void:
                 var t0: float = cuts[c]
                 var t1: float = cuts[c+1]
                 var mid_s: float = s0+(s1-s0)*(t0+t1)*0.5
-                var colour: Color = KERB_BLUE if int(floor(mid_s/block_len))%2 == 0 else KERB_WHITE
+                var colour: Color = kerb_a if int(floor(mid_s/block_len))%2 == 0 else kerb_b
                 var o0: Vector2 = outer[i].lerp(outer[j],t0)
                 var o1: Vector2 = outer[i].lerp(outer[j],t1)
                 var i0: Vector2 = inner[i].lerp(inner[j],t0)

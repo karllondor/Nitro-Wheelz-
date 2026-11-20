@@ -88,7 +88,9 @@ static func _edge(u: float, v: float) -> float:
 
 ## Coast archetype: x of the sea cliff line at z (sea is west of it).
 func coast_x(z: float) -> float:
-    return -PLAY_HALF_X*0.50+75.0*sin(z/230.0+_phase)+34.0*_n(2,0.0,z)
+    # Bays and headlands at the 200-400 m scale (a road can follow the
+    # cliff); the rock face mesh adds the small-scale jaggedness.
+    return -PLAY_HALF_X*0.50+75.0*sin(z/230.0+_phase)+26.0*_n(2,0.0,z*0.30)
 
 ## Ojcow: canyon centre (u units) at v.
 func canyon_u(v: float) -> float:
@@ -314,28 +316,32 @@ func tile_build(c: Vector2i) -> Dictionary:
         for b in range(-2,3):
             var p: Vector2 = ctr+Vector2(float(a),float(b))*12.0
             var hh: float = base_at(p.x,p.y)
-            lo = minf(lo,hh)
-            hi = maxf(hi,hh)
-            sum += hh
-            cnt += 1
+            var sea_point: bool = relief == "coast" and is_water(p.x,p.y)
+            if not sea_point:
+                # coast: the sea below the cliff is not part of the road span
+                lo = minf(lo,hh)
+                hi = maxf(hi,hh)
+                sum += hh
+                cnt += 1
             if is_water(p.x,p.y):
                 if relief == "canyon":
                     stream = true
-                else:
+                elif relief != "coast" or (absi(a) <= 1 and absi(b) <= 1 and a*a+b*b <= 1):
+                    # coast: the cliff rule below measures the drop exactly
                     wet += 1
-    var mean: float = sum/float(cnt)
-    if wet > 0:
+    var mean: float = sum/float(maxi(cnt,1))
+    if wet > 0 or cnt == 0:
         return {"state":2,"reason":"SEA / WATER","h":mean}
     if relief == "coast":
-        var d: float = INF
-        for a2 in range(-2,3):
-            for b2 in range(-2,3):
-                var q: Vector2 = ctr+Vector2(float(a2),float(b2))*14.0
-                d = minf(d,coast_distance(q.x,q.y))
-        if d < 20.0:
-            return {"state":2,"reason":"CLIFF EDGE: ROAD + BARRIER NEED 20 m","h":mean}
-        if d < 34.0:
-            return {"state":1,"reason":"CLIFF SHELF: BARRIER + RETAINING WALL","h":mean}
+        # Distance from the drop to the road corridor near the tile centre
+        # (where a road through this tile runs). A 24 m road + 3.6 m verge
+        # + barrier strip needs ~20 m from its centre line: closer is red.
+        # Every sample of the final road is checked again by classify().
+        var d: float = coast_distance(ctr.x,ctr.y)
+        if d < 21.0:
+            return {"state":2,"reason":"CLIFF EDGE: ROAD + VERGE + BARRIER NEED 21 m","h":mean}
+        if d < 40.0:
+            return {"state":1,"reason":"CLIFF SHELF: CLIFF WALL, FULL WIDTH ON LAND","h":mean}
     var span: float = hi-lo
     if span > 32.0:
         return {"state":2,"reason":"TOO STEEP (%d m DROP IN ONE TILE)" % int(span),"h":mean}
