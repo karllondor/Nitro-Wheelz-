@@ -1,5 +1,8 @@
 # Nitro Wheelz — v0.1.23 procedural world Phase A (test build, awaiting visual review)
 
+> **NEW 2026-11-20 OWNER APPROVAL:** Phase A's procedural adjacency, local chunks and Builder/Race parity are worth preserving, but its road-adjacent generic village art was rejected. All future world work must follow [master implementation brief](docs/research/procedural_world/CLAUDE_MASTER_BUILD_BRIEF_2026-11-20.md), [terrain-first spec](docs/research/procedural_world/TERRAIN_FIRST_TOWNSCAPER_TRACK_BUILDER_SPEC.md), [research](docs/research/procedural_world/NITRO_WHEELZ_WORLD_RESEARCH_v1.md) and [Drive-hosted 49-image reference library](docs/references/drift_tracks/README.md). These are specifications/references; the full 3D terrain system has **NOT** been implemented or tested yet. The earlier Phase A STOP POINT and planned house-heavy Phase B are superseded.
+
+
 ## PROCEDURAL WORLD PHASE A (v0.1.23)
 - Read docs/research/procedural_world/PHASE_A_REPORT.md first (architecture, evidence, measurements, limits).
 - Code: game/scripts/world/scenery_rules.gd, scenery_modules.gd, procedural_world.gd; drift_track.gd (world from saved track, with_props, world_grid()); track_builder.gd (world, compact bar, FIT, occupied-bounds camera, pinch/pan).
