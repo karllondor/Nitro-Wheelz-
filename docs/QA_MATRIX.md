@@ -25,9 +25,9 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | Area | Result |
 |---|---|
 | factory_models_test incl. FLAME (always factory GLB, RYU-32 handling + V8 profile, 41 371 tris, 6 draw calls, footprint, wheelbase) | PASS (local) |
-| Full suite | see the row below / follow-up commit |
+| Full suite (import + 34 tests) | PASS (local, exit 0; terrain_physics_test needed the post-PASS shutdown watchdog once) |
 | Renders (garage views, close-ups, race top-down / chase) | scratchpad only (the sheet contains the generated asset) |
-| CI / APK | see the follow-up docs commit |
+| CI at b7fca16 | all green: [android APK](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44923456545/job/136904273351), [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44923456504/job/136904273456), [web](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44923456417/job/136904273155), [desktop](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44923456468/job/136904273006), [foundation](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44923456516/job/136904273244). APK 46.8 MB, SHA-256 def1b205…a66b. A CI-built APK is not a phone test. |
 | Phone review | NOT RUN |
 
 ## v0.1.32 — Mobile QA fixes (Claude Code cloud container, 2026-11-21)
