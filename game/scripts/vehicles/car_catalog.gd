@@ -96,6 +96,9 @@ static func factory_model(variant: String) -> Dictionary:
         var chosen: String = factory_test_look() if looks.has(factory_test_look()) else str(looks.keys()[0])
         look["look"] = chosen
         look["livery_texture"] = str((looks[chosen] as Dictionary).get("livery_texture",""))
+        var alt: String = str((looks[chosen] as Dictionary).get("glb",""))
+        if alt != "" and ResourceLoader.exists(alt):
+            model["glb"] = alt                # prototype body (asset absent in a build -> the normal model)
     return {"model":model,"look":look}
 
 ## True when this variant is shown with its Car Factory test model.
