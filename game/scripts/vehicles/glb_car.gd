@@ -21,6 +21,7 @@ var profile: Dictionary = {}
 var cosmetic: Dictionary = {}
 var shadow_height: float = 0.10
 var front_wheels: Array[Node3D] = []
+var rear_hubs: Array[Node3D] = []
 var rolling_wheels: Array[Node3D] = []
 var wheel_mounts: Array[Node3D] = []
 var wheel_radius: float = 0.29
@@ -142,6 +143,8 @@ func _mount_wheels(model: Dictionary) -> void:
         hub.add_child(steer)
         if front:
             front_wheels.append(steer)
+        else:
+            rear_hubs.append(steer)
         var tilt := Node3D.new()
         tilt.name = "Camber"
         var deg: float = float(camber.get("front" if front else "rear",0.0))
@@ -189,5 +192,9 @@ func _make_shadow(model: Dictionary) -> void:
 func set_motion(steer_rad: float, speed_mps: float, dt: float) -> void:
     for wheel in front_wheels:
         wheel.rotation.y = -steer_rad
+    # Rear wheel hubs are mechanically fixed; never inherit a steering pose
+    # across the initial drift / camera switch / track reload.
+    for hub in rear_hubs:
+        hub.rotation.y = 0.0
     for roll in rolling_wheels:
-        roll.rotation.x -= speed_mps*dt/wheel_radius
+        roll.rotation.x = wrapf(roll.rotation.x-speed_mps*dt/wheel_radius,-PI,PI)
