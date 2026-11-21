@@ -35,6 +35,18 @@
     "tyre_radius_m": 0.29,
     "tyre_width_m": 0.205
   },
+  "wheel_ryu_5spoke": {
+    "file": "wheel_ryu_5spoke.glb",
+    "glb_bytes": 98420,
+    "name": "RYU DEEP 5-SPOKE",
+    "note": "From the RYU-32 reference sheet (silver five-spoke deep dish, polished lip); spoke shape and size are a sheet-based approximation.",
+    "outer_face_offset_m": 0.1315,
+    "rim_half_width_m": 0.1275,
+    "rim_radius_m": 0.254,
+    "triangles": 2522,
+    "tyre_radius_m": 0.33,
+    "tyre_width_m": 0.255
+  },
   "wheel_signature_e30": {
     "file": "wheel_signature_e30.glb",
     "glb_bytes": 111272,

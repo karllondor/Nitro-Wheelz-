@@ -88,6 +88,8 @@ REGION = {
     # v0.1.30 (append-only, unused cells of the E30 layout)
     "tex_headlight_rect": (0.00, 0.625, 0.25, 0.6875),
     "tex_tail_b": (0.25, 0.625, 0.75, 0.75),
+    "tex_headlight_twin": (0.00, 0.75, 0.25, 0.8125),
+    "tex_tail_round": (0.25, 0.75, 0.375, 0.875),
 }
 
 

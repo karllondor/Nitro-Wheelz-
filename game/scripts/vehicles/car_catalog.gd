@@ -22,7 +22,7 @@ const CARS: Dictionary = {
         "profile":"res://cars/lada_baseline.json","factory_model":"res://cars/models/lada_2106.json"},
     "blue":{"name":"RYU-32 COUPE","paint":"DEEP BLUE","short":"RYU-32 • BLUE",
         "length":4.545,"wheelbase":2.615,"width":1.90,"note":"4.0 V8 ITB • 350 HP • 400 NM",
-        "profile":"res://cars/ryu32_v8.json"},
+        "profile":"res://cars/ryu32_v8.json","factory_model":"res://cars/models/ryu32.json"},
     # Car Factory prototype (Blender -> GLB). Cosmetics (paint, wheels) are
     # chosen in the garage and stored apart from the handling profile.
     "e30":{"name":"E30 BLESSED","paint":"BLESSED YELLOW","short":"E30 • BLESSED",
@@ -72,6 +72,20 @@ static func set_factory_test_models(on: bool) -> void:
     cfg.set_value("developer","factory_test_models",on)
     cfg.save(SETTINGS_PATH)
 
+## DEVELOPER: which look a factory test model with several looks wears
+## (RYU-32: "clean" or "livery"). Looks only.
+static func factory_test_look() -> String:
+    var cfg := ConfigFile.new()
+    if cfg.load(SETTINGS_PATH) != OK:
+        return "clean"
+    return str(cfg.get_value("developer","factory_test_look","clean"))
+
+static func set_factory_test_look(look: String) -> void:
+    var cfg := ConfigFile.new()
+    cfg.load(SETTINGS_PATH)
+    cfg.set_value("developer","factory_test_look",look)
+    cfg.save(SETTINGS_PATH)
+
 static var _models: Dictionary = {}
 
 ## {"model": <model block for NitroGlbCar>, "look": <paint + wheels>} of a
@@ -94,6 +108,11 @@ static func factory_model(variant: String) -> Dictionary:
     for key in ["paint_color_hex","paint_finish","wheel_asset_id"]:
         look[key] = str(v.get(key,""))
     look["paint_shader"] = v.get("paint_shader",{})
+    var looks: Dictionary = v.get("looks",{})
+    if not looks.is_empty():
+        var chosen: String = factory_test_look() if looks.has(factory_test_look()) else str(looks.keys()[0])
+        look["look"] = chosen
+        look["livery_texture"] = str((looks[chosen] as Dictionary).get("livery_texture",""))
     return {"model":model,"look":look}
 
 ## True when this variant is shown with its Car Factory test model.

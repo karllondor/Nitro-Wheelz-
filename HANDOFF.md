@@ -1,4 +1,7 @@
-# Nitro Wheelz — v0.1.30 Car Factory stage 2 (Lada RED / WHITE one GLB, test model) on top of v0.1.29 E30 v0.3
+# Nitro Wheelz — v0.1.31 Car Factory stage 3 (RYU-32 CLEAN / LIVERY, test model) on top of v0.1.30 Lada stage 2
+
+## CAR FACTORY MIGRATION — RYU-32 (v0.1.31)
+- Read docs/car_factory/RYU32_FACTORY.md. TEST model behind the same DEVELOPER switch; RYU-32 TEST LOOK picks CLEAN / LIVERY. The LIVERY texture is provisional until the owner sends the LIVERY render.
 
 ## CAR FACTORY MIGRATION — LADA (v0.1.30)
 - Read docs/car_factory/LADA_2106_FACTORY.md. The new Lada is a TEST model behind DEVELOPER > CAR FACTORY TEST MODELS (default OFF); do not make it the default before the owner accepts it on the phone.

@@ -45,6 +45,11 @@ uniform float coat : hint_range(0.5, 3.0) = 1.4;
 // v0.3 clear-coat horizon reflection.
 uniform float horizon : hint_range(0.0, 2.0) = 1.0;
 uniform float horizon_sharp : hint_range(0.01, 0.5) = 0.07;
+// v0.1.30 livery: an RGBA texture in the paint's livery UV layout (box
+// projection made by the Car Factory: sides, top, front, rear) laid over
+// the paint colour. Off = the plain colour (CLEAN look).
+uniform sampler2D livery_tex : source_color, hint_default_transparent, filter_linear_mipmap, repeat_disable;
+uniform float livery_on : hint_range(0.0, 1.0) = 0.0;
 
 void fragment() {
 	vec3 n = normalize(NORMAL);
@@ -68,14 +73,16 @@ void fragment() {
 	// Body light / shadow from the panel orientation (world up = lit).
 	float up = smoothstep(-0.60, 0.85, nw.y);
 	float lit = mix(1.0 - body_shade, 1.0, up);
-	vec3 base = paint.rgb * lit * mix(shade_tint.rgb, vec3(1.0), up);
+	vec4 lv = texture(livery_tex, UV);
+	vec3 pc = mix(paint.rgb, lv.rgb, lv.a * livery_on);
+	vec3 base = pc * lit * mix(shade_tint.rgb, vec3(1.0), up);
 	// Keep the shaded side saturated (golden, not muddy): lift chroma a bit
 	// where the panel shading darkens it.
 	float l = dot(base, vec3(0.299, 0.587, 0.114));
 	base = mix(vec3(l), base, 1.0 + 0.12 * (1.0 - up));
 	// Paint depth: richer, darker colour where the surface turns away.
 	base *= mix(1.0, 1.0 - depth, pow(1.0 - ndv, 1.6));
-	vec3 tint = mix(vec3(1.0), paint.rgb * 1.3 + 0.06, metallic);
+	vec3 tint = mix(vec3(1.0), pc * 1.3 + 0.06, metallic);
 	ALBEDO = base * (1.0 - metallic * 0.55);
 	ROUGHNESS = roughness;
 	METALLIC = metallic * 0.6;
@@ -83,5 +90,5 @@ void fragment() {
 	EMISSION = env * tint * gloss * mix(fres, 1.0, 0.095 + metallic * 0.50)
 		+ studio.rgb * (key + strip) * gloss * 0.35
 		+ studio.rgb * pow(1.0 - ndv, 4.0) * rim * 0.14
-		+ paint.rgb * glow;
+		+ pc * glow;
 }

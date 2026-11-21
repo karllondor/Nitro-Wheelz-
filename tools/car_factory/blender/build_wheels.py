@@ -153,9 +153,18 @@ def rim_lada_5spoke(part):
     """Lada RED sheet: white five-spoke deep dish. Polished step lip, deep
     polished dish wall, white concave face with five wide tapering spokes
     and dark openings between them, grey centre cap with four nuts."""
+    _rim_5spoke(part, "rim_white", 0.070)
+
+
+def rim_ryu_5spoke(part):
+    """RYU-32 sheet: silver five-spoke deep dish (17-18 in look, 20 in rim
+    in the die-cast proportions of the sheet) with a polished lip."""
+    _rim_5spoke(part, "rim_silver", 0.088)
+
+
+def _rim_5spoke(part, face_key, lip_depth):
     m = nwcf.frame_from_axis((0, 0, 0), (1, 0, 0))
     seg = 40
-    lip_depth = 0.070
     face_a = HALF - lip_depth
     r_step = RIM_R - 0.022
     nwcf.lathe(part, m, [(HALF - 0.006, FLANGE_R + 0.001), (HALF + 0.002, FLANGE_R - 0.001),
@@ -169,7 +178,7 @@ def rim_lada_5spoke(part):
                          (face_a - 0.030, 0.0)], "rim_dark", segments=seg, orient=lambda c: (1.0, 0, 0))
     # White outer ring of the face (spokes grow out of it).
     nwcf.lathe(part, m, [(face_a + 0.004, r_step - 0.010), (face_a - 0.002, r_step - 0.030),
-                         (face_a - 0.006, r_step - 0.032)], "rim_white", segments=seg,
+                         (face_a - 0.006, r_step - 0.032)], face_key, segments=seg,
                orient=lambda c: (1.0, 0, 0))
     for k in range(5):
         a = math.tau * k / 5
@@ -190,15 +199,15 @@ def rim_lada_5spoke(part):
         def q(i, s_, d):
             return V[i * 4 + s_ * 2 + d]
         faces = [
-            part.face([q(0, 0, 0), q(0, 1, 0), q(1, 1, 0), q(1, 0, 0)], "rim_white"),
-            part.face([q(0, 0, 0), q(1, 0, 0), q(1, 0, 1), q(0, 0, 1)], "rim_white"),
-            part.face([q(0, 1, 0), q(0, 1, 1), q(1, 1, 1), q(1, 1, 0)], "rim_white"),
+            part.face([q(0, 0, 0), q(0, 1, 0), q(1, 1, 0), q(1, 0, 0)], face_key),
+            part.face([q(0, 0, 0), q(1, 0, 0), q(1, 0, 1), q(0, 0, 1)], face_key),
+            part.face([q(0, 1, 0), q(0, 1, 1), q(1, 1, 1), q(1, 1, 0)], face_key),
         ]
         cen = rot @ Vector((face_a, 0.0, (r0 + r1) * 0.5))
         part.orient([f for f in faces if f is not None],
                     lambda c, cen=cen: (c - cen) + Vector((0.8, 0, 0)))
     nwcf.lathe(part, m, [(face_a + 0.010, 0.070), (face_a + 0.022, 0.064), (face_a + 0.030, 0.048),
-                         (face_a + 0.033, 0.0)], "rim_white", segments=24, orient=lambda c: (1.0, 0, 0))
+                         (face_a + 0.033, 0.0)], face_key, segments=24, orient=lambda c: (1.0, 0, 0))
     for k in range(4):
         a = math.tau * k / 4
         cen = Vector((face_a + 0.028, 0.044 * math.cos(a), 0.044 * math.sin(a)))
@@ -249,6 +258,8 @@ def rim_lada_mesh(part):
 
 # Lada sheets: 18 in rims (~0.79 of the tyre diameter), 9 in wide.
 LADA_SIZE = {"TYRE_R": 0.295, "TYRE_W": 0.235, "RIM_R": 0.2286, "FLANGE_R": 0.2466, "HALF": 0.1150}
+# RYU-32 sheet: big deep-dish wheels with a thin sidewall (die-cast look).
+RYU_SIZE = {"TYRE_R": 0.330, "TYRE_W": 0.255, "RIM_R": 0.2540, "FLANGE_R": 0.2720, "HALF": 0.1275}
 
 DESIGNS = {
     "wheel_signature_e30": {"name": "SIGNATURE", "builder": rim_signature, "tyre_seg": 36,
@@ -263,6 +274,9 @@ DESIGNS = {
     "wheel_lada_mesh": {"name": "LADA MESH", "builder": rim_lada_mesh, "size": LADA_SIZE,
                         "note": "From the approved WHITE Lada concept sheet (grey-violet cross-laced mesh, polished "
                                 "lip); spoke count is an approximation."},
+    "wheel_ryu_5spoke": {"name": "RYU DEEP 5-SPOKE", "builder": rim_ryu_5spoke, "size": RYU_SIZE,
+                         "note": "From the RYU-32 reference sheet (silver five-spoke deep dish, polished lip); spoke "
+                                 "shape and size are a sheet-based approximation."},
 }
 DEFAULT_SIZE = {"TYRE_R": TYRE_R, "TYRE_W": TYRE_W, "RIM_R": RIM_R, "FLANGE_R": FLANGE_R, "HALF": HALF}
 

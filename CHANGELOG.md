@@ -1,3 +1,12 @@
+## [0.1.31] — Car Factory stage 3: RYU-32 CLEAN / LIVERY as one GLB (TEST MODEL, not approved)
+Report: docs/car_factory/RYU32_FACTORY.md (sources, missing LIVERY reference, V8 vs sheet engine, orthographic comparison, budget).
+- New tools/car_factory/blender/build_ryu32.py: 90s drift coupe from the CLEAN BLUE reference sheet - aero kit bumpers with intakes and lips, kit over-fenders and skirts, twin-projector lamps, quad round tail lamps, big exhaust, large fixed wing, bonnet removed with a 1UZ-style V8 on eight ITB trumpets (the brief's V8, not the sheet's inline engine), cage with the X behind the seats.
+- CLEAN and LIVERY share the GLB: the paint shader now takes an optional livery texture in the factory's livery UV layout. The LIVERY design is PROVISIONAL (no reference received).
+- New wheel RYU DEEP 5-SPOKE (0.33 m tyre, 20 in rim look). 38 550 triangles with wheels, 8 draw calls, body GLB 1.18 MB.
+- capture_car_views.gd: orthographic side / front / rear views (blueprint comparison) and a 5th argument for the look.
+- DEVELOPER: CAR FACTORY TEST MODELS now covers the RYU-32 too; RYU-32 TEST LOOK: CLEAN / LIVERY. Default OFF = procedural RYU-32. Handling, V8 sound, collisions, saves unchanged.
+- Android versionCode 31 / versionName 0.1.31. NOT RUN: phone review.
+
 ## [0.1.30] — Car Factory stage 2: Lada 2106 RED / WHITE as one GLB (TEST MODEL, not approved)
 Report: docs/car_factory/LADA_2106_FACTORY.md (decision, sheet measurements, budget, BEFORE / AFTER, unconfirmed details).
 - New tools/car_factory/blender/build_lada_2106.py: one shared sedan body + RED parts (exposed VAZ four with 4 ITB trumpets, quad round lamps, chrome grille / bumpers / trim, bolt-on overfenders, red sheet tail lamps) and WHITE parts (closed bonnet with raised centre, rectangular lamps, colour-keyed bumpers + skirts, rolled flares) in ONE GLB.

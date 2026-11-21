@@ -19,17 +19,19 @@ func _initialize() -> void:
 
 func _run() -> void:
     var was_on: bool = CARS.factory_test_models()
+    var was_look: String = CARS.factory_test_look()
     var garage_backup := ConfigFile.new()
     var had_garage: bool = garage_backup.load(COSMETICS.GARAGE_PATH) == OK
     var err: String = await _checks()
     CARS.set_factory_test_models(was_on)
+    CARS.set_factory_test_look(was_look)
     if had_garage:
         garage_backup.save(COSMETICS.GARAGE_PATH)
     if not err.is_empty():
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: Car Factory Lada 2106 - one GLB with RED / WHITE geometry variants behind DEVELOPER > CAR FACTORY TEST MODELS (off = procedural Lada), variant slots, own paint + wheels, 3 body materials, budget per variant, footprint + wheelbase, handling identical on / off, garage = race car")
+    print("PASS: Car Factory test models behind DEVELOPER > CAR FACTORY TEST MODELS (off = procedural Lada / RYU-32): Lada one GLB with RED / WHITE geometry variants (slots, own paint + wheels), RYU-32 one GLB with CLEAN / LIVERY looks (paint material only), 3 body materials, budget, footprint + wheelbase, handling + engine profiles identical on / off, garage = race car")
     print("NOT RUN: owner visual acceptance; frame time on a real Android phone")
     for _f in range(3):
         await process_frame
@@ -37,18 +39,22 @@ func _run() -> void:
 
 func _checks() -> String:
     var handling_off: Dictionary = CARS.handling("red").duplicate(true)
+    var ryu_off: Dictionary = CARS.handling("blue").duplicate(true)
+    var ryu_engine: Dictionary = CARS.engine("blue").duplicate(true)
     CARS.set_factory_test_models(false)
-    for v in ["red","white"]:
+    for v in ["red","white","blue"]:
         var classic: Node3D = CARS.make(v)
-        var ok: bool = classic is NitroLadaLowPoly
+        var ok: bool = (classic is NitroLadaLowPoly) if v != "blue" else (classic is NitroCoupeLowPoly)
         classic.free()
         if not ok:
-            return "Switch OFF must keep the procedural Lada (%s)" % v
+            return "Switch OFF must keep the procedural model (%s)" % v
     CARS.set_factory_test_models(true)
     if CARS.handling("red") != handling_off or str(CARS.profile("red").get("id","")) != "lada_baseline":
         return "Factory test models must not touch the Lada handling profile"
-    if CARS.uses_factory_test_model("blue") or CARS.uses_factory_test_model("e30"):
-        return "Only the Lada has a factory test model in this build"
+    if CARS.handling("blue") != ryu_off or CARS.engine("blue") != ryu_engine or int(ryu_engine["cylinders"]) != 8:
+        return "Factory test models must not touch the RYU-32 handling / V8 engine profile"
+    if CARS.uses_factory_test_model("e30"):
+        return "The E30 is already a factory car (no test switch)"
     var expect: Dictionary = {"red":[1,"wheel_lada_5spoke"],"white":[2,"wheel_lada_mesh"]}
     var glb_path: String = ""
     for v in expect.keys():
@@ -100,6 +106,39 @@ func _checks() -> String:
         if outer > float(info["width"])*0.5+0.005:
             return "%s tyres poke out of the arches (%.3f m)" % [v,outer]
         car.queue_free()
+        await process_frame
+    # RYU-32: one GLB, CLEAN / LIVERY differ only in the paint material.
+    var ryu_glb: String = ""
+    for look in ["clean","livery"]:
+        CARS.set_factory_test_look(look)
+        var rc: Node3D = CARS.make("blue")
+        root.add_child(rc)
+        await process_frame
+        if not (rc is NitroGlbCar):
+            return "Switch ON: the RYU-32 must be the factory GLB car (%s)" % look
+        var rg: NitroGlbCar = rc
+        var path: String = str(CARS.factory_model("blue")["model"]["glb"])
+        if ryu_glb != "" and path != ryu_glb:
+            return "RYU-32 CLEAN and LIVERY must share one GLB"
+        ryu_glb = path
+        var on: float = float(rg.paint_material.get_shader_parameter("livery_on"))
+        if (look == "livery") != (on > 0.5):
+            return "RYU-32 %s look: livery_on = %.1f" % [look,on]
+        if look == "livery" and rg.paint_material.get_shader_parameter("livery_tex") == null:
+            return "RYU-32 LIVERY needs its livery texture"
+        var st: Dictionary = _stats(rc,0)
+        var info: Dictionary = CARS.info("blue")
+        var bb: AABB = st["bounds"]
+        print("RYU-32 %s: %d triangles, %d draw calls, bounds %s" % [look.to_upper(),st["visible"],st["calls"],str(bb.size)])
+        if int(st["visible"]) > BUDGET_TRIANGLES or int(st["calls"]) > BUDGET_DRAW_CALLS:
+            return "RYU-32 over budget (%d tris, %d calls)" % [st["visible"],st["calls"]]
+        if absf(bb.size.z-float(info["length"])) > 0.02 or bb.size.x > float(info["width"])+0.005:
+            return "RYU-32 footprint %s vs catalog %.3f x %.3f" % [str(bb.size),float(info["length"]),float(info["width"])]
+        var fl: Node3D = rg.body.find_child("wheel_FL",true,false)
+        var rl: Node3D = rg.body.find_child("wheel_RL",true,false)
+        if absf(absf(fl.position.z-rl.position.z)-float(info["wheelbase"])) > 0.005:
+            return "RYU-32 wheelbase in the GLB must be %.3f m" % float(info["wheelbase"])
+        rc.queue_free()
         await process_frame
     # Garage builds the same car the race will drive.
     var garage: Control = (load(GARAGE_SCENE) as PackedScene).instantiate()

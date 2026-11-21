@@ -21,6 +21,15 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.31 — Car Factory stage 3: RYU-32 CLEAN / LIVERY (Claude Code cloud container, 2026-11-21)
+| Area | Result |
+|---|---|
+| factory_models_test (Lada + RYU-32), e30_factory_car_test, car_profiles_test, garage_audio_test, visual_identity_test, main_menu_test | PASS (local); full suite at stage 4 |
+| BEFORE / CLEAN / LIVERY renders, orthographic views, close-ups | DONE -> docs/car_factory/ryu32/ |
+| Orthographic overlay vs the CLEAN sheet (not committed) | reviewed in the session |
+| LIVERY reference | NOT RECEIVED - provisional texture |
+| Phone review / owner acceptance | NOT RUN |
+
 ## v0.1.30 — Car Factory stage 2: Lada 2106 RED / WHITE (Claude Code cloud container, 2026-11-21)
 | Area | Result |
 |---|---|

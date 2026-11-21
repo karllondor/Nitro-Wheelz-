@@ -67,6 +67,13 @@ func apply_paint(choice: Dictionary) -> void:
     var p: Dictionary = COSMETICS.paint_params(choice)
     for key in p.keys():
         paint_material.set_shader_parameter(key,p[key])
+    # Livery texture (e.g. RYU-32 LIVERY look); CLEAN = none.
+    var livery: String = str(choice.get("livery_texture",""))
+    if livery != "" and ResourceLoader.exists(livery):
+        paint_material.set_shader_parameter("livery_tex",load(livery))
+        paint_material.set_shader_parameter("livery_on",1.0)
+    else:
+        paint_material.set_shader_parameter("livery_on",0.0)
     # Per-variant paint shading from a car model file (e.g. Lada pearl white).
     var extra: Variant = choice.get("paint_shader",{})
     if extra is Dictionary:

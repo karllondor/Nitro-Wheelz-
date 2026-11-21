@@ -28,8 +28,11 @@ func _run() -> void:
     var variant: String = args[1] if args.size() > 1 else "e30"
     var with_race: bool = args.size() > 2 and args[2] == "race"
     var old_factory: bool = CATALOG.factory_test_models()
+    var old_look: String = CATALOG.factory_test_look()
     if args.size() > 3:
         CATALOG.set_factory_test_models(args[3] == "factory")
+    if args.size() > 4:
+        CATALOG.set_factory_test_look(args[4])   # e.g. RYU-32 clean | livery
     DirAccess.make_dir_recursive_absolute(out)
     var cfg := ConfigFile.new()
     cfg.load("user://nitro_garage.cfg")
@@ -79,6 +82,22 @@ func _run() -> void:
         for i in range(4):
             await process_frame
         preview.get_texture().get_image().save_png(out+("view_top" if c == "top" else "close_"+str(c))+".png")
+    # Orthographic side / front / rear for comparison with blueprint-style
+    # reference sheets (same scale as the sheet's orthographic views).
+    var hh: float = 0.70
+    cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+    for o in [["ortho_side",90.0,Vector3(0.0,hh,14.0),float(inf.get("length",4.3))*1.12],
+            ["ortho_front",180.0,Vector3(0.0,hh,14.0),float(inf.get("width",1.7))*1.25],
+            ["ortho_rear",0.0,Vector3(0.0,hh,14.0),float(inf.get("width",1.7))*1.25]]:
+        tt.rotation.y = deg_to_rad(float(o[1]))
+        cam.position = o[2]
+        cam.size = float(o[3])
+        cam.look_at(Vector3(0.0,hh,0.0),Vector3.UP)
+        cam.current = true
+        for i in range(4):
+            await process_frame
+        preview.get_texture().get_image().save_png(out+str(o[0])+".png")
+    cam.projection = Camera3D.PROJECTION_PERSPECTIVE
     root.remove_child(garage)
     garage.free()
     if with_race:
@@ -104,5 +123,6 @@ func _run() -> void:
     cfg.set_value("garage","paint",old_paint)
     cfg.save("user://nitro_garage.cfg")
     CATALOG.set_factory_test_models(old_factory)
+    CATALOG.set_factory_test_look(old_look)
     print("CAR VIEWS SAVED %s %s" % [variant,ProjectSettings.globalize_path(out)])
     quit(0)
