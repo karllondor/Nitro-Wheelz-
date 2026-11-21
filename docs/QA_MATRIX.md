@@ -1,5 +1,21 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## v0.1.32b candidate — STATUS (2026-11-21)
+
+| Check | Outcome | Evidence |
+|---|---|---|
+| Correct source baseline | YES | Branch based on v0.1.32 commit b1ef0ef; main was v0.1.6 |
+| Car Factory GLBs available without Developer Mode | CODE CHANGED; PHONE NOT RUN | catalog default GLB with explicit legacy fallback |
+| Lada/RYU-32 paint and rims in garage + race | CODE CHANGED; PHONE NOT RUN | shared data and per-variant saves; factory_models_test updated |
+| RYU-32 stripes as PAINT option | CODE CHANGED; PHONE NOT RUN | BLUE + STRIPES shares GLB; existing texture provisional |
+| Driver name, car, score, stars, time | CODE CHANGED; PHONE NOT RUN | results_screen_test updated; old entries UNKNOWN |
+| First drift rear wheel anomaly in Top Down and Chase | OPEN; PHONE NOT RUN | defensive neutral rear hubs and bounded wheel roll; earlier yaw-only test did not reproduce the visual anomaly |
+| Old-vs-new track top-down aesthetic | A/B REVIEW PENDING | no camera/terrain changes made without visual approval |
+| Godot import, Android APK install, race UI, 120 Hz regression | NOT RUN IN THIS SESSION | verify CI and device separately |
+
+See `docs/MOBILE_QA_v0.1.32b.md`. Do not treat code inspection or passing wheel-yaw assertions as proof that the first-drift Android image bug is resolved.
+
+
 PASS only when actually executed. BUILT does not mean played or installed.
 
 | Check | Platform | Status | Evidence |
