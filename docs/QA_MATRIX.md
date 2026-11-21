@@ -30,7 +30,7 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 | Rear wheels never steer, front = physics steering, first drift == after RESTART (7 car models) | PASS (wheel_visual_test); phone symptom NOT reproduced |
 | Records per layout, next-star pill, two-tap RESTART / GARAGE | PASS (track_records_test) |
 | Evidence | docs/mobile_qa_v0132/ |
-| CI | see the follow-up docs commit |
+| CI at 80b12f4 | all green: [android APK](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44876886564/job/136763437312), [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44876886577/job/136763437276), [web](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44876886633/job/136763437290), [desktop](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44876886571/job/136763437403), [foundation](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44876886627/job/136763437289). A CI-built APK is not a phone test. |
 | Phone verification | NOT RUN (owner checklist in docs/MOBILE_QA_v0.1.32.md) |
 
 ## Car Factory stage 4 — integration QA + standards (docs only, on v0.1.31; 2026-11-21)
