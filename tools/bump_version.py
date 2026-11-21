@@ -7,12 +7,12 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REGEX = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+REGEX = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$")
 
 def new_version(current, kind):
     match = REGEX.fullmatch(current)
     if not match:
-        raise ValueError("VERSION is not MAJOR.MINOR.PATCH")
+        raise ValueError("VERSION is not valid SemVer")
     major, minor, patch = map(int, match.groups())
     if kind == "major":
         return str(major+1) + ".0.0"
