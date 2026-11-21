@@ -2,6 +2,8 @@
 
 First starter source version **0.1.0**. Every new game created from it starts its own version history; starter version and game version are different concepts.
 
+Development prereleases use standard SemVer suffixes, e.g. `0.1.32-b.1`; these remain separate from immutable stable releases. The next stable PATCH after such a candidate is `0.1.33`. Do not overwrite released artifacts.
+
 Naming:
 Game-Slug_vMAJOR.MINOR.PATCH_Source.zip
 Game-Slug_vMAJOR.MINOR.PATCH_Windows.zip
