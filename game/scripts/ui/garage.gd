@@ -321,11 +321,11 @@ func _drive() -> void:
 
 func _set_status() -> void:
     var info: Dictionary = CARS.info(active_variant)
-    var prof: Dictionary = CARS.profile(active_variant)
+    var prof: Dictionary = CARS.cosmetic_profile(active_variant)
     var factory: bool = COSMETICS.supported(prof)
     version_label.text = "SELECTED: "+str(info["paint"])+"  •  "+str(info["note"])
     if CARS.uses_factory_test_model(active_variant):
-        version_label.text += "  •  FACTORY TEST MODEL"
+        version_label.text += "  •  FACTORY GLB"
     if factory:
         var choice: Dictionary = COSMETICS.current(active_variant,prof)
         version_label.text = "%s  •  %s  •  %s" % [COSMETICS.paint_name(choice,prof),
@@ -348,26 +348,26 @@ func _set_status() -> void:
         STYLE.style_button(paint_buttons[key],ui_unit,key == active_variant)
 
 func _signature() -> void:
-    var prof: Dictionary = CARS.profile(active_variant)
+    var prof: Dictionary = CARS.cosmetic_profile(active_variant)
     if not COSMETICS.supported(prof):
         return
     var choice: Dictionary = COSMETICS.reset_to_signature(active_variant,prof)
     _apply_cosmetic(choice)
 
 func _next_paint() -> void:
-    var prof: Dictionary = CARS.profile(active_variant)
+    var prof: Dictionary = CARS.cosmetic_profile(active_variant)
     if COSMETICS.supported(prof):
         _apply_cosmetic(COSMETICS.next_paint(active_variant,prof))
 
 func _next_wheels() -> void:
-    var prof: Dictionary = CARS.profile(active_variant)
+    var prof: Dictionary = CARS.cosmetic_profile(active_variant)
     if COSMETICS.supported(prof):
         _apply_cosmetic(COSMETICS.next_wheel(active_variant,prof))
 
 ## Live update of the preview: same car node, new paint / wheels only.
 func _apply_cosmetic(choice: Dictionary) -> void:
     if car != null and car.has_method("apply_paint"):
-        car.call("apply_paint",choice)
+        car.call("apply_paint",CARS.visual_choice(active_variant,choice))
         car.call("apply_wheels",choice)
     _set_status()
 
