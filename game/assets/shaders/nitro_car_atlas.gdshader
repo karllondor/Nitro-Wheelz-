@@ -7,6 +7,19 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 
+// Car Factory geometry variants (v0.1.30): UV2.x = 0 on parts shared by
+// every variant, n on parts that exist only in variant slot n (e.g. Lada
+// RED = 1 exposed engine, WHITE = 2 closed bonnet). The other slot's faces
+// collapse to a point here, so variants share one GLB / mesh / draw call.
+// Meshes without UV2 (E30, wheels) read 0 = always visible.
+uniform float variant_slot = 0.0;
+
+void vertex() {
+	if (UV2.x > 0.5 && abs(UV2.x - variant_slot) > 0.25) {
+		VERTEX = vec3(0.0);
+	}
+}
+
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_disable;
 uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_disable;
 uniform sampler2D emission_tex : source_color, hint_default_black, filter_linear_mipmap, repeat_disable;

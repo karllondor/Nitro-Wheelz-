@@ -1,0 +1,38 @@
+{
+  "id": "lada_2106_factory",
+  "status": "CAR FACTORY TEST MODEL - not approved; shown only with DEVELOPER > CAR FACTORY TEST MODELS: ON. The procedural model stays the default until the owner accepts this one.",
+  "source": "tools/car_factory/blender/build_lada_2106.py (one GLB, geometry variants RED = slot 1, WHITE = slot 2)",
+  "glb": "res://assets/cars/lada_2106/lada_2106.glb",
+  "wheel_radius_m": 0.295,
+  "camber_deg": {
+    "front": -1.5,
+    "rear": -1.0
+  },
+  "camber_note": "Visual estimate from the concept sheets; cosmetic only, no physics.",
+  "shadow_size_m": [
+    2.6,
+    5.15
+  ],
+  "variants": {
+    "red": {
+      "variant_slot": 1,
+      "paint_color_hex": "#B20C22",
+      "paint_finish": "solid",
+      "wheel_asset_id": "wheel_lada_5spoke",
+      "note": "RED sheet: exposed ITB engine, quad round lamps, chrome bumpers and trim, bolt-on overfenders, white 5-spoke dish wheels. Colour sampled from the sheet (#AE0E23 / #BF0A21)."
+    },
+    "white": {
+      "variant_slot": 2,
+      "paint_color_hex": "#EEEDF1",
+      "paint_finish": "pearl",
+      "wheel_asset_id": "wheel_lada_mesh",
+      "note": "WHITE sheet: clean bonnet with a raised centre panel, rectangular lamps, colour-keyed bumpers and skirts, rolled flares, grey-violet mesh wheels. The sheet's lavender tint is studio light; the paint is neutral pearl white.",
+      "paint_shader": {
+        "body_shade": 0.15,
+        "shade_tint": "#EEF0F7",
+        "depth": 0.1
+      },
+      "paint_shader_note": "White paint: lighter, neutral side shading (the default warm shade turned the pearl white beige)."
+    }
+  }
+}

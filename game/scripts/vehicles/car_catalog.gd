@@ -16,10 +16,10 @@ const ORDER: Array[String] = ["red","white","blue","e30"]
 const CARS: Dictionary = {
     "red":{"name":"LADA 2106 DRIFT SPEC","paint":"RACING RED","short":"LADA • RED",
         "length":4.166,"wheelbase":2.424,"width":1.91,"note":"EXPOSED ENGINE",
-        "profile":"res://cars/lada_baseline.json"},
+        "profile":"res://cars/lada_baseline.json","factory_model":"res://cars/models/lada_2106.json"},
     "white":{"name":"LADA 2106 DRIFT SPEC","paint":"PEARL WHITE","short":"LADA • WHITE",
         "length":4.166,"wheelbase":2.424,"width":1.91,"note":"CLEAN HOOD",
-        "profile":"res://cars/lada_baseline.json"},
+        "profile":"res://cars/lada_baseline.json","factory_model":"res://cars/models/lada_2106.json"},
     "blue":{"name":"RYU-32 COUPE","paint":"DEEP BLUE","short":"RYU-32 • BLUE",
         "length":4.545,"wheelbase":2.615,"width":1.90,"note":"4.0 V8 ITB • 350 HP • 400 NM",
         "profile":"res://cars/ryu32_v8.json"},
@@ -56,6 +56,50 @@ static func set_baseline_physics_forced(on: bool) -> void:
     cfg.set_value("developer","baseline_physics",on)
     cfg.save(SETTINGS_PATH)
 
+## DEVELOPER switch (v0.1.30): show the Car Factory TEST models (Blender ->
+## GLB) of cars that still have an approved procedural model. OFF by
+## default: the old model stays until the owner accepts the new one. Looks
+## only: handling, sound, collisions and saves never change.
+static func factory_test_models() -> bool:
+    var cfg := ConfigFile.new()
+    if cfg.load(SETTINGS_PATH) != OK:
+        return false
+    return bool(cfg.get_value("developer","factory_test_models",false))
+
+static func set_factory_test_models(on: bool) -> void:
+    var cfg := ConfigFile.new()
+    cfg.load(SETTINGS_PATH)
+    cfg.set_value("developer","factory_test_models",on)
+    cfg.save(SETTINGS_PATH)
+
+static var _models: Dictionary = {}
+
+## {"model": <model block for NitroGlbCar>, "look": <paint + wheels>} of a
+## variant's Car Factory test model, or {} when it has none.
+static func factory_model(variant: String) -> Dictionary:
+    var path: String = str(info(variant).get("factory_model",""))
+    if path == "" or not FileAccess.file_exists(path):
+        return {}
+    if not _models.has(path):
+        var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+        _models[path] = raw if raw is Dictionary else {}
+    var data: Dictionary = _models[path]
+    var v: Dictionary = (data.get("variants",{}) as Dictionary).get(valid(variant),{})
+    if v.is_empty():
+        return {}
+    var model: Dictionary = data.duplicate()
+    model.erase("variants")
+    model["variant_slot"] = int(v.get("variant_slot",0))
+    var look: Dictionary = {}
+    for key in ["paint_color_hex","paint_finish","wheel_asset_id"]:
+        look[key] = str(v.get(key,""))
+    look["paint_shader"] = v.get("paint_shader",{})
+    return {"model":model,"look":look}
+
+## True when this variant is shown with its Car Factory test model.
+static func uses_factory_test_model(variant: String) -> bool:
+    return factory_test_models() and not factory_model(variant).is_empty()
+
 static func handling(variant: String) -> Dictionary:
     if baseline_physics_forced():
         return {}
@@ -74,6 +118,9 @@ static func info(variant: String) -> Dictionary:
 ## Factory GLB car wearing its saved cosmetics: same node in garage + race).
 static func make(variant: String) -> Node3D:
     var v: String = valid(variant)
+    if uses_factory_test_model(v):
+        var fm: Dictionary = factory_model(v)
+        return FACTORY_CAR.new().setup(v,{"model":fm["model"]},fm["look"])
     if v == "blue":
         return COUPE.new()
     if bool(info(v).get("factory",false)):

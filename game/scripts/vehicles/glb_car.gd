@@ -25,6 +25,9 @@ var rolling_wheels: Array[Node3D] = []
 var wheel_mounts: Array[Node3D] = []
 var wheel_radius: float = 0.29
 var paint_material: ShaderMaterial
+# Geometry variant of a shared GLB (0 = none; Lada RED 1 / WHITE 2): faces
+# of the other variants are collapsed by the car shaders (UV2 mask).
+var variant_slot: int = 0
 var body: Node3D
 var shadow: MeshInstance3D
 static var _scenes: Dictionary = {}
@@ -39,8 +42,10 @@ func setup(car_variant: String, car_profile: Dictionary, choice: Dictionary) -> 
 func _ready() -> void:
     var model: Dictionary = profile.get("model",{})
     wheel_radius = float(model.get("wheel_radius_m",0.29))
+    variant_slot = int(model.get("variant_slot",0))
     paint_material = ShaderMaterial.new()
     paint_material.shader = PAINT_SHADER
+    paint_material.set_shader_parameter("variant_slot",float(variant_slot))
     paint_material.set_shader_parameter("studio",Color(0.97,0.97,1.0))
     paint_material.set_shader_parameter("floor_tint",Color(0.11,0.11,0.13))
     apply_paint(cosmetic)
@@ -62,6 +67,14 @@ func apply_paint(choice: Dictionary) -> void:
     var p: Dictionary = COSMETICS.paint_params(choice)
     for key in p.keys():
         paint_material.set_shader_parameter(key,p[key])
+    # Per-variant paint shading from a car model file (e.g. Lada pearl white).
+    var extra: Variant = choice.get("paint_shader",{})
+    if extra is Dictionary:
+        for key in (extra as Dictionary).keys():
+            var val: Variant = extra[key]
+            if val is String and Color.html_is_valid(val):
+                val = Color.html(val)
+            paint_material.set_shader_parameter(key,val)
 
 ## Swap the wheel asset on all four hubs (cosmetic only).
 func apply_wheels(choice: Dictionary) -> void:
@@ -87,13 +100,14 @@ func _material_for(src: Material) -> Material:
     var name: String = src.resource_name
     if name.begins_with("NW_Paint"):
         return paint_material
-    var key: int = src.get_instance_id()
+    var key: String = "%d:%d" % [src.get_instance_id(),variant_slot]
     if _converted.has(key):
         return _converted[key]
     var out: Material = src
     if name.begins_with("NW_Glass"):
         var glass := ShaderMaterial.new()
         glass.shader = GLASS_SHADER
+        glass.set_shader_parameter("variant_slot",float(variant_slot))
         out = glass
     elif name.begins_with("NW_Atlas") and src is BaseMaterial3D:
         var std := src as BaseMaterial3D
@@ -102,6 +116,7 @@ func _material_for(src: Material) -> Material:
         atlas.set_shader_parameter("albedo_tex",std.albedo_texture)
         atlas.set_shader_parameter("orm_tex",std.roughness_texture if std.roughness_texture != null else std.metallic_texture)
         atlas.set_shader_parameter("emission_tex",std.emission_texture)
+        atlas.set_shader_parameter("variant_slot",float(variant_slot))
         out = atlas
     _converted[key] = out
     return out

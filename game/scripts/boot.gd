@@ -233,6 +233,14 @@ func _dev_page() -> void:
         show_page("dev"))
     phys.name = "Baseline physics"
     STYLE.style_button(phys,ui_unit,forced)
+    # v0.1.30: Car Factory TEST models (Blender -> GLB) for cars that still
+    # have an approved procedural model (Lada RED / WHITE). Looks only.
+    var fac: bool = CARS.factory_test_models()
+    var fac_b: Button = _big("CAR FACTORY TEST MODELS: "+("ON" if fac else "OFF")+"\nLADA RED / WHITE • LOOKS ONLY",func():
+        CARS.set_factory_test_models(not CARS.factory_test_models())
+        show_page("dev"))
+    fac_b.name = "Factory test models"
+    STYLE.style_button(fac_b,ui_unit,fac)
     var dbg_on: bool = load("res://scripts/ui/audio_debug_overlay.gd").enabled()
     var dbg_b: Button = _big("AUDIO DEBUG OVERLAY: "+("ON" if dbg_on else "OFF"),func():
         load("res://scripts/ui/audio_debug_overlay.gd").set_enabled(not dbg_on)

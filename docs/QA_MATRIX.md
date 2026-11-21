@@ -21,6 +21,15 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.30 — Car Factory stage 2: Lada 2106 RED / WHITE (Claude Code cloud container, 2026-11-21)
+| Area | Result |
+|---|---|
+| Godot suite (import + 30 tests) incl. factory_models_test (RED 37 510 / WHITE 31 444 visible tris, 8 draw calls, footprint, handling identical on / off) | PASS (local); terrain_physics_test needed the new post-PASS watchdog once (shutdown hang after PASS, WARNING printed) |
+| BEFORE / AFTER renders (7 views, garage, race top-down / chase, 6 close-ups per variant) | DONE -> docs/car_factory/lada_2106/ |
+| Sheet comparison (approved concept sheets, not committed) | reviewed in the session |
+| CI | see the follow-up docs commit |
+| Phone review / owner acceptance | NOT RUN |
+
 ## v0.1.29 — E30 Blessed Final Visual Polish v0.3 (Claude Code cloud container, 2026-11-20)
 | Area | Result |
 |---|---|

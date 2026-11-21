@@ -1,7 +1,9 @@
 extends SceneTree
 ## Car Factory QA views for ANY car variant (developer tool, needs a display):
 ##   xvfb-run -s "-screen 0 900x2000x24" godot --path game --rendering-driver opengl3 \
-##     --resolution 900x2000 --script res://tests/capture_car_views.gd -- /abs/out_dir e30 [race]
+##     --resolution 900x2000 --script res://tests/capture_car_views.gd -- /abs/out_dir e30 [race|-] [factory|classic]
+## The 4th argument forces DEVELOPER > CAR FACTORY TEST MODELS on / off for
+## this run (restored afterwards), e.g. "red race factory" = new Lada GLB.
 ## Same garage studio, backdrop, card and lights as on the phone; the
 ## turntable stops at fixed angles (front 3/4, rear 3/4, left, right, front,
 ## rear) + a top view, then close-ups from cameras placed relative to the
@@ -25,6 +27,9 @@ func _run() -> void:
     var out: String = (args[0] if args.size() > 0 else "user://car_views").trim_suffix("/")+"/"
     var variant: String = args[1] if args.size() > 1 else "e30"
     var with_race: bool = args.size() > 2 and args[2] == "race"
+    var old_factory: bool = CATALOG.factory_test_models()
+    if args.size() > 3:
+        CATALOG.set_factory_test_models(args[3] == "factory")
     DirAccess.make_dir_recursive_absolute(out)
     var cfg := ConfigFile.new()
     cfg.load("user://nitro_garage.cfg")
@@ -98,5 +103,6 @@ func _run() -> void:
             race.free()
     cfg.set_value("garage","paint",old_paint)
     cfg.save("user://nitro_garage.cfg")
+    CATALOG.set_factory_test_models(old_factory)
     print("CAR VIEWS SAVED %s %s" % [variant,ProjectSettings.globalize_path(out)])
     quit(0)

@@ -324,6 +324,8 @@ func _set_status() -> void:
     var prof: Dictionary = CARS.profile(active_variant)
     var factory: bool = COSMETICS.supported(prof)
     version_label.text = "SELECTED: "+str(info["paint"])+"  •  "+str(info["note"])
+    if CARS.uses_factory_test_model(active_variant):
+        version_label.text += "  •  FACTORY TEST MODEL"
     if factory:
         var choice: Dictionary = COSMETICS.current(active_variant,prof)
         version_label.text = "%s  •  %s  •  %s" % [COSMETICS.paint_name(choice,prof),

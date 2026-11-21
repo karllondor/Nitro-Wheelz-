@@ -1,4 +1,9 @@
-# Nitro Wheelz — v0.1.29 E30 Blessed Final Visual Polish v0.3 (test build) on top of v0.1.28 Japan City street circuit / v0.1.27 Terrain Builder refinement
+# Nitro Wheelz — v0.1.30 Car Factory stage 2 (Lada RED / WHITE one GLB, test model) on top of v0.1.29 E30 v0.3
+
+## CAR FACTORY MIGRATION — LADA (v0.1.30)
+- Read docs/car_factory/LADA_2106_FACTORY.md. The new Lada is a TEST model behind DEVELOPER > CAR FACTORY TEST MODELS (default OFF); do not make it the default before the owner accepts it on the phone.
+- Variant mask: TEXCOORD_1 / UV2.x (0 shared, n = slot n) collapsed in the car shaders; model data in game/cars/models/*.json; catalog entries point at it with "factory_model".
+- Next: stage 3 RYU-32 (CLEAN / LIVERY, V8 ITB), stage 4 integration QA + the five Car Factory standard documents; then the owner's v0.1.28 mobile QA brief (Track Builder touch / camera, rear-wheel steering glitch, world generation, per-track records, Developer Mode).
 
 ## E30 FINAL VISUAL POLISH v0.3 (v0.1.29)
 - Read docs/car_factory/E30_VISUAL_POLISH_v0.3.md (audit, changes, measurements, lessons learned). One revertable commit. Rebuild: tools/car_factory/blender/build_e30_blessed.py + build_wheels.py (bpy 5.3.0); QA views for any car: tests/capture_car_views.gd -- <out> <variant> [race].

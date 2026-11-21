@@ -60,7 +60,24 @@ SWATCH = {
     "brake":        ((0.22, 0.21, 0.20), 0.55, 0.8, (0, 0, 0)),
     "caliper":      ((0.05, 0.05, 0.055), 0.50, 0.2, (0, 0, 0)),
 }
-SWATCH_ORDER = sorted(SWATCH)
+# v0.1.30 (Lada / RYU-32 migration): APPEND-ONLY extension. The first 29
+# swatches keep their atlas cells (sorted order, as built for the E30), new
+# keys take the next free cells in the order listed here, so rebuilding an
+# older car never moves its colours. Never insert into the middle.
+SWATCH_EXT = {
+    "rim_white":    ((0.80, 0.80, 0.82), 0.30, 0.05, (0, 0, 0)),
+    "rim_mesh":     ((0.50, 0.50, 0.62), 0.28, 0.70, (0, 0, 0)),
+    "engine_black": ((0.026, 0.026, 0.028), 0.62, 0.15, (0, 0, 0)),
+    "alu_cast":     ((0.56, 0.57, 0.59), 0.46, 0.90, (0, 0, 0)),
+    "red_part":     ((0.50, 0.02, 0.03), 0.34, 0.10, (0, 0, 0)),
+    "radiator":     ((0.06, 0.06, 0.065), 0.70, 0.30, (0, 0, 0)),
+    "header":       ((0.30, 0.24, 0.20), 0.42, 0.85, (0, 0, 0)),
+    "blue_part":    ((0.04, 0.10, 0.42), 0.30, 0.20, (0, 0, 0)),
+    "gold_part":    ((0.70, 0.52, 0.18), 0.28, 0.95, (0, 0, 0)),
+    "white_lens":   ((0.92, 0.92, 0.90), 0.10, 0.0, (0.06, 0.06, 0.05)),
+}
+SWATCH_ORDER = sorted(SWATCH) + list(SWATCH_EXT)
+SWATCH.update(SWATCH_EXT)
 # Textured rectangles: (u0, v0, u1, v1) in Blender UV space.
 REGION = {
     "tex_headlight": (0.50, 0.00, 0.75, 0.25),
@@ -68,6 +85,9 @@ REGION = {
     "tex_plate": (0.75, 0.00, 1.00, 0.0625),
     "tex_sidewall": (0.75, 0.125, 1.00, 0.375),
     "tex_headlight_hi": (0.50, 0.25, 0.75, 0.50),
+    # v0.1.30 (append-only, unused cells of the E30 layout)
+    "tex_headlight_rect": (0.00, 0.625, 0.25, 0.6875),
+    "tex_tail_b": (0.25, 0.625, 0.75, 0.75),
 }
 
 
@@ -577,6 +597,21 @@ def empty(name, location, props=None):
         e[k] = v
     bpy.context.scene.collection.objects.link(e)
     return e
+
+
+VARIANT_LAYER = "VariantMask"
+
+
+def tag_variant(obj, slot):
+    """Geometry-variant mask (exported as TEXCOORD_1 = Godot UV2): 0 = shared
+    by every variant, n = only in variant slot n. The game collapses faces of
+    the other slots in the vertex shader, so RED / WHITE (or CLEAN / LIVERY)
+    share one GLB, one mesh and the same draw calls."""
+    me = obj.data
+    layer = me.uv_layers.get(VARIANT_LAYER) or me.uv_layers.new(name=VARIANT_LAYER)
+    for loop_uv in layer.data:
+        loop_uv.uv = (float(slot), 0.0)
+    return obj
 
 
 def export_glb(path, objects):

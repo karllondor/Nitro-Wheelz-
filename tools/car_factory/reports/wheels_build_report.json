@@ -1,4 +1,28 @@
 {
+  "wheel_lada_5spoke": {
+    "file": "wheel_lada_5spoke.glb",
+    "glb_bytes": 98424,
+    "name": "LADA 5-SPOKE DISH",
+    "note": "From the approved RED Lada 2106 concept sheet (white five-spoke deep dish, polished lip); spoke shape and offset are a sheet-based approximation.",
+    "outer_face_offset_m": 0.11900000000000001,
+    "rim_half_width_m": 0.115,
+    "rim_radius_m": 0.2286,
+    "triangles": 2522,
+    "tyre_radius_m": 0.295,
+    "tyre_width_m": 0.235
+  },
+  "wheel_lada_mesh": {
+    "file": "wheel_lada_mesh.glb",
+    "glb_bytes": 118392,
+    "name": "LADA MESH",
+    "note": "From the approved WHITE Lada concept sheet (grey-violet cross-laced mesh, polished lip); spoke count is an approximation.",
+    "outer_face_offset_m": 0.11900000000000001,
+    "rim_half_width_m": 0.115,
+    "rim_radius_m": 0.2286,
+    "triangles": 2710,
+    "tyre_radius_m": 0.295,
+    "tyre_width_m": 0.235
+  },
   "wheel_nw_deep_dish": {
     "file": "wheel_nw_deep_dish.glb",
     "glb_bytes": 113820,

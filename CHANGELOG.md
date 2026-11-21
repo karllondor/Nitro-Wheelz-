@@ -1,3 +1,13 @@
+## [0.1.30] — Car Factory stage 2: Lada 2106 RED / WHITE as one GLB (TEST MODEL, not approved)
+Report: docs/car_factory/LADA_2106_FACTORY.md (decision, sheet measurements, budget, BEFORE / AFTER, unconfirmed details).
+- New tools/car_factory/blender/build_lada_2106.py: one shared sedan body + RED parts (exposed VAZ four with 4 ITB trumpets, quad round lamps, chrome grille / bumpers / trim, bolt-on overfenders, red sheet tail lamps) and WHITE parts (closed bonnet with raised centre, rectangular lamps, colour-keyed bumpers + skirts, rolled flares) in ONE GLB.
+- Geometry variants: nwcf.tag_variant() writes a variant mask to TEXCOORD_1 (0 shared, 1 RED, 2 WHITE); the paint / atlas / glass shaders collapse the other variant's faces. One mesh, 3 body materials, 8 draw calls. RED 37 510 / WHITE 31 444 visible triangles incl. wheels (budget 42 000).
+- Wheel library: LADA 5-SPOKE DISH and LADA MESH (18 in, per-design tyre / rim sizes; build_wheels.py --only keeps the E30 wheel files untouched). Atlas swatches extended append-only.
+- Shown only with DEVELOPER > CAR FACTORY TEST MODELS: ON (default OFF = the approved procedural Lada). Looks only: handling, sound, collisions, scoring and saves unchanged; the garage labels the test model.
+- Proportions follow the approved sheets (overhangs 0.68 / 1.06 m, 0.295 m tyres, roof 1.34 m) inside the unchanged 4.166 / 2.424 / 1.91 m gameplay footprint.
+- New test factory_models_test; capture_car_views.gd takes a 4th argument factory|classic.
+- Android versionCode 30 / versionName 0.1.30. NOT RUN: phone review.
+
 ## [0.1.29] — E30 Blessed Final Visual Polish v0.3  — TEST BUILD, not approved until the owner reviews it on the phone
 Report: docs/car_factory/E30_VISUAL_POLISH_v0.3.md (audit vs the camera-matched NIGHTRIDE photos, changes, measurements, BEFORE / AFTER, lessons learned).
 - Paint (every colour / finish): clear coat reflects a world-space studio horizon, so reflection lines follow the body's curvature; shade keeps its chroma. Atlas metals: horizon reflection sharpness follows roughness (polished lip / chrome vs machined face).
