@@ -1,3 +1,16 @@
+## [0.1.32] — Mobile QA fixes from the owner's v0.1.28 phone test (TEST BUILD)
+Report: docs/MOBILE_QA_v0.1.32.md (causes found in code, fixes, tests, what is NOT confirmed on the phone, owner checklist).
+- Track Builder MOVE / pinch: camera pitch and terrain lift frozen while a finger moves the map (the per-event mountain-occlusion search moved the ground under the finger), no fling, view centre kept over the map, plane-only pan. Test: 0.000 m drift of the ground point under the finger over 24 drag steps in the Tatry.
+- Dead bottom-left strip fixed: BUILD now has its own map rectangle down to the button rows (the SETUP one left ~15 % of the screen above the two BUILD rows dead, also for a second pinch finger).
+- The UPDATING TERRAIN pill no longer swallows touches; the map moves while the terrain adapts, world-changing buttons wait. A pinch no longer runs a terrain fit when its first finger lifts.
+- Records per track layout: Terrain Builder DRIVE, the 3D builder and named saves fingerprint the geometry in the track id (all builder layouts shared one best: "CHASING 27,226" everywhere). HUD pill: NEXT ★n target of this track, then the best, then ALL STARS.
+- Race cameras start behind the car's start heading (also after RESTART / terrain load). Rear-wheel steering on the first drift NOT reproduced: wheel_visual_test measures 0.00° on every car incl. the Car Factory test models.
+- Builder markers only near the road (no more coloured grid over the landscape); roadside planting 2.0 m behind the barrier (was 0.9).
+- Pause: RESTART and GARAGE / MENU need a second tap.
+- DEVELOPER: TOUCH DIAGNOSTICS overlay (touch IDs, who takes each touch, hitboxes, input order, FPS / frame time, terrain fits, wheel angles), RESET DEVELOPER DEFAULTS, EXPORT DEVELOPER PRESET; developer settings moved to user://nitro_dev.cfg apart from the player's settings; every option documented in docs/DEVELOPER_MODE.md.
+- New tests: builder_touch_test, wheel_visual_test, track_records_test; capture_mobile_qa.gd evidence tool.
+- Android versionCode 32 / versionName 0.1.32. NOT RUN: phone verification.
+
 ## [0.1.31] — Car Factory stage 3: RYU-32 CLEAN / LIVERY as one GLB (TEST MODEL, not approved)
 Report: docs/car_factory/RYU32_FACTORY.md (sources, missing LIVERY reference, V8 vs sheet engine, orthographic comparison, budget).
 - New tools/car_factory/blender/build_ryu32.py: 90s drift coupe from the CLEAN BLUE reference sheet - aero kit bumpers with intakes and lips, kit over-fenders and skirts, twin-projector lamps, quad round tail lamps, big exhaust, large fixed wing, bonnet removed with a 1UZ-style V8 on eight ITB trumpets (the brief's V8, not the sheet's inline engine), cage with the X behind the seats.

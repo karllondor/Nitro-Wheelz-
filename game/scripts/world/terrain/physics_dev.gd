@@ -15,7 +15,7 @@ class_name NitroPhysicsDev
 ##   suspension   visual heave / pitch from longitudinal acceleration.
 ##   telemetry    on-screen readout of all of the above + traction values.
 ## Switchable at any time, no terrain regeneration.
-const SETTINGS_PATH: String = "user://nitro_settings.cfg"
+const DEV = preload("res://scripts/dev_settings.gd")   # user://nitro_dev.cfg
 const SECTION: String = "physics_dev"
 const GRADE_STEPS: Array[int] = [0,25,50,75,100]
 const G: float = 9.81
@@ -24,22 +24,18 @@ const DEFAULTS: Dictionary = {"grade_force":0,"camera_pitch":true,"banking":fals
 
 static func load_settings() -> Dictionary:
     var out: Dictionary = DEFAULTS.duplicate()
-    var cfg := ConfigFile.new()
-    if cfg.load(SETTINGS_PATH) != OK:
-        return out
     for k in DEFAULTS.keys():
-        out[k] = cfg.get_value(SECTION,k,DEFAULTS[k])
+        out[k] = DEV.get_value(SECTION,k,DEFAULTS[k])
     out["grade_force"] = clampi(int(out["grade_force"]),0,100)
     if str(out["grounding"]) not in ["snap","smooth"]:
         out["grounding"] = "snap"
     return out
 
 static func save_settings(s: Dictionary) -> void:
-    var cfg := ConfigFile.new()
-    cfg.load(SETTINGS_PATH)  # keep the other sections
+    var vals: Dictionary = {}
     for k in DEFAULTS.keys():
-        cfg.set_value(SECTION,k,s.get(k,DEFAULTS[k]))
-    cfg.save(SETTINGS_PATH)
+        vals[k] = s.get(k,DEFAULTS[k])
+    DEV.set_section(SECTION,vals)
 
 static func set_value(key: String, value: Variant) -> Dictionary:
     var s: Dictionary = load_settings()

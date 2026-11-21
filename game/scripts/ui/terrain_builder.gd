@@ -15,6 +15,7 @@ extends Node3D
 ## tiles) and open point-to-point routes (ROUTE). UNDO / REDO cover every
 ## road edit; the generated terrain itself is deterministic per seed.
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
+const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const WORLD = preload("res://scripts/world/terrain/terrain_world.gd")
 const TT = preload("res://scripts/world/terrain/terrain_track.gd")
@@ -120,6 +121,28 @@ var pan_plane_y: float = 0.0
 var pan_anchor: Vector3 = Vector3.ZERO
 var pan_vel: Vector2 = Vector2.ZERO
 var pan_last_t: int = 0
+# v0.1.32 mobile QA: the map rectangle of each stage (BUILD has only two
+# button rows: the old SETUP rectangle left a dead strip above them), the
+# camera lift over terrain (eased per frame, never inside an input event)
+# and a pending occlusion-pitch update while a finger moves the map.
+var map_rect_setup: Rect2 = Rect2()
+var map_rect_build: Rect2 = Rect2()
+var cam_lift: float = 0.0
+var _pitch_dirty: bool = false
+## Developer touch diagnostics: what the map received (see touch_diagnostics.gd).
+var diag_events: PackedStringArray = []
+var diag_rebuilds: int = 0
+var diag_camera_rebuilds: int = 0
+var diag_generate_ms: int = 0
+var diag_adapt_ms: int = 0
+var _adapt_t0: int = 0
+
+## Lines for DEVELOPER > TOUCH DIAGNOSTICS (touch_diagnostics.gd).
+func diag_text() -> String:
+    return "BUILDER %s  %s  navigating %s  busy %s  touches %s\nmap rect %s  cam %.0f m  pitch %.1f (goal %.1f)  lift %.1f m\nterrain: last generate %d ms (sliced)  road fits %d, last %d ms  fits during a camera move: %d\n%s" % [
+        stage.to_upper(),"MOVE" if pan_mode else mode.to_upper(),str(navigating()),str(busy_running),str(touches.keys()),
+        str(map_rect),cam_dist,view_pitch,_pitch_goal,cam_lift,diag_generate_ms,diag_rebuilds,diag_adapt_ms,
+        diag_camera_rebuilds,"\n".join(diag_events)]
 var stroke_pos: Vector2 = Vector2(-1,-1)
 var g_twist_on: bool = false
 var g_plane_y: float = 0.0
@@ -134,6 +157,7 @@ func _ready() -> void:
     ui_async = get_tree().get_script() == null
     grid = TT.new_grid()
     _build_scene_nodes()
+    TOUCH_DIAG.attach(self)
     var edit_path: String = str(ProjectSettings.get_setting("nitro/terrain_edit_track",""))
     ProjectSettings.set_setting("nitro/terrain_edit_track","")
     var loaded: bool = false
@@ -227,6 +251,7 @@ func _generate_async(new_seed: bool, then: Callable = Callable(), title: String 
     if busy_running:
         return
     busy_running = true
+    var gen_t0: int = Time.get_ticks_msec()
     var b: NitroBusy = BUSY.open(self,title)
     b.set_text(title,"%s • %s" % [str(CAT.info(archetype)["name"]),str(CAT.info(archetype)["country"]).to_upper()])
     await get_tree().process_frame
@@ -251,6 +276,7 @@ func _generate_async(new_seed: bool, then: Callable = Callable(), title: String 
     dirty = true
     adapt_pending = true
     _rebuild_preview()
+    diag_generate_ms = Time.get_ticks_msec()-gen_t0
     b.set_text("FITTING THE ROAD","CUT / FILL • BRIDGES • SCENERY")
     await _adapt_sliced(b)
     if title_label != null:
@@ -266,13 +292,8 @@ func _rebuild_overlay() -> void:
         child.queue_free()
     # Buildability squares: painted by the terrain shader, so they always
     # lie ON the ground (v0.1.27; flat quads used to sink into slopes).
-    var img := Image.create(grid.cols,grid.rows,false,Image.FORMAT_RGBA8)
-    for y in range(grid.rows):
-        for x in range(grid.cols):
-            var st: int = int(build_map[Vector2i(x,y)]["state"])
-            img.set_pixel(x,y,[Color(0.25,0.95,0.45,1.0),Color(1.0,0.72,0.12,1.0),Color(1.0,0.18,0.20,1.0)][st])
     var half0 := Vector2(grid.cols,grid.rows)*GRID.CELL_M*0.5
-    world.ground_mat.set_shader_parameter("tile_tex",ImageTexture.create_from_image(img))
+    _refresh_tile_marks()
     world.ground_mat.set_shader_parameter("tile_origin",-half0)
     world.ground_mat.set_shader_parameter("tile_count",Vector2(grid.cols,grid.rows))
     world.ground_mat.set_shader_parameter("tile_size",GRID.CELL_M)
@@ -283,10 +304,10 @@ func _rebuild_overlay() -> void:
     var half := Vector2(grid.cols,grid.rows)*GRID.CELL_M*0.5
     for x2 in range(grid.cols+1):
         var px: float = -half.x+float(x2)*GRID.CELL_M
-        _drape(st2,Vector2(px,-half.y),Vector2(px,half.y),0.9 if (x2 == 0 or x2 == grid.cols) else 0.45)
+        _drape(st2,Vector2(px,-half.y),Vector2(px,half.y),0.9 if (x2 == 0 or x2 == grid.cols) else 0.32)
     for y2 in range(grid.rows+1):
         var pz: float = -half.y+float(y2)*GRID.CELL_M
-        _drape(st2,Vector2(-half.x,pz),Vector2(half.x,pz),0.9 if (y2 == 0 or y2 == grid.rows) else 0.45)
+        _drape(st2,Vector2(-half.x,pz),Vector2(half.x,pz),0.9 if (y2 == 0 or y2 == grid.rows) else 0.32)
     var lines: ArrayMesh = st2.commit()
     var lm := StandardMaterial3D.new()
     lm.vertex_color_use_as_albedo = true
@@ -299,6 +320,44 @@ func _rebuild_overlay() -> void:
     ln.mesh = lines
     overlay_root.add_child(ln)
 
+## v0.1.32 (owner: "large coloured squares in a regular grid around the
+## track" - in the mountains the map read as a building grid): markers are
+## guidance near the road, not a carpet over the landscape.
+##  * green "you can build here" only next to the open ends of the road;
+##  * amber / red only within 2 tiles of the road (before the first tile:
+##    faint red where nothing can be built);
+##  * road tiles and everything else: no marker (the landscape shows).
+func _refresh_tile_marks() -> void:
+    if world == null or world.ground_mat == null or build_map.is_empty():
+        return
+    var cols: Array[Color] = [Color(0.25,0.95,0.45),Color(1.0,0.72,0.12),Color(1.0,0.18,0.20)]
+    var road: Array = grid.links.keys()
+    var ends: Array = []
+    for r in road:
+        if grid.degree(r) < 2:
+            ends.append(r)
+    var img := Image.create(grid.cols,grid.rows,false,Image.FORMAT_RGBA8)
+    for y in range(grid.rows):
+        for x in range(grid.cols):
+            var c := Vector2i(x,y)
+            var st: int = int(build_map[c]["state"])
+            var a: float = 0.0
+            if not grid.is_road(c):
+                var near: int = 99
+                for r in road:
+                    near = mini(near,maxi(absi(r.x-c.x),absi(r.y-c.y)))
+                if road.is_empty():
+                    a = 0.45 if st == 2 else 0.0
+                elif st == 0:
+                    for e in ends:
+                        if absi(e.x-c.x)+absi(e.y-c.y) == 1:
+                            a = 0.85
+                            break
+                elif near <= 2:
+                    a = 0.55 if st == 1 else 0.70
+            img.set_pixel(x,y,Color(cols[st].r,cols[st].g,cols[st].b,a))
+    world.ground_mat.set_shader_parameter("tile_tex",ImageTexture.create_from_image(img))
+
 func _show_tiles(on: bool) -> void:
     overlay_root.visible = on
     if world != null and world.ground_mat != null:
@@ -308,7 +367,7 @@ func _drape(st: SurfaceTool, a: Vector2, b: Vector2, width: float) -> void:
     var d: Vector2 = (b-a)
     var steps: int = maxi(1,int(d.length()/8.0))
     var n := Vector2(-d.y,d.x).normalized()*width
-    var col := Color(1,1,1,0.30) if width < 0.8 else Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.8)
+    var col := Color(1,1,1,0.16) if width < 0.8 else Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.8)
     for i in range(steps):
         var p0: Vector2 = a+d*float(i)/float(steps)
         var p1: Vector2 = a+d*float(i+1)/float(steps)
@@ -444,8 +503,16 @@ func _build_ui() -> void:
         ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
     var mw: float = width*0.30
     _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y3-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
-    map_rect = Rect2(0.0,header_rect.end.y+s.y*0.006,s.x,y1-row_h*1.3-header_rect.end.y)
+    var top: float = header_rect.end.y+s.y*0.006
+    map_rect_setup = Rect2(0.0,top,s.x,y1-row_h*1.3-top)
+    # BUILD: the map reaches down to the two button rows (the MOVE button
+    # inside it is a Button and takes its own touches first).
+    map_rect_build = Rect2(0.0,top,s.x,y3-gap*0.5-top)
+    _sync_map_rect()
     _refresh_titles()
+
+func _sync_map_rect() -> void:
+    map_rect = map_rect_build if stage == "build" else map_rect_setup
 
 func _row(parent: Control, items: Array, y: float, h: float, left: float, width: float, prefix: String) -> void:
     var gap: float = width*0.014
@@ -453,10 +520,8 @@ func _row(parent: Control, items: Array, y: float, h: float, left: float, width:
     for k in range(items.size()):
         var it: Array = items[k]
         var key: String = prefix+(str(it[2]) if it[2] != null else str(it[0]))
-        var b: Button = _button(parent,str(it[0]),str(it[1]),Rect2(left+float(k)*(bw+gap),y,bw,h),key)
-        if it[2] != null:
-            b.pressed.disconnect(Callable(self,str(it[1])))
-            b.pressed.connect(Callable(self,str(it[1])).bind(str(it[2])))
+        _button(parent,str(it[0]),str(it[1]),Rect2(left+float(k)*(bw+gap),y,bw,h),key,
+            str(it[2]) if it[2] != null else null)
 
 func _landscape_row(y: float, h: float, left: float, width: float) -> void:
     for key in buttons.keys():
@@ -469,7 +534,21 @@ func _landscape_row(y: float, h: float, left: float, width: float) -> void:
         items.append([str(CAT.info(a)["short"]),"_pick_landscape",a])
     _row(setup_box,items,y,h,left,width,"land_")
 
-func _button(parent: Control, text: String, method: String, rect: Rect2, key: String) -> Button:
+## v0.1.32: buttons stay pressable while the terrain adapts (the compact
+## pill lets touches through); only actions that would change or leave the
+## world wait for it.
+const BUSY_SAFE: Array[String] = ["_toggle_pan","_fit","_cycle_view"]
+
+func _guarded(method: String, arg: Variant = null) -> void:
+    if busy_running and not BUSY_SAFE.has(method):
+        _status("UPDATING TERRAIN • ONE MOMENT",false)
+        return
+    if arg == null:
+        call(method)
+    else:
+        call(method,arg)
+
+func _button(parent: Control, text: String, method: String, rect: Rect2, key: String, arg: Variant = null) -> Button:
     var b := Button.new()
     b.name = key
     b.text = text
@@ -477,7 +556,7 @@ func _button(parent: Control, text: String, method: String, rect: Rect2, key: St
     b.size = rect.size
     b.clip_text = true
     b.add_theme_font_size_override("font_size",int(clampf(rect.size.y*0.30,12.0*ui_unit,19.0*ui_unit)))
-    b.pressed.connect(Callable(self,method))
+    b.pressed.connect(_guarded.bind(method,arg))
     STYLE.style_button(b,ui_unit)
     parent.add_child(b)
     buttons[key] = b
@@ -684,9 +763,23 @@ func _cam_pos(pitch_deg: float) -> Vector3:
     var p: float = deg_to_rad(pitch_deg)
     var y: float = deg_to_rad(cam_yaw)
     var pos: Vector3 = cam_target+Vector3(sin(y)*cos(p),sin(p),cos(y)*cos(p))*cam_dist
-    if world != null:
-        pos.y = maxf(pos.y,world.height_at(pos.x,pos.z)+12.0)
+    # v0.1.32: the lift over a mountain is eased once per frame (_process),
+    # so the projection never jumps between two touch events.
+    pos.y += cam_lift
     return pos
+
+## Height the camera must rise to stay 12 m above the terrain under it.
+func _needed_lift() -> float:
+    if world == null:
+        return 0.0
+    var p: float = deg_to_rad(view_pitch)
+    var y: float = deg_to_rad(cam_yaw)
+    var pos: Vector3 = cam_target+Vector3(sin(y)*cos(p),sin(p),cos(y)*cos(p))*cam_dist
+    return maxf(0.0,world.height_at(pos.x,pos.z)+12.0-pos.y)
+
+## A finger (or the mouse) is moving the map right now.
+func navigating() -> bool:
+    return pan_pointer >= 0 or gesture_active or orbit_pointer >= 0
 
 ## Terrain between the camera and a ground point (sampled along the ray).
 func _occluded(from: Vector3, to: Vector3) -> bool:
@@ -728,9 +821,17 @@ func _apply_camera() -> void:
     var key: String = "%.1f|%.1f|%.1f|%.1f|%.2f|%.2f" % [cam_target.x,cam_target.z,cam_target.y,cam_dist,cam_pitch,cam_yaw]
     if key != _cam_key:
         _cam_key = key
-        _pitch_goal = _clear_pitch()
-    # Game: the occlusion pitch eases in (no jumps while panning).
-    view_pitch = move_toward(view_pitch,_pitch_goal,2.0) if ui_async else _pitch_goal
+        # v0.1.32: while a finger moves the map the view keeps its pitch
+        # (the occlusion search ran per drag event, cost ~2 000 terrain
+        # samples each time and changed the projection under the finger:
+        # the map jumped or moved against the finger). It runs once the
+        # finger lifts.
+        if navigating():
+            _pitch_dirty = true
+        else:
+            _pitch_goal = _clear_pitch()
+    if not ui_async:
+        view_pitch = _pitch_goal
     camera.position = _cam_pos(view_pitch)
     camera.near = clampf(cam_dist*0.0025,0.3,4.0)
     camera.look_at(cam_target,Vector3.UP)
@@ -781,11 +882,16 @@ func pick(screen: Vector2) -> Vector2i:
 # ------------------------------------------------------------------ input
 
 func _unhandled_input(event: InputEvent) -> void:
-    if busy_running or dialog != null:
+    if dialog != null:
         touches.clear()
         return
+    _sync_map_rect()
+    # v0.1.32: while the terrain adapts (compact UPDATING pill) the map can
+    # still be moved and zoomed; only drawing waits.
+    var draw_ok: bool = stage == "build" and not pan_mode and not busy_running
     if event is InputEventScreenTouch:
         var t: InputEventScreenTouch = event
+        _diag("%s #%d %s" % ["down" if t.pressed else "up",t.index,"MAP" if map_rect.has_point(t.position) else "outside map"])
         if t.pressed and map_rect.has_point(t.position):
             touches[t.index] = t.position
         else:
@@ -794,7 +900,7 @@ func _unhandled_input(event: InputEvent) -> void:
             pan_pointer = -1
             _begin_gesture()
         elif t.pressed and touches.size() == 1 and not gesture_active and map_rect.has_point(t.position):
-            if stage == "build" and not pan_mode:
+            if draw_ok:
                 stroke_pointer = t.index
                 stroke_pos = t.position
                 begin_stroke(pick(t.position))
@@ -804,7 +910,8 @@ func _unhandled_input(event: InputEvent) -> void:
             if t.index == stroke_pointer:
                 stroke_pointer = -1
                 stroke_pos = Vector2(-1,-1)
-                end_stroke()
+                if stroke_active:
+                    end_stroke()
             if t.index == pan_pointer:
                 _end_pan()
             if t.index == orbit_pointer:
@@ -812,7 +919,7 @@ func _unhandled_input(event: InputEvent) -> void:
         if gesture_active and touches.size() < 2:
             gesture_active = false
             # The finger left on screen keeps panning (no jump).
-            if touches.size() == 1 and (stage != "build" or pan_mode):
+            if touches.size() == 1 and not draw_ok:
                 var k: int = int(touches.keys()[0])
                 _begin_pan(k,touches[k])
     elif event is InputEventScreenDrag:
@@ -841,7 +948,7 @@ func _unhandled_input(event: InputEvent) -> void:
         if mb.button_index != MOUSE_BUTTON_LEFT:
             return
         if mb.pressed and map_rect.has_point(mb.position):
-            if stage == "build" and not pan_mode:
+            if draw_ok:
                 stroke_pos = mb.position
                 begin_stroke(pick(mb.position))
             else:
@@ -870,8 +977,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _plane_hit(screen: Vector2, y: float) -> Vector3:
     var o: Vector3 = camera.project_ray_origin(screen)
     var d: Vector3 = camera.project_ray_normal(screen)
-    if d.y > -0.02:
-        return ground_hit(screen)
+    # v0.1.32: never switch to the (bumpy) terrain hit in the middle of a
+    # drag; a ray near the horizon is clamped onto the plane far away.
+    d.y = minf(d.y,-0.02)
     var t: float = (y-o.y)/d.y
     return o+d*t
 
@@ -886,8 +994,10 @@ func _move_pan(pos: Vector2) -> void:
     var now: Vector3 = _plane_hit(pos,pan_plane_y)
     var d := Vector2(pan_anchor.x-now.x,pan_anchor.z-now.z)
     cam_target += Vector3(d.x,0.0,d.y)
+    _clamp_target()
     goal_target = cam_target
     _apply_camera()
+    _diag("pan #%d" % pan_pointer)
     var t: int = Time.get_ticks_msec()
     var dt: float = maxf(float(t-pan_last_t)/1000.0,0.004)
     pan_vel = pan_vel.lerp(d/dt,0.35)
@@ -895,11 +1005,24 @@ func _move_pan(pos: Vector2) -> void:
 
 func _end_pan() -> void:
     pan_pointer = -1
-    # Fling: keep gliding a little in the swipe direction.
-    if Time.get_ticks_msec()-pan_last_t < 90 and pan_vel.length() > 30.0:
-        var glide: Vector2 = pan_vel.limit_length(cam_dist*2.0)*0.22
-        goal_target = cam_target+Vector3(glide.x,0.0,glide.y)
+    # v0.1.32: no fling. A quick release used to throw the camera up to
+    # 0.44 x the camera distance (hundreds of metres) away from the track;
+    # the map now stops exactly where the finger left it.
     pan_vel = Vector2.ZERO
+    goal_target = cam_target
+
+## The view centre stays over the generated map (never far off the track).
+func _clamp_target() -> void:
+    if grid == null:
+        return
+    var half := Vector2(grid.cols,grid.rows)*GRID.CELL_M*0.5
+    cam_target.x = clampf(cam_target.x,-half.x,half.x)
+    cam_target.z = clampf(cam_target.z,-half.y,half.y)
+
+func _diag(text: String) -> void:
+    diag_events.append("%d %s" % [Time.get_ticks_msec()%100000,text])
+    if diag_events.size() > 10:
+        diag_events.remove_at(0)
 
 func _toggle_pan() -> void:
     pan_mode = not pan_mode
@@ -926,6 +1049,10 @@ func _begin_gesture() -> void:
             _rebuild_preview()
         elif not undo_stack.is_empty():
             undo_stack.pop_back()
+    # v0.1.32: the first finger may not have started a stroke (outside the
+    # grid); it must never end one (and run a terrain fit) when it lifts.
+    stroke_pointer = -1
+    stroke_pos = Vector2(-1,-1)
     orbit_pointer = -1
     var pts: Array = touches.values()
     gesture_active = true
@@ -959,7 +1086,9 @@ func _update_gesture() -> void:
     _apply_camera()
     var now: Vector3 = _plane_hit(mid,g_plane_y)
     cam_target += Vector3(g_anchor.x-now.x,0.0,g_anchor.z-now.z)
+    _clamp_target()
     goal_target = cam_target
+    _diag("pinch / pan / twist")
     goal_dist = cam_dist
     goal_yaw = cam_yaw
     _apply_camera()
@@ -1189,6 +1318,16 @@ func _auto() -> void:
 
 func _process(delta: float) -> void:
     since_rebuild += delta
+    _sync_map_rect()
+    # Camera lift over terrain and the occlusion pitch ease here, once per
+    # frame - never inside a touch event (stable projection under a finger).
+    if world != null:
+        cam_lift = lerpf(cam_lift,_needed_lift(),1.0-exp(-6.0*delta))
+    if _pitch_dirty and not navigating():
+        _pitch_dirty = false
+        _pitch_goal = _clear_pitch()
+    if ui_async and not navigating():
+        view_pitch = move_toward(view_pitch,_pitch_goal,90.0*delta)
     var k: float = 1.0-exp(-7.0*delta)
     if not gesture_active and orbit_pointer < 0:
         var moved: bool = absf(cam_dist-goal_dist) > 0.05 or cam_target.distance_to(goal_target) > 0.05 \
@@ -1232,6 +1371,7 @@ func _process(delta: float) -> void:
 func _rebuild_preview() -> void:
     dirty = false
     since_rebuild = 0.0
+    _refresh_tile_marks()
     for child in road_root.get_children():
         road_root.remove_child(child)
         child.queue_free()
@@ -1295,6 +1435,11 @@ func _draped_heights(samples: Array[Vector2], closed: bool) -> PackedFloat32Arra
 ## Full terrain adaptation for the drawn road (one connected piece): the
 ## saved data (with knot heights) -> Track DNA -> the race road + terrain.
 func _adapt_now() -> void:
+    _adapt_t0 = Time.get_ticks_msec()
+    diag_rebuilds += 1
+    if navigating():
+        diag_camera_rebuilds += 1
+    _diag("terrain adapt #%d" % diag_rebuilds)
     if ui_async:
         _adapt_ui()
         return
@@ -1357,6 +1502,8 @@ func _adapt_prepare() -> Dictionary:
     return {}
 
 func _adapt_finish(prep: Dictionary) -> void:
+    if _adapt_t0 > 0:
+        diag_adapt_ms = Time.get_ticks_msec()-_adapt_t0
     if prep.has("comp"):
         var comp: Dictionary = prep["comp"]
         var ev: Dictionary = prep["ev"]
@@ -1431,6 +1578,8 @@ func _write(path: String, title: String, id: String) -> bool:
     if data.is_empty():
         _status("FINISH A VALID %s FIRST" % topology.to_upper(),false)
         return false
+    # Records per layout (v0.1.32): the id carries a geometry fingerprint.
+    data["id"] = load("res://scripts/ui/race_results.gd").layout_id(id,data)
     var file := FileAccess.open(path,FileAccess.WRITE)
     if file == null:
         _status("STORAGE UNAVAILABLE",false)

@@ -38,6 +38,22 @@ static func star_tiers(length_m: float) -> Array[int]:
         tiers.append(int(round(maxf(length_m,50.0)*float(LAPS)*rate/50.0))*50)
     return tiers
 
+## v0.1.32 (owner phone test: "CHASING 27,226" on every track): records
+## belong to a track LAYOUT. The editors' scratch slots (Terrain Builder
+## DRIVE = "player_terrain_track", 3D builder "player_built_track", default
+## names) used one id for every layout, so all their runs shared one best.
+## The id now ends with a fingerprint of the geometry + world (not the name).
+static func layout_id(base: String, data: Dictionary) -> String:
+    var d: Dictionary = data.duplicate(true)
+    for k in ["id","name","saved_at","created","modified","stage","schema_version"]:
+        d.erase(k)
+    var h: int = hash(JSON.stringify(d,"",true,false)) & 0xffffffff
+    var root: String = base
+    var cut: int = base.rfind("_")
+    if cut > 0 and base.length()-cut == 9 and base.substr(cut+1).is_valid_hex_number():
+        root = base.substr(0,cut)    # re-saving: replace the old fingerprint
+    return "%s_%08x" % [root,h]
+
 static func star_count(score: int, length_m: float) -> int:
     var count: int = 0
     for tier in star_tiers(length_m):

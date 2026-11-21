@@ -556,6 +556,8 @@ func _write_track(path: String, title: String, id: String) -> bool:
     if not bool(compiled.get("ok",false)):
         _status("INVALID: "+str((compiled.get("errors",PackedStringArray()) as PackedStringArray)[0]),false)
         return false
+    # Records per layout (v0.1.32): the id carries a geometry fingerprint.
+    data["id"] = load("res://scripts/ui/race_results.gd").layout_id(id,data)
     var file := FileAccess.open(path,FileAccess.WRITE)
     if file == null:
         _status("STORAGE UNAVAILABLE",false)

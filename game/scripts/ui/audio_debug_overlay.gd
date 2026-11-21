@@ -4,20 +4,14 @@ class_name NitroAudioDebugOverlay
 ## layout, rpm, gear, load, misfires, squeal, scrape, player mix).
 ## Off by default; never part of the player HUD.
 const STYLE = preload("res://scripts/ui/hud_style.gd")
-const SETTINGS_PATH: String = "user://nitro_settings.cfg"
+const DEV = preload("res://scripts/dev_settings.gd")   # user://nitro_dev.cfg
 var audio: Node
 
 static func enabled() -> bool:
-    var cfg := ConfigFile.new()
-    if cfg.load(SETTINGS_PATH) != OK:
-        return false
-    return bool(cfg.get_value("developer","audio_debug",false))
+    return bool(DEV.get_value("developer","audio_debug",false))
 
 static func set_enabled(on: bool) -> void:
-    var cfg := ConfigFile.new()
-    cfg.load(SETTINGS_PATH)
-    cfg.set_value("developer","audio_debug",on)
-    cfg.save(SETTINGS_PATH)
+    DEV.set_value("developer","audio_debug",on)
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE

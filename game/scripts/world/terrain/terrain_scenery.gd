@@ -73,7 +73,9 @@ const ROADSIDE: Dictionary = {
 }
 ## Soft planting may stand this far beyond the verge (behind the barrier);
 ## trees, boulders and buildings keep the full safety strip.
-const ROADSIDE_MIN_M: float = 0.9
+## v0.1.32: 2.0 m (was 0.9) - the owner's phone test found the scenery too
+## close to the track.
+const ROADSIDE_MIN_M: float = 2.0
 const TRUNK := Color(0.30,0.22,0.16)
 
 var world: NitroTerrainWorld
@@ -429,7 +431,7 @@ func _roadside(node: Node3D, id: Vector2i, x0: float, z0: float, span: float, pe
         for side in [-1.0,1.0]:
             if rng.randf() > dens:
                 continue
-            var d: float = hw[i]+PROFILE.VERGE+rng.randf_range(ROADSIDE_MIN_M,6.0)
+            var d: float = hw[i]+PROFILE.VERGE+rng.randf_range(ROADSIDE_MIN_M,7.0)
             var p: Vector2 = samples[i]+nrm*side*d+t*rng.randf_range(-2.0,2.0)
             if road_clearance(p) < PROFILE.VERGE+ROADSIDE_MIN_M or field.is_water(p.x,p.y):
                 continue

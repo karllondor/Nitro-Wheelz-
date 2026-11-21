@@ -68,10 +68,16 @@ func _build() -> void:
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation",int(10.0*sc))
     stack.add_child(row)
-    _menu_button(row,"↻  RESTART",_on_restart,sc,60.0,21.0).name = "RESTART"
+    # v0.1.32 (owner QA): RESTART and GARAGE / MENU end the run, so they ask
+    # for a second tap (the label says so for 2.5 s) instead of a popup.
+    var rb: Button = _menu_button(row,"↻  RESTART",Callable(),sc,60.0,21.0)
+    rb.name = "RESTART"
+    rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RESTART",_on_restart))
     if _on_edit.is_valid():
         _menu_button(row,"✎  EDIT TRACK",_on_edit,sc,60.0,21.0).name = "EDIT TRACK"
-    _menu_button(stack,"GARAGE / MENU",_on_garage,sc,60.0,21.0).name = "GARAGE / MENU"
+    var gb: Button = _menu_button(stack,"GARAGE / MENU",Callable(),sc,60.0,21.0)
+    gb.name = "GARAGE / MENU"
+    gb.pressed.connect(_confirm.bind(gb,"TAP AGAIN TO LEAVE THE RUN",_on_garage))
     var fold: Button = _menu_button(stack,("▾  SOUND & STYLE" if settings_open else "▸  SOUND & STYLE"),
         func() -> void:
             settings_open = not settings_open
@@ -94,9 +100,26 @@ func _menu_button(parent: Control, text: String, cb: Callable, sc: float, h: flo
     btn.add_theme_font_override("font",STYLE.BOLD)
     btn.add_theme_font_size_override("font_size",int(fs*sc))
     STYLE.style_button(btn,sc,primary)
-    btn.pressed.connect(cb)
+    if cb.is_valid():
+        btn.pressed.connect(cb)
     parent.add_child(btn)
     return btn
+
+## Two-tap confirmation for actions that throw the current run away.
+func _confirm(btn: Button, prompt: String, action: Callable) -> void:
+    if btn.has_meta("armed") and Time.get_ticks_msec()-int(btn.get_meta("armed")) < 2500:
+        btn.remove_meta("armed")
+        action.call()
+        return
+    var label: String = btn.text
+    btn.set_meta("armed",Time.get_ticks_msec())
+    btn.text = prompt
+    STYLE.style_button(btn,btn.get_theme_font_size("font_size")/21.0,true)
+    get_tree().create_timer(2.5).timeout.connect(func() -> void:
+        if is_instance_valid(btn) and btn.has_meta("armed"):
+            btn.remove_meta("armed")
+            btn.text = label
+            STYLE.style_button(btn,btn.get_theme_font_size("font_size")/21.0,false))
 
 ## Kept for callers/tests: same actions as the panel buttons.
 func _toggle_sound() -> void:

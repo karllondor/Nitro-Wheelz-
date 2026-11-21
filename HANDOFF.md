@@ -1,4 +1,9 @@
-# Nitro Wheelz — v0.1.31 Car Factory stage 3 (RYU-32 CLEAN / LIVERY, test model) on top of v0.1.30 Lada stage 2
+# Nitro Wheelz — v0.1.32 mobile QA fixes (owner's v0.1.28 phone test) on top of the Car Factory migration (v0.1.29–31)
+
+## MOBILE QA (v0.1.32)
+- Read docs/MOBILE_QA_v0.1.32.md: fixed causes (builder camera during gestures, dead strip, busy pill, shared record ids, tile-marker carpet), not reproduced (rear-wheel steering, road pieces during rebuild), open (minimap readability, unified editors, live handling sliders).
+- Phone results come only from the owner; ask them to run the checklist with DEVELOPER > TOUCH DIAGNOSTICS on.
+- Developer settings live in user://nitro_dev.cfg (dev_settings.gd); never write them to nitro_settings.cfg.
 
 ## CAR FACTORY STANDARD (stage 4)
 - docs/car_factory/CAR_FACTORY_STANDARD.md is the entry point (+ REFERENCE_PACKAGE, MATERIALS_AND_PAINT, WHEEL_LIBRARY, QUALITY_CHECKLIST); CAR_FACTORY_MIGRATION_QA.md lists the status of every car and how to review on the phone.

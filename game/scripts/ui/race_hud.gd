@@ -30,6 +30,9 @@ var car_world_position: Vector2 = Vector2.ZERO
 var track_progress: float = 0.0
 var target_time: float = 0.0
 var best_score: int = -1        # local best on this track, -1 = none yet
+## v0.1.32: this track's star thresholds (points); the pill shows the next
+## star to earn, then the personal best once every star is reached.
+var star_tiers: Array[int] = []
 var car_screen: Vector2 = Vector2(-1,-1)  # car on screen; callouts pop above it
 var bank_progress: float = 0.0  # 0..1 while a finished combo waits to bank
 var _last_score: int = 0
@@ -73,6 +76,13 @@ func overall_progress() -> float:
 ## Text of the centred chase pill: who/what the player is chasing.
 func chase_label() -> Dictionary:
     var running: int = score+int(round(float(drift_score)*combo))
+    if not star_tiers.is_empty():
+        for i in range(star_tiers.size()):
+            if running < star_tiers[i]:
+                return {"text":"NEXT ★%d  %s" % [i+1,_score_string(star_tiers[i])],"beating":false}
+        if best_score > running:
+            return {"text":"CHASING  "+_score_string(best_score),"beating":false}
+        return {"text":"ALL STARS  "+_score_string(running),"beating":true}
     if best_score <= 0:
         return {"text":"FIRST RUN","beating":false}
     if running > best_score:

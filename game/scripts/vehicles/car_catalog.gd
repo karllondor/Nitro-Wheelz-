@@ -11,6 +11,7 @@ const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
 const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
+const DEV = preload("res://scripts/dev_settings.gd")
 
 const ORDER: Array[String] = ["red","white","blue","e30"]
 const CARS: Dictionary = {
@@ -45,46 +46,28 @@ static func profile(variant: String) -> Dictionary:
 ## DEVELOPER switch: drive every car on the Lada baseline physics (the way
 ## back to the old behaviour). Sound and looks still follow the car.
 static func baseline_physics_forced() -> bool:
-    var cfg := ConfigFile.new()
-    if cfg.load(SETTINGS_PATH) != OK:
-        return false
-    return bool(cfg.get_value("developer","baseline_physics",false))
+    return bool(DEV.get_value("developer","baseline_physics",false))
 
 static func set_baseline_physics_forced(on: bool) -> void:
-    var cfg := ConfigFile.new()
-    cfg.load(SETTINGS_PATH)
-    cfg.set_value("developer","baseline_physics",on)
-    cfg.save(SETTINGS_PATH)
+    DEV.set_value("developer","baseline_physics",on)
 
 ## DEVELOPER switch (v0.1.30): show the Car Factory TEST models (Blender ->
 ## GLB) of cars that still have an approved procedural model. OFF by
 ## default: the old model stays until the owner accepts the new one. Looks
 ## only: handling, sound, collisions and saves never change.
 static func factory_test_models() -> bool:
-    var cfg := ConfigFile.new()
-    if cfg.load(SETTINGS_PATH) != OK:
-        return false
-    return bool(cfg.get_value("developer","factory_test_models",false))
+    return bool(DEV.get_value("developer","factory_test_models",false))
 
 static func set_factory_test_models(on: bool) -> void:
-    var cfg := ConfigFile.new()
-    cfg.load(SETTINGS_PATH)
-    cfg.set_value("developer","factory_test_models",on)
-    cfg.save(SETTINGS_PATH)
+    DEV.set_value("developer","factory_test_models",on)
 
 ## DEVELOPER: which look a factory test model with several looks wears
 ## (RYU-32: "clean" or "livery"). Looks only.
 static func factory_test_look() -> String:
-    var cfg := ConfigFile.new()
-    if cfg.load(SETTINGS_PATH) != OK:
-        return "clean"
-    return str(cfg.get_value("developer","factory_test_look","clean"))
+    return str(DEV.get_value("developer","factory_test_look","clean"))
 
 static func set_factory_test_look(look: String) -> void:
-    var cfg := ConfigFile.new()
-    cfg.load(SETTINGS_PATH)
-    cfg.set_value("developer","factory_test_look",look)
-    cfg.save(SETTINGS_PATH)
+    DEV.set_value("developer","factory_test_look",look)
 
 static var _models: Dictionary = {}
 

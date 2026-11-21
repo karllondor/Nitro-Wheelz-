@@ -29,7 +29,9 @@ func _ready() -> void:
     _t0 = Time.get_ticks_msec()
     _view = Control.new()
     _view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    _view.mouse_filter = Control.MOUSE_FILTER_STOP
+    # v0.1.32: the compact pill (quick terrain updates) lets touches through
+    # so the map can still be moved / zoomed; the full card blocks input.
+    _view.mouse_filter = Control.MOUSE_FILTER_IGNORE if compact else Control.MOUSE_FILTER_STOP
     _view.draw.connect(_draw_view)
     add_child(_view)
 

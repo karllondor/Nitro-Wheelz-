@@ -3,6 +3,7 @@ extends Node3D
 ## Authoritative vehicle state is planar; camera/visuals never modify the physics.
 
 const TRACK = preload("res://scripts/world/drift_track.gd")
+const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
@@ -92,6 +93,7 @@ var skid_clock: float = 0.0
 
 func _ready() -> void:
     (load("res://scripts/ui/hud_style.gd")).ensure_settings()
+    TOUCH_DIAG.attach(self)
     track = TRACK.new()
     track.track_data_path = str(ProjectSettings.get_setting(
         "nitro/selected_track",TRACK.TRACK_DATA))
@@ -138,8 +140,21 @@ func _ready() -> void:
     road_y = track.height_from_info(info0)
     car_y = road_y
     _update_visuals()
+    _snap_cameras()
     if not track.pending_terrain.is_empty():
         _load_terrain()
+
+## v0.1.32: both cameras start behind / above the car's start heading (the
+## top-down view used to begin facing -Z and swing round in the first
+## moments of a run on tracks that start in another direction).
+func _snap_cameras() -> void:
+    if model == null:
+        return
+    var f: Vector2 = model.forward()
+    drone_direction = Vector3(f.x,0.0,f.y).normalized()
+    camera_velocity_lead = Vector3.ZERO
+    if overhead != null and chase != null:
+        _update_camera_view(10.0)
 
 ## v0.1.27 loading screen: the landscape of a terrain track is generated in
 ## slices under a dimmed "LOADING TRACK" card with spinning dots and a
@@ -159,6 +174,7 @@ func _load_terrain() -> void:
     road_y = track.height_from_info(info1)
     car_y = road_y
     _update_visuals()
+    _snap_cameras()
     b.close()
     set_physics_process(true)
 
@@ -326,6 +342,8 @@ func _make_ui() -> void:
     hud.track_points = PackedVector2Array(track.centerline)
     hud.track_id = track.track_id
     hud.best_score = _local_best_score(track.track_id)
+    # Next-star target of THIS track (same tiers as the finish screen).
+    hud.star_tiers = RESULTS.star_tiers(track.length_metres/(3.0 if route_mode else 1.0))
     # Same provisional local target as the finish screen uses, so the HUD
     # chasing-time stars and the result stars always agree.
     hud.target_time = 75.0 if track.track_id=="benchmark_oval" else (
@@ -597,6 +615,25 @@ func _update_visuals() -> void:
     if touch != null:
         touch.overlay_visible = false
 
+## Lines for DEVELOPER > TOUCH DIAGNOSTICS: the visual angle of every
+## wheel relative to the body (a rear wheel must always read 0.0), the
+## physics steering angle, drift angle and speed (v0.1.32 mobile QA).
+func diag_text() -> String:
+    if car_root == null or model == null:
+        return "RACE (loading)"
+    var basis: Basis = car_root.global_transform.basis.orthonormalized().inverse()
+    var parts: PackedStringArray = []
+    var rolling: Variant = car_root.get("rolling_wheels")
+    if rolling is Array:
+        for w in rolling:
+            var n: Node3D = w
+            var axle: Vector3 = basis*n.global_transform.basis.x.normalized()
+            var at: Vector3 = basis*(n.global_position-car_root.global_position)
+            parts.append("%s%s %.1f" % ["F" if at.z < 0.0 else "R","L" if at.x < 0.0 else "R",
+                rad_to_deg(atan2(axle.z,absf(axle.x)))])
+    return "RACE wheels (deg vs body): %s\nsteer %.1f deg  drift %.1f deg  %.0f km/h  run %.1f s" % [
+        "  ".join(parts),rad_to_deg(model.steering_angle),float(model.drift_angle),model.speed_kmh(),time_elapsed]
+
 ## Developer telemetry (Developer Mode > ELEVATION PHYSICS > TELEMETRY).
 func telemetry_text() -> String:
     var grade_force: int = int(dev.get("grade_force",0))
@@ -808,10 +845,10 @@ func _restart() -> void:
     collision_cooldown = 0.0
     camera_shake_strength = 0.0
     camera_velocity_lead = Vector3.ZERO
-    drone_direction = Vector3(0.0,0.0,-1.0)
     chase_is_blocked = false
     wall_collision_count = 0
     _update_visuals()
+    _snap_cameras()
 
 func _unhandled_input(event: InputEvent) -> void:
     if event.is_action_pressed("camera_toggle"):

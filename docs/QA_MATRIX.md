@@ -21,6 +21,18 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.32 — Mobile QA fixes (Claude Code cloud container, 2026-11-21)
+| Area | Result |
+|---|---|
+| Source of the tested APK | v0.1.28 = add0883 on ccr-91dad981-53kkbi |
+| Full suite (import + 33 tests incl. builder_touch_test, wheel_visual_test, track_records_test) | PASS (local, exit 0; terrain_physics_test needed the post-PASS shutdown watchdog once); tests touched by the last changes re-run: PASS |
+| Track Builder: dead strip, MOVE drag under the finger (Tatry), no fling, pinch in the strip, no terrain fit while navigating, navigation during UPDATING | PASS (builder_touch_test) |
+| Rear wheels never steer, front = physics steering, first drift == after RESTART (7 car models) | PASS (wheel_visual_test); phone symptom NOT reproduced |
+| Records per layout, next-star pill, two-tap RESTART / GARAGE | PASS (track_records_test) |
+| Evidence | docs/mobile_qa_v0132/ |
+| CI | see the follow-up docs commit |
+| Phone verification | NOT RUN (owner checklist in docs/MOBILE_QA_v0.1.32.md) |
+
 ## Car Factory stage 4 — integration QA + standards (docs only, on v0.1.31; 2026-11-21)
 | Area | Result |
 |---|---|

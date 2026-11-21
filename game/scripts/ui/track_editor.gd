@@ -490,8 +490,9 @@ func _persist_track(title: String) -> bool:
         return false
     var slug: String = _safe_slug(title)
     var path: String = "user://nitro_track_"+slug+".json"
-    data["id"] = "custom_"+slug
     data["name"] = title
+    # Records per layout (v0.1.32): the id carries a geometry fingerprint.
+    data["id"] = load("res://scripts/ui/race_results.gd").layout_id("custom_"+slug,data)
     var file: FileAccess = FileAccess.open(path,FileAccess.WRITE)
     if file == null:
         _status("FAILED • Device storage unavailable",false)

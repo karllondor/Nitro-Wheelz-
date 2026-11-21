@@ -254,6 +254,28 @@ func _dev_page() -> void:
     dbg_b.name = "Audio debug"
     STYLE.style_button(dbg_b,ui_unit,dbg_on)
     _big("ELEVATION PHYSICS ▶\nTERRAIN TRACKS",func(): show_page("elev")).name = "Elevation physics"
+    # v0.1.32 mobile QA: touch / hitbox / input-order / FPS / wheel-angle
+    # overlay in the Track Builder and the race.
+    var td_on: bool = load("res://scripts/ui/touch_diagnostics.gd").enabled()
+    var td_b: Button = _big("TOUCH DIAGNOSTICS: "+("ON" if td_on else "OFF")+"\nTOUCH IDS • HITBOXES • FPS • WHEELS",func():
+        load("res://scripts/ui/touch_diagnostics.gd").set_enabled(not td_on)
+        show_page("dev"))
+    td_b.name = "Touch diagnostics"
+    STYLE.style_button(td_b,ui_unit,td_on)
+    var dev_info := Label.new()
+    dev_info.name = "Developer preset info"
+    dev_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    dev_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    dev_info.add_theme_font_size_override("font_size",int(15*ui_unit))
+    dev_info.add_theme_color_override("font_color",STYLE.MUTED)
+    dev_info.text = "Developer options are stored apart from your game settings."
+    _big("RESET DEVELOPER DEFAULTS",func():
+        load("res://scripts/dev_settings.gd").reset_defaults()
+        show_page("dev")).name = "Developer reset"
+    _big("EXPORT DEVELOPER PRESET",func():
+        var path: String = load("res://scripts/dev_settings.gd").export_preset()
+        dev_info.text = "Saved %s (also copied to the clipboard)" % ProjectSettings.globalize_path(path)).name = "Developer export"
+    page.add_child(dev_info)
     var bench_label := Label.new()
     bench_label.name = "Benchmark result"
     bench_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
