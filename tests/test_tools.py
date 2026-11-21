@@ -67,6 +67,9 @@ class ToolsTests(unittest.TestCase):
         self.assertEqual(version.new_version("0.1.0","patch"),"0.1.1")
         self.assertEqual(version.new_version("0.1.0","minor"),"0.2.0")
         self.assertEqual(version.new_version("0.9.0","major"),"1.0.0")
+        self.assertEqual(version.new_version("0.1.32-b.1","patch"),"0.1.33")
+        self.assertIsNotNone(check.SEMVER.fullmatch("0.1.32-b.1"))
+        self.assertIsNotNone(packager.SEMVER.fullmatch("0.1.32-b.1"))
 
     def test_source_package_is_immutable(self):
         with tempfile.TemporaryDirectory() as td:
