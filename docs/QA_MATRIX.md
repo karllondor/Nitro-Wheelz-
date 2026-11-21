@@ -21,6 +21,16 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## Car Factory stage 4 — integration QA + standards (docs only, on v0.1.31; 2026-11-21)
+| Area | Result |
+|---|---|
+| Full suite (import + 30 tests incl. factory_models_test, e30_factory_car_test, car_profiles_test) | PASS (local, exit 0, no shutdown watchdog needed this run) |
+| CI a9a2947 (Lada, v0.1.30) | all green: [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44874475267/job/136756024583), [android](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44874475264/job/136756024575), [web](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44874475284/job/136756024501), [desktop](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44874475290/job/136756024602), [foundation](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44874475344/job/136756024693) |
+| CI 9419cd7 (RYU-32, v0.1.31) | all green: [godot](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44875240147/job/136758379960), [android](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44875240166/job/136758380032), [web](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44875240201/job/136758380229), [desktop](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44875240204/job/136758380243), [foundation](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44875240238/job/136758380402) |
+| Lineup of all looks (E30, Lada RED / WHITE, RYU-32 CLEAN / LIVERY) | docs/car_factory/car_factory_lineup_v0131.jpg |
+| Five standard documents | docs/car_factory/CAR_*.md |
+| Phone review / owner acceptance of the test models | NOT RUN |
+
 ## v0.1.31 — Car Factory stage 3: RYU-32 CLEAN / LIVERY (Claude Code cloud container, 2026-11-21)
 | Area | Result |
 |---|---|

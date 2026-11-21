@@ -1,5 +1,8 @@
 # Nitro Wheelz — v0.1.31 Car Factory stage 3 (RYU-32 CLEAN / LIVERY, test model) on top of v0.1.30 Lada stage 2
 
+## CAR FACTORY STANDARD (stage 4)
+- docs/car_factory/CAR_FACTORY_STANDARD.md is the entry point (+ REFERENCE_PACKAGE, MATERIALS_AND_PAINT, WHEEL_LIBRARY, QUALITY_CHECKLIST); CAR_FACTORY_MIGRATION_QA.md lists the status of every car and how to review on the phone.
+
 ## CAR FACTORY MIGRATION — RYU-32 (v0.1.31)
 - Read docs/car_factory/RYU32_FACTORY.md. TEST model behind the same DEVELOPER switch; RYU-32 TEST LOOK picks CLEAN / LIVERY. The LIVERY texture is provisional until the owner sends the LIVERY render.
 
