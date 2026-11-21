@@ -1,0 +1,136 @@
+{
+  "red": {
+    "signature": {
+      "paint_color_hex": "#B20C22",
+      "paint_finish": "solid",
+      "wheel_asset_id": "wheel_lada_5spoke",
+      "wheel_finish": "standard",
+      "livery_id": "clean"
+    },
+    "paints": [
+      {
+        "name": "RACING RED",
+        "hex": "#B20C22",
+        "finish": "solid"
+      },
+      {
+        "name": "PEARL WHITE",
+        "hex": "#EEEDF1",
+        "finish": "pearl"
+      },
+      {
+        "name": "MIDNIGHT BLACK",
+        "hex": "#15151B",
+        "finish": "metallic"
+      },
+      {
+        "name": "GUNMETAL",
+        "hex": "#3A3D44",
+        "finish": "metallic"
+      },
+      {
+        "name": "DEEP BLUE",
+        "hex": "#1240C8",
+        "finish": "metallic"
+      }
+    ],
+    "wheels": [
+      "wheel_lada_5spoke",
+      "wheel_lada_mesh",
+      "wheel_nw_deep_dish"
+    ]
+  },
+  "white": {
+    "signature": {
+      "paint_color_hex": "#EEEDF1",
+      "paint_finish": "pearl",
+      "wheel_asset_id": "wheel_lada_mesh",
+      "wheel_finish": "standard",
+      "livery_id": "clean"
+    },
+    "paints": [
+      {
+        "name": "PEARL WHITE",
+        "hex": "#EEEDF1",
+        "finish": "pearl"
+      },
+      {
+        "name": "RACING RED",
+        "hex": "#B20C22",
+        "finish": "solid"
+      },
+      {
+        "name": "MIDNIGHT BLACK",
+        "hex": "#15151B",
+        "finish": "metallic"
+      },
+      {
+        "name": "GUNMETAL",
+        "hex": "#3A3D44",
+        "finish": "metallic"
+      },
+      {
+        "name": "DEEP BLUE",
+        "hex": "#1240C8",
+        "finish": "metallic"
+      }
+    ],
+    "wheels": [
+      "wheel_lada_mesh",
+      "wheel_lada_5spoke",
+      "wheel_nw_deep_dish"
+    ]
+  },
+  "blue": {
+    "signature": {
+      "paint_color_hex": "#1240C8",
+      "paint_finish": "metallic",
+      "wheel_asset_id": "wheel_ryu_5spoke",
+      "wheel_finish": "standard",
+      "livery_id": "clean"
+    },
+    "paints": [
+      {
+        "name": "DEEP BLUE",
+        "hex": "#1240C8",
+        "finish": "metallic",
+        "livery_id": "clean"
+      },
+      {
+        "name": "BLUE + STRIPES",
+        "hex": "#1240C8",
+        "finish": "metallic",
+        "livery_id": "stripes"
+      },
+      {
+        "name": "MIDNIGHT BLACK",
+        "hex": "#14171F",
+        "finish": "metallic",
+        "livery_id": "clean"
+      },
+      {
+        "name": "ALPINE WHITE",
+        "hex": "#E9ECEF",
+        "finish": "pearl",
+        "livery_id": "clean"
+      },
+      {
+        "name": "GUNMETAL",
+        "hex": "#3A3D44",
+        "finish": "metallic",
+        "livery_id": "clean"
+      },
+      {
+        "name": "NITRO PURPLE",
+        "hex": "#7030A0",
+        "finish": "metallic",
+        "livery_id": "clean"
+      }
+    ],
+    "wheels": [
+      "wheel_ryu_5spoke",
+      "wheel_nw_deep_dish",
+      "wheel_lada_mesh"
+    ]
+  }
+}
