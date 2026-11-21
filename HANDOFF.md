@@ -1,4 +1,7 @@
-# Nitro Wheelz — v0.1.32 mobile QA fixes (owner's v0.1.28 phone test) on top of the Car Factory migration (v0.1.29–31)
+# Nitro Wheelz — v0.1.33 AI-body test car (RYU-32 FLAME) on top of the mobile QA fixes (v0.1.32) and the Car Factory migration (v0.1.29–31)
+
+## AI BODY TEST CAR (v0.1.33)
+- docs/car_factory/AI_BODY_PROTOTYPE.md. Fifth car FLAME = AI-generated body (free-plan asset, NOT FOR RELEASE) + wheel library wheels, RYU-32 physics / V8. Next if the owner likes it: buy the paid plan, regenerate, patch the roof, remove text / plate, make CLEAN + LIVERY, apply the same pipeline to the Lada.
 
 ## MOBILE QA (v0.1.32)
 - Read docs/MOBILE_QA_v0.1.32.md: fixed causes (builder camera during gestures, dead strip, busy pill, shared record ids, tile-marker carpet), not reproduced (rear-wheel steering, road pieces during rebuild), open (minimap readability, unified editors, live handling sliders).

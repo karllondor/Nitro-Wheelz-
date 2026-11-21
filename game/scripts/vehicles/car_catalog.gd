@@ -13,7 +13,7 @@ const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 const DEV = preload("res://scripts/dev_settings.gd")
 
-const ORDER: Array[String] = ["red","white","blue","e30"]
+const ORDER: Array[String] = ["red","white","blue","e30","flame"]
 const CARS: Dictionary = {
     "red":{"name":"LADA 2106 DRIFT SPEC","paint":"RACING RED","short":"LADA • RED",
         "length":4.166,"wheelbase":2.424,"width":1.91,"note":"EXPOSED ENGINE",
@@ -30,6 +30,12 @@ const CARS: Dictionary = {
         "length":4.325,"wheelbase":2.570,"width":1.645,"note":"M52B28 2.8 R6 • NA",
         "body":"4-DOOR SEDAN","factory":true,
         "profile":"res://cars/e30_blessed.json"},
+    # AI TEST car (v0.1.33): a separate car wearing a body generated with an
+    # image-to-3D service (free plan: NOT FOR RELEASE). It drives exactly like
+    # the RYU-32 (same handling, V8 sound, footprint); looks only.
+    "flame":{"name":"RYU-32 FLAME (AI TEST)","paint":"FLAME BLUE","short":"R32 • FLAME",
+        "length":4.545,"wheelbase":2.615,"width":1.90,"note":"AI TEST BODY • 4.0 V8 ITB",
+        "profile":"res://cars/ryu32_v8.json","factory_model":"res://cars/models/ryu32_flame.json","factory_only":true},
 }
 
 const SETTINGS_PATH: String = "user://nitro_settings.cfg"
@@ -96,14 +102,16 @@ static func factory_model(variant: String) -> Dictionary:
         var chosen: String = factory_test_look() if looks.has(factory_test_look()) else str(looks.keys()[0])
         look["look"] = chosen
         look["livery_texture"] = str((looks[chosen] as Dictionary).get("livery_texture",""))
-        var alt: String = str((looks[chosen] as Dictionary).get("glb",""))
-        if alt != "" and ResourceLoader.exists(alt):
-            model["glb"] = alt                # prototype body (asset absent in a build -> the normal model)
     return {"model":model,"look":look}
 
 ## True when this variant is shown with its Car Factory test model.
 static func uses_factory_test_model(variant: String) -> bool:
-    return factory_test_models() and not factory_model(variant).is_empty()
+    var fm: Dictionary = factory_model(variant)
+    if fm.is_empty():
+        return false
+    if bool(info(variant).get("factory_only",false)):
+        return ResourceLoader.exists(str((fm["model"] as Dictionary).get("glb","")))   # cars that only exist as a GLB
+    return factory_test_models()
 
 static func handling(variant: String) -> Dictionary:
     if baseline_physics_forced():
@@ -126,7 +134,7 @@ static func make(variant: String) -> Node3D:
     if uses_factory_test_model(v):
         var fm: Dictionary = factory_model(v)
         return FACTORY_CAR.new().setup(v,{"model":fm["model"]},fm["look"])
-    if v == "blue":
+    if v == "blue" or v == "flame":      # "flame" without its GLB falls back to the coupe
         return COUPE.new()
     if bool(info(v).get("factory",false)):
         var prof: Dictionary = profile(v)

@@ -1,0 +1,25 @@
+{
+  "id": "ryu32_flame_ai",
+  "status": "AI TEST BODY - NOT FOR RELEASE. Body mesh + textures generated with an image-to-3D service on its FREE plan (non-commercial); contains an invented sponsor text and plate. Replace with a generation made under a paid plan and cleaned before any release.",
+  "source": "tools/car_factory/blender/import_ai_car.py (hood vent repainted, tyres cut out, wheels from the wheel library)",
+  "glb": "res://assets/cars/ryu32_ai/ryu32_ai.glb",
+  "wheel_radius_m": 0.33,
+  "camber_deg": {
+    "front": -3.0,
+    "rear": -2.0
+  },
+  "camber_note": "Visual estimate (drift stance); cosmetic only, no physics.",
+  "shadow_size_m": [
+    2.6,
+    5.5
+  ],
+  "variants": {
+    "flame": {
+      "variant_slot": 0,
+      "paint_color_hex": "#1240C8",
+      "paint_finish": "metallic",
+      "wheel_asset_id": "wheel_ryu_5spoke",
+      "note": "Livery and paint are baked into the body texture (no PAINT / WHEELS choice)."
+    }
+  }
+}

@@ -85,15 +85,15 @@ jobs:
           python3 tools/check_project.py
           mkdir -p builds/android
           "$GODOT_BIN" --headless --editor --path game --import
-          "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk"
-          test -s builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk
-          unzip -t builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk | tail -n 2
-          unzip -Z1 builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk | grep -E '^(AndroidManifest.xml|lib/arm64-v8a/.*\.so)$'
-          sha256sum builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk > builds/android/Nitro-Wheelz_v0.1.32_Android-debug.apk.sha256
+          "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk"
+          test -s builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk
+          unzip -t builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk | tail -n 2
+          unzip -Z1 builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk | grep -E '^(AndroidManifest.xml|lib/arm64-v8a/.*\.so)$'
+          sha256sum builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk > builds/android/Nitro-Wheelz_v0.1.33_Android-debug.apk.sha256
           echo "BUILT: APK not yet tested on a real Android device."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.32_Android-debug
+          name: Nitro-Wheelz_v0.1.33_Android-debug
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30

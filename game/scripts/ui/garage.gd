@@ -117,7 +117,7 @@ func _ready() -> void:
         paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.718,bw,0.068,
             _choose.bind(v),sc)
         paint_buttons[v].name = "Car "+v
-        paint_buttons[v].add_theme_font_size_override("font_size",int((18.0 if n <= 3 else 14.0)*sc))
+        paint_buttons[v].add_theme_font_size_override("font_size",int((18.0 if n <= 3 else (14.0 if n == 4 else 12.5))*sc))
     # Car Factory cosmetics (prototype): SIGNATURE resets to the authentic
     # look, PAINT and WHEELS cycle presets. Cosmetic only: never physics.
     cosmetic_buttons["signature"] = _action("SIGNATURE",0.05,0.800,0.26,0.068,Callable(self,"_signature"),sc)

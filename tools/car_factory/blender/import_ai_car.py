@@ -42,6 +42,9 @@ def parse():
     ap.add_argument("--wheel-r", type=float, default=0.33)
     ap.add_argument("--cut-r", type=float, default=0.362)
     ap.add_argument("--nose", default="-y", help="axis the nose points to after import (blender space)")
+    ap.add_argument("--hood-box", default="", help="x0,x1,y0,y1 (metres, after fitting): repaint the dark patch "
+                    "inside it (a painted-on vent) in the paint colour sampled from the bonnet in front of it")
+    ap.add_argument("--decimate", type=float, default=1.0, help="collapse-decimate ratio for the triangle budget")
     args, _ = ap.parse_known_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:])
     return args
 
@@ -140,6 +143,32 @@ def main():
     y_rear, y_front = mid - a.wheelbase * 0.5, mid + a.wheelbase * 0.5
     print("axles found: rear %.3f front %.3f (wheelbase %.3f) -> used %.3f / %.3f" % (
         axle_y[0], axle_y[1], axle_y[1] - axle_y[0], y_rear, y_front))
+    hood = None
+    if a.hood_box:
+        bx = [float(t) for t in a.hood_box.split(",")]
+        uvl = me.uv_layers.active.data
+        vent, ref = [], []
+        for p in me.polygons:
+            c, n = p.center, p.normal
+            if n.z < 0.3 or not (0.45 < c.z < 1.1):
+                continue
+            poly = [(uvl[li].uv[0], uvl[li].uv[1]) for li in p.loop_indices]
+            if bx[0] <= c.x <= bx[1] and bx[2] <= c.y <= bx[3]:
+                vent.append(poly)
+            elif bx[0] <= c.x <= bx[1] and bx[3] < c.y <= bx[3] + 0.45:
+                ref.append(poly)
+        hood = {"vent": vent, "ref": ref}
+        print("hood vent faces: %d (reference bonnet faces: %d)" % (len(vent), len(ref)))
+        # the dark vent texture also hid lumpy geometry: relax the vertices of that patch
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        patch = [v for v in bm.verts if bx[0] - 0.05 <= v.co.x <= bx[1] + 0.05 and bx[2] - 0.05 <= v.co.y <= bx[3] + 0.05
+                 and 0.45 < v.co.z < 1.1 and any(f.normal.z > 0.3 for f in v.link_faces)]
+        for _ in range(8):
+            bmesh.ops.smooth_vert(bm, verts=patch, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        bm.to_mesh(me)
+        bm.free()
+        print("bonnet patch relaxed: %d vertices" % len(patch))
     # Cut the tyres out. The AI mesh is a closed solid, but Blender's exact boolean left whole
     # cutter shells behind on it, so the cut is done by hand: delete every face whose centre
     # lies inside the tyre cylinder, then close the hole with a dark liner (tube + inner disc).
@@ -172,6 +201,14 @@ def main():
         liners.append(part.to_object())
     obj = nwcf.join([obj] + liners, "AI_Body")
     bpy.context.view_layer.objects.active = obj
+    if a.decimate < 0.999:
+        n0 = len(obj.data.polygons)
+        mod = obj.modifiers.new("dec", 'DECIMATE')
+        mod.decimate_type = 'COLLAPSE'
+        mod.ratio = a.decimate
+        mod.use_collapse_triangulate = True
+        nwcf.apply_modifiers(obj)
+        print("decimated %d -> %d faces" % (n0, len(obj.data.polygons)))
     # materials: slot 0 = the body texture; the cut faces (L_well) go onto a
     # black texel patch of the same textures
     me = obj.data
@@ -192,7 +229,7 @@ def main():
         me.materials.pop(index=len(me.materials) - 1)
     print("wheel-well faces: %d" % n_well)
     import tempfile
-    paint_black_patch(mat, a.src, tempfile.mkdtemp(prefix="nwai_"))
+    paint_black_patch(mat, a.src, tempfile.mkdtemp(prefix="nwai_"), hood)
     bpy.ops.object.shade_smooth_by_angle(angle=math.radians(52))
     me.calc_loop_triangles()
     tris = len(me.loop_triangles)
@@ -217,7 +254,7 @@ def main():
     print("EXPORTED", a.out, os.path.getsize(a.out), "bytes")
 
 
-def paint_black_patch(mat, src_glb, tmpdir):
+def paint_black_patch(mat, src_glb, tmpdir, hood=None, rough_floor=0.30, metal_ceiling=0.25):
     """Black, fully rough, non-metal 8 x 8 texel patch in the bottom-left corner of the base
     colour and metallic-roughness textures (the wheel-well UVs point there). Done on the
     textures embedded in the source GLB with PIL and written as baseline JPEGs: Blender's
@@ -228,23 +265,73 @@ def paint_black_patch(mat, src_glb, tmpdir):
     import struct
     from PIL import Image
 
+    a_rough_floor = int(round(rough_floor * 255))
+    a_metal_ceiling = int(round(metal_ceiling * 255))
     raw = open(src_glb, "rb").read()
     jl = struct.unpack("<I", raw[12:16])[0]
     j = json.loads(raw[20:20 + jl])
     base = 20 + jl + 8
     os.makedirs(tmpdir, exist_ok=True)
     out = {}
+    import colorsys
+    # Paint colour of the bonnet in front of the vent: median of the saturated texels of the
+    # reference faces (base colour and metallic-roughness texture sampled at the same faces).
+    fills = {}
+    if hood and hood["vent"] and hood["ref"]:
+        imgs = {}
+        for im in j["images"]:
+            bv = j["bufferViews"][im["bufferView"]]
+            data = raw[base + bv.get("byteOffset", 0): base + bv.get("byteOffset", 0) + bv["byteLength"]]
+            nm = im["name"].lower().replace(".jpg", "").replace(".png", "")
+            if "basecolor" in nm:
+                imgs["basecolor"] = Image.open(io.BytesIO(data)).convert("RGB")
+            elif nm.endswith("rm"):
+                imgs["rm"] = Image.open(io.BytesIO(data)).convert("RGB")
+
+        def texel(img_, poly):
+            w_, h_ = img_.size
+            u = sum(q[0] for q in poly) / len(poly)
+            v = sum(q[1] for q in poly) / len(poly)
+            return img_.getpixel((min(w_ - 1, max(0, int(u * w_))), min(h_ - 1, max(0, int((1.0 - v) * h_)))))
+
+        good = []
+        for poly in hood["ref"]:
+            r_, g_, b_ = texel(imgs["basecolor"], poly)
+            hh, ss, vv = colorsys.rgb_to_hsv(r_ / 255.0, g_ / 255.0, b_ / 255.0)
+            if ss > 0.45 and vv > 0.35:
+                good.append(poly)
+        for key in ("basecolor", "rm"):
+            cols = [texel(imgs[key], poly) for poly in good]
+            fills[key] = tuple(sorted(c[i] for c in cols)[len(cols) // 2] for i in range(3)) if cols else None
+        print("bonnet paint sampled from %d faces: base %s rm %s" % (len(good), fills["basecolor"], fills["rm"]))
     for im in j["images"]:
         bv = j["bufferViews"][im["bufferView"]]
         data = raw[base + bv.get("byteOffset", 0): base + bv.get("byteOffset", 0) + bv["byteLength"]]
         name = im["name"].lower()
         img = Image.open(io.BytesIO(data)).convert("RGB")
         w, h = img.size
+        def fill_vent(img_, key_):
+            col = fills.get(key_)
+            if not col:
+                return
+            from PIL import ImageDraw
+            dr = ImageDraw.Draw(img_)
+            for poly in hood["vent"]:
+                pts = [(u * w, (1.0 - v) * h) for u, v in poly]
+                dr.polygon(pts, fill=col, outline=col)
+                dr.line(pts + [pts[0]], fill=col, width=3)
+
         if "basecolor" in name:
+            fill_vent(img, "basecolor")
             img.paste((1, 1, 1), (0, h - 8, 8, h))
             path = os.path.join(tmpdir, "ryu_basecolor.jpg")
             key = "basecolor"
         elif name.replace(".jpg", "").replace(".png", "").endswith("rm"):
+            fill_vent(img, "rm")
+            r_, g_, b_ = img.split()
+            g_ = g_.point(lambda t: max(t, a_rough_floor))          # roughness floor (0.3 by default)
+            b_ = b_.point(lambda t: min(t, a_metal_ceiling))
+            img = Image.merge("RGB", (r_, g_, b_))
             img.paste((0, 255, 0), (0, h - 8, 8, h))       # G = roughness 1, B = metallic 0
             path = os.path.join(tmpdir, "ryu_rm.jpg")
             key = "rm"

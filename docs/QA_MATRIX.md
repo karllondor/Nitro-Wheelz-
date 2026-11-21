@@ -21,6 +21,15 @@ PASS only when actually executed. BUILT does not mean played or installed.
 
 The above CI actions validate parse, scene tree startup, synthetic bindings and model numerics. They do not validate rendering quality, handling feel, controller hardware or phone performance.
 
+## v0.1.33 — AI-body test car FLAME (Claude Code cloud container, 2026-11-21)
+| Area | Result |
+|---|---|
+| factory_models_test incl. FLAME (always factory GLB, RYU-32 handling + V8 profile, 41 371 tris, 6 draw calls, footprint, wheelbase) | PASS (local) |
+| Full suite | see the row below / follow-up commit |
+| Renders (garage views, close-ups, race top-down / chase) | scratchpad only (the sheet contains the generated asset) |
+| CI / APK | see the follow-up docs commit |
+| Phone review | NOT RUN |
+
 ## v0.1.32 — Mobile QA fixes (Claude Code cloud container, 2026-11-21)
 | Area | Result |
 |---|---|

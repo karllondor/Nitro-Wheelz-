@@ -1,3 +1,11 @@
+## [0.1.33] — AI-generated body test car "RYU-32 FLAME (AI TEST)" (TEST BUILD, not for release)
+Report: docs/car_factory/AI_BODY_PROTOTYPE.md (pipeline, licence status, known flaws).
+- New fifth garage car R32 • FLAME: a body generated with an image-to-3D service (flame livery baked into its texture) fitted to the RYU-32 footprint, tyres cut out, the wheel library's rotating RYU deep 5-spoke wheels on its hubs. Drives exactly like the RYU-32 (same handling profile, V8 sound, collision footprint); looks only. Always on (no DEVELOPER switch); falls back to the procedural coupe when the GLB is absent.
+- The black painted-on bonnet vent is repainted in the paint colour (texture + metallic-roughness fill, lumpy geometry relaxed); paint roughness floored so the car shader no longer washes the blue out.
+- tools/car_factory/blender/import_ai_car.py: nose turn, non-uniform fit to the catalog, weld, axle detection, manual tyre cut with dark liners, hood repaint, decimation, baseline-JPEG textures, hubs. 41 371 triangles with wheels, 6 draw calls.
+- Licence: the asset comes from the free (non-commercial) plan of the generating service; test project only, see docs/LICENSE_AND_SOURCES.md. Known flaws: open roof, invented sponsor text / plate on the texture.
+- Android versionCode 33 / versionName 0.1.33. NOT RUN: phone review.
+
 ## [0.1.32] — Mobile QA fixes from the owner's v0.1.28 phone test (TEST BUILD)
 Report: docs/MOBILE_QA_v0.1.32.md (causes found in code, fixes, tests, what is NOT confirmed on the phone, owner checklist).
 - Track Builder MOVE / pinch: camera pitch and terrain lift frozen while a finger moves the map (the per-event mountain-occlusion search moved the ground under the finger), no fling, view centre kept over the map, plane-only pan. Test: 0.000 m drift of the ground point under the finger over 24 drag steps in the Tatry.

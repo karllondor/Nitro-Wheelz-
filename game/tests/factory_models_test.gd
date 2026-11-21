@@ -31,7 +31,7 @@ func _run() -> void:
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: Car Factory test models behind DEVELOPER > CAR FACTORY TEST MODELS (off = procedural Lada / RYU-32): Lada one GLB with RED / WHITE geometry variants (slots, own paint + wheels), RYU-32 one GLB with CLEAN / LIVERY looks (paint material only), 3 body materials, budget, footprint + wheelbase, handling + engine profiles identical on / off, garage = race car")
+    print("PASS: Car Factory test models behind DEVELOPER > CAR FACTORY TEST MODELS (off = procedural Lada / RYU-32): Lada one GLB with RED / WHITE geometry variants (slots, own paint + wheels), RYU-32 one GLB with CLEAN / LIVERY looks (paint material only), FLAME = separate AI-body car (always factory GLB, RYU-32 handling + V8), 3 body materials, budget, footprint + wheelbase, handling + engine profiles identical on / off, garage = race car")
     print("NOT RUN: owner visual acceptance; frame time on a real Android phone")
     for _f in range(3):
         await process_frame
@@ -140,6 +140,36 @@ func _checks() -> String:
             return "RYU-32 wheelbase in the GLB must be %.3f m" % float(info["wheelbase"])
         rc.queue_free()
         await process_frame
+    # FLAME: a separate car with an AI-generated body, always the factory GLB (no DEVELOPER
+    # switch), driving exactly like the RYU-32 (same handling + V8 profile, same footprint).
+    CARS.set_factory_test_models(false)
+    if not CARS.ORDER.has("flame") or not CARS.uses_factory_test_model("flame"):
+        return "FLAME must be a selectable car that is always the factory GLB"
+    if CARS.handling("flame") != CARS.handling("blue") or CARS.engine("flame") != CARS.engine("blue"):
+        return "FLAME must use the RYU-32 handling and V8 engine profile"
+    var fcar: Node3D = CARS.make("flame")
+    root.add_child(fcar)
+    await process_frame
+    if not (fcar is NitroGlbCar):
+        return "CARS.make('flame') must build the factory GLB car"
+    var fg: NitroGlbCar = fcar
+    var fst: Dictionary = _stats(fcar,0)
+    var fb: AABB = fst["bounds"]
+    var finfo: Dictionary = CARS.info("flame")
+    print("FLAME: %d triangles, %d draw calls, bounds %s" % [fst["visible"],fst["calls"],str(fb.size)])
+    if int(fst["visible"]) > BUDGET_TRIANGLES or int(fst["calls"]) > BUDGET_DRAW_CALLS:
+        return "FLAME over budget (%d tris, %d calls)" % [fst["visible"],fst["calls"]]
+    if absf(fb.size.z-float(finfo["length"])) > 0.03 or fb.size.x > float(finfo["width"])+0.005:
+        return "FLAME footprint %s vs catalog %.3f x %.3f" % [str(fb.size),float(finfo["length"]),float(finfo["width"])]
+    var ffl: Node3D = fg.body.find_child("wheel_FL",true,false)
+    var frl: Node3D = fg.body.find_child("wheel_RL",true,false)
+    if absf(absf(ffl.position.z-frl.position.z)-float(finfo["wheelbase"])) > 0.005:
+        return "FLAME wheelbase in the GLB must be %.3f m" % float(finfo["wheelbase"])
+    if fg.front_wheels.size() != 2 or fg.rolling_wheels.size() != 4:
+        return "FLAME needs 2 steering hubs and 4 rolling wheels"
+    fcar.queue_free()
+    await process_frame
+    CARS.set_factory_test_models(true)
     # Garage builds the same car the race will drive.
     var garage: Control = (load(GARAGE_SCENE) as PackedScene).instantiate()
     root.add_child(garage)
