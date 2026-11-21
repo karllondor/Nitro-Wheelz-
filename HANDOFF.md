@@ -1,3 +1,10 @@
+# Nitro Wheelz — v0.1.32b candidate branch
+
+Model: GPT-6. Branch: `agent/nitro-v0.1.32b-mobile-feedback`. Base: v0.1.32 commit b1ef0ef.
+Player-visible factory cars + shared cosmetics, local driver/car results, GLB hub safeguard. Release candidate, **not a proven Android fix**. Read `docs/MOBILE_QA_v0.1.32b.md`; verify cold-start first-drift tyre appearance in both cameras and old-vs-new camera/art before approval. Godot/phone tests NOT RUN here. Do not release/tag/merge without actual CI and owner approval.
+
+---
+
 # Nitro Wheelz — v0.1.32 mobile QA fixes (owner's v0.1.28 phone test) on top of the Car Factory migration (v0.1.29–31)
 
 ## MOBILE QA (v0.1.32)
