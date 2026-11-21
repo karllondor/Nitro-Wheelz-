@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "snapshot_date_utc": "2026-11-21",
+  "repo": "karllondor/Nitro-Wheelz-",
+  "integration_branch": "ccr-91dad981-53kkbi",
+  "observed_version": "0.1.33",
+  "snapshot_kind": "read_only_status_index_not_lock",
+  "read_first": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/dev/COORDINATION_PROTOCOL.md",
+    "docs/dev/REVIEW_2026-11-21.md",
+    "HANDOFF.md",
+    "CHANGELOG.md"
+  ],
+  "qa_evidence": "https://drive.google.com/drive/folders/1w9d3eWfdCU8NMHMaC52v4M18BUhBW7gh",
+  "unmerged_prs": [
+    {
+      "number": 15,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "head": "agent/nitro-v0.1.32b-mobile-feedback",
+      "target": "ccr-91dad981-53kkbi",
+      "action": "selective_diff_review_no_wholesale_merge",
+      "url": "https://github.com/karllondor/Nitro-Wheelz-/pull/15"
+    }
+  ],
+  "issues": [
+    {
+      "number": 16,
+      "key": "NW-WHEEL-16",
+      "priority": "P0",
+      "status": "OPEN_ON_PHONE",
+      "owner": "unassigned",
+      "paths": [
+        "game/scripts/vehicles/glb_car.gd",
+        "game/scripts/vehicles/*",
+        "tools/car_factory/*"
+      ],
+      "url": "https://github.com/karllondor/Nitro-Wheelz-/issues/16",
+      "claim_required": true
+    },
+    {
+      "number": 18,
+      "key": "NW-ROUTE-18",
+      "priority": "P0",
+      "status": "CONFIRMED_CODE_BUG",
+      "owner": "unassigned",
+      "paths": [
+        "game/scripts/ui/race_hud.gd",
+        "game/scripts/*race*.gd"
+      ],
+      "url": "https://github.com/karllondor/Nitro-Wheelz-/issues/18",
+      "claim_required": true
+    },
+    {
+      "number": 19,
+      "key": "NW-WATER-19",
+      "priority": "P0_P1",
+      "status": "PHONE_REPORTED_ROOT_CAUSE_UNVERIFIED",
+      "owner": "unassigned",
+      "paths": [
+        "game/scripts/world/terrain/terrain_world.gd",
+        "game/scripts/world/terrain/terrain_field.gd",
+        "game/scripts/world/terrain/terrain_track.gd"
+      ],
+      "url": "https://github.com/karllondor/Nitro-Wheelz-/issues/19",
+      "claim_required": true
+    },
+    {
+      "number": 20,
+      "key": "NW-VEGETATION-20",
+      "priority": "P1",
+      "status": "VISIBLE_BEHAVIOUR_REQUIRES_CLARIFICATION_AND_QA",
+      "owner": "unassigned",
+      "paths": [
+        "game/assets/shaders/terrain_vegetation.gdshader",
+        "game/scripts/world/terrain/terrain_scenery.gd"
+      ],
+      "url": "https://github.com/karllondor/Nitro-Wheelz-/issues/20",
+      "claim_required": true
+    }
+  ],
+  "review": "docs/dev/REVIEW_2026-11-21.md",
+  "safeguards": {
+    "concurrency": "exclusive_claim_per_overlapping_path",
+    "branching": "isolated_per_task",
+    "delivery": "PR_into_integration_branch_only_after_review",
+    "no_force_push": true,
+    "no_blind_reset": true,
+    "do_not_close_on_headless_only": true
+  }
+}
