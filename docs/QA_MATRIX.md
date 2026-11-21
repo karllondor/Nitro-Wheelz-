@@ -26,7 +26,7 @@ The above CI actions validate parse, scene tree startup, synthetic bindings and 
 |---|---|
 | Godot suite (import + 29 tests) incl. e30_factory_car_test (41 502 tris, 8 draw calls, garage framing 5.0 % margin over a full turn) | PASS (local) |
 | BEFORE / AFTER renders (7 views, 6 close-ups, garage, race top-down / chase, photo cameras) | DONE -> docs/car_factory/e30_v03/ |
-| CI | pending at commit time (follow-up docs commit) |
+| CI at 11a9522 | android [success](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44832982410/job/136622288872), web [success](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44832982393/job/136622288767), desktop [success](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44832982306/job/136622288513), foundation [success](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44832982362/job/136622288785), godot [**FAILURE**](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/44832982389/job/136622288798): every test printed PASS, then terrain_physics_test never exited (exit 124 = runner timeout). Cause: headless engine shutdown hang (gdb: main thread in pthread_join, the Dummy audio-driver thread at 100 % CPU; reproduced locally 2 of 3 runs). Fix in the next commit: tools/run_godot_checks.sh kills a test still alive 20 s after its PASS line and prints a WARNING (an error, a hang before PASS or a non-zero exit still fail) |
 | Phone review | NOT RUN |
 
 ## v0.1.28 — Japan City street circuit (Claude Code cloud container, 2026-11-20)
