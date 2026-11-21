@@ -1,4 +1,4 @@
-# DEVELOPER mode (v0.1.32)
+# DEVELOPER mode (v0.1.32; updated for 0.1.32b candidate)
 
 Main menu > **DEVELOPER**. Developer / test options are stored in `user://nitro_dev.cfg`, **apart from the player's
 settings** (`user://nitro_settings.cfg`: volumes, accent colour, sound on/off). Builds up to v0.1.31 kept them in the
@@ -10,8 +10,7 @@ the player file. None of these options is saved into tracks or race results.
 | CONTROLLER DIAGNOSTICS | screen | Live view of keyboard / gamepad / touch actions, dead zones and the logical inputs the car receives. | `scenes/dev/input_monitor.tscn` |
 | BASELINE PHYSICS FOR ALL CARS | ON / **OFF** | ON: every car drives on the Lada baseline handling (the way back to the old behaviour); looks and engine sound still follow the chosen car. | `car_catalog.gd baseline_physics_forced()` |
 | AUDIO DEBUG OVERLAY | ON / **OFF** | Race overlay with the synth state: engine layout, rpm, gear, load, misfires, tyre squeal, scrape, player mix. | `ui/audio_debug_overlay.gd` |
-| CAR FACTORY TEST MODELS | ON / **OFF** | ON: the Lada RED / WHITE and the RYU-32 use their new Car Factory GLB test models (looks only; handling, sound, collisions, saves unchanged). OFF: the approved procedural models. | `car_catalog.gd factory_test_models()` |
-| RYU-32 TEST LOOK | **CLEAN** / LIVERY (PROVISIONAL) | Which look the RYU-32 test model wears (same GLB, paint material only). | `car_catalog.gd factory_test_look()` |
+| CAR FACTORY GLB CARS | **ON** / OFF | ON: Lada RED / WHITE and RYU-32 use their Car Factory GLB models by default. OFF: temporary legacy procedural comparison (appearance only, handling and saves unchanged). Obsolete saved factory_test_models switch is ignored. | `car_catalog.gd factory_test_models()` |
 | ELEVATION PHYSICS ▶ GRADE FORCE | **0** / 25 / 50 / 75 / 100 % | Share of the gravity component along the road on terrain tracks (planar acceleration). 0 % = exactly the flat handling. Flat tracks never change. | `world/terrain/physics_dev.gd` |
 | ELEVATION PHYSICS ▶ CAMERA PITCH | **ON** / OFF | Race cameras follow the road grade (visual). | same |
 | ELEVATION PHYSICS ▶ BANKING / BODY ROLL | ON / **OFF** | Visual body roll from lateral acceleration (+ road cross-fall, 0 on level roads). | same |
@@ -30,3 +29,5 @@ The owner's "Nitro Dev Lab" proposal — live handling sliders (steering respons
 yaw damping, handbrake grip) with units, RESET per value and saved presets — is not in this build. The handling values
 live in `game/cars/*.json` (`handling`), so such a panel can edit a developer copy of a profile without touching the
 car files. Bugs (map panning, dead touch areas, wheel visuals) are fixed in code, never hidden behind sliders.
+
+RYU-32 CLEAN / BLUE + STRIPES are now selectable directly from GARAGE > PAINT; the provisional stripes do not require Developer Mode.
