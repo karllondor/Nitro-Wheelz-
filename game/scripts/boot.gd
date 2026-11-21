@@ -233,20 +233,14 @@ func _dev_page() -> void:
         show_page("dev"))
     phys.name = "Baseline physics"
     STYLE.style_button(phys,ui_unit,forced)
-    # v0.1.30: Car Factory TEST models (Blender -> GLB) for cars that still
-    # have an approved procedural model (Lada RED / WHITE). Looks only.
+    # v0.1.32b: GLB is the normal player-visible model. Developer can
+    # temporarily compare the legacy procedural model without losing saves.
     var fac: bool = CARS.factory_test_models()
-    var fac_b: Button = _big("CAR FACTORY TEST MODELS: "+("ON" if fac else "OFF")+"\nLADA RED / WHITE + RYU-32 • LOOKS ONLY",func():
+    var fac_b: Button = _big("CAR FACTORY GLB CARS: "+("ON" if fac else "OFF")+"\nDEFAULT ON • LEGACY COMPARISON ONLY",func():
         CARS.set_factory_test_models(not CARS.factory_test_models())
         show_page("dev"))
     fac_b.name = "Factory test models"
     STYLE.style_button(fac_b,ui_unit,fac)
-    var liv: bool = CARS.factory_test_look() == "livery"
-    var look_b: Button = _big("RYU-32 TEST LOOK: "+("LIVERY (PROVISIONAL)" if liv else "CLEAN"),func():
-        CARS.set_factory_test_look("clean" if CARS.factory_test_look() == "livery" else "livery")
-        show_page("dev"))
-    look_b.name = "Factory test look"
-    STYLE.style_button(look_b,ui_unit,liv)
     var dbg_on: bool = load("res://scripts/ui/audio_debug_overlay.gd").enabled()
     var dbg_b: Button = _big("AUDIO DEBUG OVERLAY: "+("ON" if dbg_on else "OFF"),func():
         load("res://scripts/ui/audio_debug_overlay.gd").set_enabled(not dbg_on)

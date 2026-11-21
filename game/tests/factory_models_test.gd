@@ -1,7 +1,7 @@
 extends SceneTree
 ## Car Factory migration (v0.1.30): Lada 2106 RED / WHITE as ONE GLB with
-## geometry variants, shown only with DEVELOPER > CAR FACTORY TEST MODELS.
-##  * switch OFF (default): the approved procedural Lada stays;
+## geometry variants, default ON in the player garage (legacy opt-out).
+##  * switch OFF: the earlier procedural Lada is available for regression;
 ##  * switch ON: RED and WHITE build NitroGlbCar from the same GLB with
 ##    variant slots 1 / 2, their own paint and wheels, 3 body materials;
 ##  * budget per variant (only the faces that variant shows) and draw calls;
@@ -31,7 +31,7 @@ func _run() -> void:
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: Car Factory test models behind DEVELOPER > CAR FACTORY TEST MODELS (off = procedural Lada / RYU-32): Lada one GLB with RED / WHITE geometry variants (slots, own paint + wheels), RYU-32 one GLB with CLEAN / LIVERY looks (paint material only), 3 body materials, budget, footprint + wheelbase, handling + engine profiles identical on / off, garage = race car")
+    print("PASS: Car Factory GLB models default ON, legacy procedural fallback available: Lada one GLB with RED / WHITE geometry variants (slots, own paint + wheels), RYU-32 one GLB with CLEAN / LIVERY looks (paint material only), 3 body materials, budget, footprint + wheelbase, handling + engine profiles identical on / off, garage = race car")
     print("NOT RUN: owner visual acceptance; frame time on a real Android phone")
     for _f in range(3):
         await process_frame
@@ -107,10 +107,13 @@ func _checks() -> String:
             return "%s tyres poke out of the arches (%.3f m)" % [v,outer]
         car.queue_free()
         await process_frame
-    # RYU-32: one GLB, CLEAN / LIVERY differ only in the paint material.
+    # RYU-32: stripes are now a normal PAINT choice in the garage.
+    var blue_profile: Dictionary = CARS.cosmetic_profile("blue")
+    COSMETICS.reset_to_signature("blue",blue_profile)
     var ryu_glb: String = ""
-    for look in ["clean","livery"]:
-        CARS.set_factory_test_look(look)
+    for look in ["clean","stripes"]:
+        if look == "stripes":
+            COSMETICS.next_paint("blue",blue_profile)
         var rc: Node3D = CARS.make("blue")
         root.add_child(rc)
         await process_frame
@@ -122,9 +125,9 @@ func _checks() -> String:
             return "RYU-32 CLEAN and LIVERY must share one GLB"
         ryu_glb = path
         var on: float = float(rg.paint_material.get_shader_parameter("livery_on"))
-        if (look == "livery") != (on > 0.5):
+        if (look == "stripes") != (on > 0.5):
             return "RYU-32 %s look: livery_on = %.1f" % [look,on]
-        if look == "livery" and rg.paint_material.get_shader_parameter("livery_tex") == null:
+        if look == "stripes" and rg.paint_material.get_shader_parameter("livery_tex") == null:
             return "RYU-32 LIVERY needs its livery texture"
         var st: Dictionary = _stats(rc,0)
         var info: Dictionary = CARS.info("blue")
@@ -149,10 +152,10 @@ func _checks() -> String:
     var preview: Variant = garage.get("car")
     if not (preview is NitroGlbCar) or (preview as NitroGlbCar).variant_slot != 2:
         return "Garage must show the factory WHITE Lada when the switch is ON"
-    if not str((garage.get("version_label") as Label).text).contains("FACTORY TEST MODEL"):
-        return "Garage must label the factory test model"
-    if not (garage.get_node("Cosmetic paint") as Button).disabled:
-        return "The Lada keeps its fixed looks (no PAINT / WHEELS menu)"
+    if not str((garage.get("version_label") as Label).text).contains("WHEELS"):
+        return "Garage must show factory paint and wheel choices"
+    if (garage.get_node("Cosmetic paint") as Button).disabled or (garage.get_node("Cosmetic wheels") as Button).disabled:
+        return "Lada factory GLB needs PAINT and WHEELS in the player garage"
     garage.queue_free()
     await process_frame
     return ""

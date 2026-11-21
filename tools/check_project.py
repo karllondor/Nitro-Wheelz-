@@ -20,7 +20,7 @@ REQUIRED = (
     "game/scripts/prototype.gd", "game/scripts/dev/input_monitor.gd",
     "game/tests/smoke_test.gd", "game/tests/input_test.gd", str(MANIFEST),
 )
-SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 def read_manifest(path):
@@ -114,7 +114,7 @@ def validate_structure(root):
         engine = (root/".godot-version").read_text(encoding="utf-8").strip()
         gd = (root/"game/project.godot").read_text(encoding="utf-8")
         if not SEMVER.fullmatch(ver):
-            errors.append("VERSION is not MAJOR.MINOR.PATCH")
+            errors.append("VERSION is not valid SemVer")
         if conf.get("game_version") != ver:
             errors.append("project.json game_version mismatch")
         if 'config/version="'+ver+'"' not in gd:

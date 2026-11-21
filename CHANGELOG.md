@@ -1,4 +1,13 @@
 ## [0.1.32] — Mobile QA fixes from the owner's v0.1.28 phone test (TEST BUILD)
+
+## v0.1.32b CANDIDATE (unreleased; `agent/nitro-v0.1.32b-mobile-feedback`)
+
+- Car Factory GLB models for Lada red/white and RYU-32 default ON in the ordinary garage/race (developer toggle now legacy comparison); shared cosmetics palettes, saved paint and wheels on all factory cars, RYU-32 striped look under PAINT.
+- Results LOCAL TOP RUNS now show # / DRIVER / CAR / POINTS / STARS / TIME, no date column; driver name editable in SETTINGS and saved with each new run. Old records show UNKNOWN when a field is absent.
+- Defensive GLB rear hub neutralization and bounded rolling-wheel phase. **First-drift visual anomaly still requires Android visual confirmation**, not marked fixed.
+- Older top-down framing vs new terrain circuits identified as visual A/B follow-up, not reverted.
+- Owner QA checklist and testing limitations: [docs/MOBILE_QA_v0.1.32b.md](docs/MOBILE_QA_v0.1.32b.md). Godot/Android tests NOT RUN in this session.
+
 Report: docs/MOBILE_QA_v0.1.32.md (causes found in code, fixes, tests, what is NOT confirmed on the phone, owner checklist).
 - Track Builder MOVE / pinch: camera pitch and terrain lift frozen while a finger moves the map (the per-event mountain-occlusion search moved the ground under the finger), no fling, view centre kept over the map, plane-only pan. Test: 0.000 m drift of the ground point under the finger over 24 drag steps in the Tatry.
 - Dead bottom-left strip fixed: BUILD now has its own map rectangle down to the button rows (the SETUP one left ~15 % of the screen above the two BUILD rows dead, also for a second pinch finger).
