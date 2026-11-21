@@ -12,6 +12,7 @@ const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
 const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 const DEV = preload("res://scripts/dev_settings.gd")
+const COSMETIC_DATA_PATH: String = "res://cars/car_factory_cosmetics.json"
 
 const ORDER: Array[String] = ["red","white","blue","e30"]
 const CARS: Dictionary = {
@@ -56,10 +57,10 @@ static func set_baseline_physics_forced(on: bool) -> void:
 ## default: the old model stays until the owner accepts the new one. Looks
 ## only: handling, sound, collisions and saves never change.
 static func factory_test_models() -> bool:
-    return bool(DEV.get_value("developer","factory_test_models",false))
+    return not bool(DEV.get_value("developer","legacy_procedural_cars",false))
 
 static func set_factory_test_models(on: bool) -> void:
-    DEV.set_value("developer","factory_test_models",on)
+    DEV.set_value("developer","legacy_procedural_cars",not on)
 
 ## DEVELOPER: which look a factory test model with several looks wears
 ## (RYU-32: "clean" or "livery"). Looks only.
@@ -70,6 +71,31 @@ static func set_factory_test_look(look: String) -> void:
     DEV.set_value("developer","factory_test_look",look)
 
 static var _models: Dictionary = {}
+static var _cosmetics_data: Dictionary = {}
+
+## Cosmetic presets are independent of the physics profile and of the
+## Blender-generated model JSON (a model rebuild must not erase choices).
+static func cosmetic_profile(variant: String) -> Dictionary:
+    var v: String = valid(variant)
+    var original: Dictionary = profile(v)
+    if COSMETICS.supported(original):
+        return original
+    if _cosmetics_data.is_empty():
+        var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(COSMETIC_DATA_PATH))
+        _cosmetics_data = raw if raw is Dictionary else {}
+    return {"cosmetics":_cosmetics_data.get(v,{})}
+
+## One appearance pipeline for the garage and race. On RYU-32 the stripes
+## are a selectable PAINT preset; both versions share the exact same GLB.
+static func visual_choice(variant: String, choice: Dictionary) -> Dictionary:
+    var out: Dictionary = choice.duplicate(true)
+    var fm: Dictionary = factory_model(variant)
+    if not fm.is_empty():
+        out["paint_shader"] = (fm["look"] as Dictionary).get("paint_shader",{})
+    if valid(variant) == "blue":
+        out["livery_texture"] = "res://assets/cars/ryu32/ryu32_livery_provisional.png" \
+            if str(out.get("livery_id","clean")) == "stripes" else ""
+    return out
 
 ## {"model": <model block for NitroGlbCar>, "look": <paint + wheels>} of a
 ## variant's Car Factory test model, or {} when it has none.
@@ -122,7 +148,8 @@ static func make(variant: String) -> Node3D:
     var v: String = valid(variant)
     if uses_factory_test_model(v):
         var fm: Dictionary = factory_model(v)
-        return FACTORY_CAR.new().setup(v,{"model":fm["model"]},fm["look"])
+        return FACTORY_CAR.new().setup(v,{"model":fm["model"]},
+            visual_choice(v,COSMETICS.current(v,cosmetic_profile(v))))
     if v == "blue":
         return COUPE.new()
     if bool(info(v).get("factory",false)):
