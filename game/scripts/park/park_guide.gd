@@ -26,6 +26,7 @@ var _clock: float = 0.0
 var _skip_rect: Rect2 = Rect2()
 var _ghost_rect: Rect2 = Rect2()
 var _repeat_rect: Rect2 = Rect2()
+var _actions_bottom: float = 0.0
 
 func _ready() -> void:
     name = "Park guide"
@@ -40,7 +41,7 @@ func show_toast(text: String, kind: String = "info", seconds: float = 2.4) -> vo
     queue_redraw()
 
 func overlay_active() -> bool:
-    return tutorial != null and tutorial.phase == "intro"
+    return tutorial != null and (tutorial.phase == "intro" or tutorial.phase == "welcome")
 
 func card_visible() -> bool:
     return tutorial != null and tutorial.is_active()
@@ -96,13 +97,17 @@ func _draw() -> void:
     var s: Vector2 = get_viewport_rect().size
     var m: Dictionary = STYLE.metrics(s)
     var u: float = float(m["unit"])
+    if tutorial.phase == "welcome":
+        _draw_welcome(s,u)
+        return
     if tutorial.phase == "intro":
         _draw_overlay(s,u)
         return
     if card_visible():
         _draw_highlight(u)
-        _draw_target(s,u)
         _draw_card(m,u)
+        _draw_coach(s,m,u)
+        _draw_nav(s,u)
     _draw_toast(s,u)
 
 func _wrapped(pos: Vector2, txt: String, size: float, width: float, colour: Color, lines: int, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> void:
@@ -130,17 +135,12 @@ func _draw_card(m: Dictionary, u: float) -> void:
     var pad: float = r.size.x*0.035
     var left: float = r.position.x+pad
     var avail: float = r.size.x-pad*2.0
-    var l: Dictionary = tutorial.lesson()
+    # lesson number + title only: the instruction itself is the big banner below (readable on a phone)
     var title: String = "%d/%d  %s" % [tutorial.lesson_index+1,TUTORIAL.LESSONS.size(),tutorial.title_text()]
-    var title_px: float = r.size.y*0.2
-    STYLE.text(self,Vector2(left,top+title_px),title,STYLE.fit_size(title,title_px,avail),STYLE.PINK,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
-    var prompt: String = tutorial.success_text() if tutorial.phase == "success" else tutorial.prompt_text()
-    var avail_h: float = r.end.y-top-title_px*1.25-r.size.y*0.12
-    var base: float = minf(r.size.y*0.22,avail_h*0.5)
-    var size: float = _fit_lines(prompt,base,avail,2)
-    _wrapped(Vector2(left,top+title_px*1.25+size),prompt,size,avail,STYLE.WHITE if tutorial.phase != "success" else STYLE.GOLD,2)
+    var title_px: float = r.size.y*0.36
+    STYLE.text(self,Vector2(left,top+title_px*1.05),title,STYLE.fit_size(title,title_px,avail),STYLE.PINK,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
     # progress bar along the bottom of the card
-    var bar := Rect2(r.position.x+pad,r.end.y-r.size.y*0.11,r.size.x-pad*2.0,maxf(3.0,r.size.y*0.035))
+    var bar := Rect2(r.position.x+pad,r.end.y-r.size.y*0.16,r.size.x-pad*2.0,maxf(4.0,r.size.y*0.07))
     draw_rect(bar,Color(1,1,1,0.12),true)
     var prog: float = 1.0 if tutorial.phase == "success" else tutorial.progress()
     draw_rect(Rect2(bar.position,Vector2(bar.size.x*prog,bar.size.y)),STYLE.PINK.lerp(Color.WHITE,0.25),true)
@@ -165,6 +165,7 @@ func _draw_actions(m: Dictionary, u: float) -> void:
     _button(_skip_rect,"POMIŃ" if TUTORIAL.LANG == "pl" else "SKIP",true,u)
     _button(_ghost_rect,("DUCH" if TUTORIAL.LANG == "pl" else "GHOST")+(" ●" if ghost_on and has_ghost else ""),has_ghost,u)
     _button(_repeat_rect,"OD NOWA" if TUTORIAL.LANG == "pl" else "REPEAT",true,u)
+    _actions_bottom = y+h
 
 func _has_demo(l: Dictionary) -> bool:
     return str(l["kind"]) in ["donut","eight","route"]
@@ -217,40 +218,95 @@ func _outline(pts: PackedVector2Array, col: Color, width: float, grow: float) ->
     out.append(out[0])
     draw_polyline(out,col,width,true)
 
-## An arrow at the screen edge towards the exercise when it is off screen (the Park is
-## much bigger than the camera view), with the distance. The world also shows a light
-## beacon over the target.
-func _draw_target(s: Vector2, u: float) -> void:
-    if target == null or tutorial.phase != "active":
+## The big instruction banner under the action buttons: what to do NOW. For an exercise lesson it
+## first says WHERE the exercise is (distance + side relative to the car), then, inside the zone,
+## what to do there. Computed from the live car every frame. Rows: {t: text, c: colour, s: size 0..1}.
+func _coach_rows() -> Array:
+    var nav: Dictionary = controller.call("nav_state") if controller != null else {}
+    var l: Dictionary = tutorial.lesson()
+    if tutorial.phase == "success":
+        return [{"t":tutorial.success_text(),"c":STYLE.GOLD,"s":1.0}]
+    if nav.is_empty():
+        return [{"t":tutorial.prompt_text(),"c":STYLE.WHITE,"s":0.85}]
+    var kind: String = str(l["kind"])
+    if bool(nav["in_zone"]):
+        var here: Dictionary = TUTORIAL.NAV_HERE_EIGHT if kind == "eight" else (TUTORIAL.NAV_HERE_ROUTE if kind == "route" else (
+            TUTORIAL.NAV_HERE_LEFT if str(l["id"]) == "donut_left" else TUTORIAL.NAV_HERE_RIGHT))
+        var sub: String = tutorial.prompt_text()
+        if tutorial.progress() > 0.01:
+            sub = "%s   %d%%" % [sub,int(round(tutorial.progress()*100.0))]
+        return [{"t":TUTORIAL.txt(here),"c":STYLE.GOLD,"s":0.9},{"t":sub,"c":STYLE.WHITE,"s":0.6}]
+    var go: Dictionary = TUTORIAL.NAV_GO_EIGHT if kind == "eight" else (TUTORIAL.NAV_GO_ROUTE if kind == "route" else TUTORIAL.NAV_GO)
+    var where: String = "%d m   %s" % [int(round(float(nav["dist"]))),TUTORIAL.txt(TUTORIAL.NAV_SIDE[str(nav["side"])])]
+    return [{"t":TUTORIAL.txt(go),"c":Color(0.45,0.97,1.0),"s":0.72},{"t":where,"c":STYLE.WHITE,"s":1.0},
+        {"t":tutorial.prompt_text(),"c":Color(0.85,0.88,0.95),"s":0.55}]
+
+func _draw_coach(s: Vector2, m: Dictionary, u: float) -> void:
+    if tutorial.phase != "active" and tutorial.phase != "success":
+        return
+    var rows: Array = _coach_rows()
+    var pad: float = s.x*0.04
+    var top: float = maxf(_actions_bottom,m["header"].end.y)+12.0*u
+    var big: float = s.x*0.068
+    var width: float = s.x-pad*2.0
+    # measure: every row on one line (a long prompt may take two)
+    var sizes: Array = []
+    var lines: Array = []
+    var total: float = big*0.5
+    for row in rows:
+        var base: float = big*float(row["s"])
+        var wrap: int = 2 if rows.size() == 1 or float(row["s"]) < 0.7 else 1
+        var size: float = _fit_lines(str(row["t"]),base,width*0.92,wrap)
+        var n: int = 2 if STYLE.text_width(str(row["t"]),size) > width*0.92 else 1
+        sizes.append(size)
+        lines.append(n)
+        total += size*1.32*float(n)
+    var plate := Rect2(pad,top,width,total)
+    draw_rect(plate,Color(0.01,0.012,0.03,0.82),true)
+    var edge: Color = Color(rows[0]["c"])
+    draw_rect(plate,edge,false,2.5*u)
+    var y: float = top+big*0.25
+    for i in range(rows.size()):
+        y += float(sizes[i])*1.05
+        _wrapped(Vector2(pad*1.4,y),str(rows[i]["t"]),float(sizes[i]),width-pad*0.8,Color(rows[i]["c"]),int(lines[i]),HORIZONTAL_ALIGNMENT_CENTER)
+        y += float(sizes[i])*(0.27+1.32*float(int(lines[i])-1))
+
+## A big arrow that circles the CAR on screen and points to the exercise, with the distance. It moves
+## with the car and the camera, so it can never stay stuck to one edge, and it stays in the middle of
+## the picture, away from the on-screen controls. Hidden inside the exercise zone (the ring is there).
+func _draw_nav(s: Vector2, u: float) -> void:
+    if controller == null or tutorial.phase != "active":
+        return
+    var nav: Dictionary = controller.call("nav_state")
+    if nav.is_empty() or bool(nav["in_zone"]):
         return
     var cam: Camera3D = get_viewport().get_camera_3d()
     if cam == null:
         return
-    var t2: Vector2 = target
-    var p3 := Vector3(t2.x,0.5,t2.y)
-    var behind: bool = cam.is_position_behind(p3)
-    var sp: Vector2 = cam.unproject_position(p3)
-    var inner: Rect2 = Rect2(Vector2.ZERO,s).grow(-s.x*0.09)
-    if not behind and inner.has_point(sp):
-        return
-    var centre: Vector2 = s*0.5
-    var dir: Vector2 = (sp-centre)
-    if behind:
-        dir = -dir
-    if dir.length() < 1.0:
-        dir = Vector2(0,-1)
-    dir = dir.normalized()
-    var half: Vector2 = inner.size*0.5
-    var k: float = minf(half.x/maxf(absf(dir.x),0.0001),half.y/maxf(absf(dir.y),0.0001))
-    var at: Vector2 = centre+dir*k*0.92
-    var nrm := Vector2(-dir.y,dir.x)
-    var size: float = 26.0*u
+    var sc: Dictionary = controller.call("nav_screen",cam,nav)
+    var car: Vector2 = sc["car"]
+    var dir: Vector2 = sc["dir"]
+    var radius: float = minf(s.x,s.y)*0.23
+    var at: Vector2 = car+dir*radius
+    var lo := Vector2(s.x*0.10,maxf(_actions_bottom+s.y*0.20,s.y*0.30))
+    var hi := Vector2(s.x*0.90,maxf(lo.y+1.0,s.y*0.52))
+    at = Vector2(clampf(at.x,lo.x,hi.x),clampf(at.y,lo.y,hi.y))
+    var dir2: Vector2 = (at-car)
+    dir2 = dir2.normalized() if dir2.length() > 1.0 else dir
+    var nrm := Vector2(-dir2.y,dir2.x)
+    var size: float = 44.0*u
     var pulse: float = 0.6+0.4*sin(_clock*5.0)
-    var col := Color(0.35,0.95,1.0,0.65+0.35*pulse)
-    var tri := PackedVector2Array([at+dir*size,at-dir*size*0.6+nrm*size*0.8,at-dir*size*0.6-nrm*size*0.8])
+    var col := Color(0.35,0.95,1.0,0.70+0.30*pulse)
+    var tri := PackedVector2Array([at+dir2*size,at-dir2*size*0.55+nrm*size*0.85,at-dir2*size*0.55-nrm*size*0.85])
+    draw_colored_polygon(PackedVector2Array([tri[0]+dir2*3.0*u,tri[1]+nrm*3.0*u,tri[2]-nrm*3.0*u]),Color(0,0,0,0.55))
     draw_colored_polygon(tri,col)
-    var label: String = "%d m" % int(round(target_dist))
-    STYLE.text(self,at-dir*size*1.9-Vector2(size*1.5,-size*0.3),label,22.0*u,Color(1,1,1,0.95),HORIZONTAL_ALIGNMENT_CENTER,size*3.0,true)
+    var label: String = "%d m" % int(round(float(nav["dist"])))
+    var lsize: float = 34.0*u
+    # the distance sits just beyond the arrow tip (away from the car), kept on screen
+    var lpos: Vector2 = at+dir2*size*1.55+Vector2(0.0,lsize*0.35)
+    lpos.x = clampf(lpos.x,size*2.2,s.x-size*2.2)
+    lpos.y = clampf(lpos.y,lo.y,hi.y+size)
+    STYLE.text(self,lpos-Vector2(size*2.0,0.0),label,lsize,Color(1,1,1,0.97),HORIZONTAL_ALIGNMENT_CENTER,size*4.0,true)
 
 # ---------------------------------------------------------------------- toast
 
@@ -297,6 +353,50 @@ func _draw_overlay(s: Vector2, u: float) -> void:
     var blink: float = 0.55+0.45*sin(_clock*4.0)
     STYLE.text(self,Vector2(s.x*0.05,s.y*0.92),tap,STYLE.fit_size(tap,34.0*u,s.x*0.9),
         Color(1,1,1,blink),HORIZONTAL_ALIGNMENT_CENTER,s.x*0.9,true)
+
+## Full-size first card: what the controls are (labels over the REAL touch targets) and how the
+## lessons work. The car stands still; a tap (or 14 s) starts lesson 1.
+func _draw_welcome(s: Vector2, u: float) -> void:
+    draw_rect(Rect2(Vector2.ZERO,s),Color(0.004,0.005,0.012,0.88),true)
+    var title: String = TUTORIAL.txt(TUTORIAL.WELCOME_TITLE)
+    var ts: float = STYLE.fit_size(title,s.x*0.075,s.x*0.9)
+    STYLE.text(self,Vector2(s.x*0.05,s.y*0.10),title,ts,STYLE.PINK,HORIZONTAL_ALIGNMENT_CENTER,s.x*0.9,true)
+    var body: String = TUTORIAL.txt(TUTORIAL.WELCOME_BODY)
+    var bs: float = _fit_lines(body,s.x*0.048,s.x*0.86,3)
+    _wrapped(Vector2(s.x*0.07,s.y*0.16),body,bs,s.x*0.86,STYLE.WHITE,3,HORIZONTAL_ALIGNMENT_CENTER)
+    if touch != null:
+        var geo: Dictionary = touch._layout()
+        var pulse: float = 0.55+0.45*sin(_clock*4.0)
+        var col := Color(1.0,0.92,0.35,0.6+0.4*pulse)
+        var w: float = 4.0*u
+        var lab: Dictionary = TUTORIAL.WELCOME_LABELS
+        var c: Vector2 = geo["joystick_center"]
+        var radius: float = float(geo["joystick_radius"])
+        draw_arc(c,radius*1.15,0.0,TAU,64,col,w,true)
+        _label(TUTORIAL.txt(lab["steer"]),Vector2(c.x+radius*0.3,c.y-radius*1.5),s,u)
+        _outline(PackedVector2Array(geo["gas_shape"]),col,w,6.0*u)
+        var gas: Rect2 = geo["gas"]
+        _label(TUTORIAL.txt(lab["gas"]),Vector2(gas.get_center().x,gas.position.y-s.y*0.03),s,u)
+        var brake: Rect2 = geo["brake"]
+        _outline(TOUCH.brake_shape(brake),col,w,6.0*u)
+        _label(TUTORIAL.txt(lab["brake"]),Vector2(brake.get_center().x-s.x*0.05,brake.position.y-s.y*0.03),s,u)
+        var drift: Rect2 = geo["drift"]
+        draw_rect(drift.grow(5.0*u),col,false,w)
+        _label(TUTORIAL.txt(lab["drift"]),Vector2(drift.get_center().x,drift.position.y-s.y*0.03),s,u)
+    var tap: String = TUTORIAL.txt(TUTORIAL.TAP_TEXT)
+    var blink: float = 0.55+0.45*sin(_clock*4.0)
+    STYLE.text(self,Vector2(s.x*0.05,s.y*0.30),tap,STYLE.fit_size(tap,s.x*0.075,s.x*0.9),
+        Color(1,1,1,blink),HORIZONTAL_ALIGNMENT_CENTER,s.x*0.9,true)
+
+## A readable label plate centred on `at`, kept inside the screen.
+func _label(text: String, at: Vector2, s: Vector2, u: float) -> void:
+    var size: float = STYLE.fit_size(text,s.x*0.048,s.x*0.34)
+    var w: float = STYLE.text_width(text,size)+size*1.2
+    var x: float = clampf(at.x-w*0.5,s.x*0.02,s.x*0.98-w)
+    var plate := Rect2(x,at.y-size*1.05,w,size*1.5)
+    draw_rect(plate,Color(0.01,0.012,0.03,0.90),true)
+    draw_rect(plate,Color(1.0,0.92,0.35,0.9),false,2.0*u)
+    STYLE.text(self,Vector2(x,at.y),text,size,STYLE.WHITE,HORIZONTAL_ALIGNMENT_CENTER,w,true)
 
 func _schematic(l: Dictionary, area: Rect2, u: float) -> void:
     var kind: String = str(l["kind"])

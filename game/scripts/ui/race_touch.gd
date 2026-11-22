@@ -19,6 +19,10 @@ var handbrake: float = 0.0
 var active_joystick: bool = false
 var overlay_visible: bool = false
 var contacts: Dictionary = {}
+## Optional gate set by a game mode (the Park tutorial): while it returns true a NEW press is ignored
+## (a full-screen card is up and the car is frozen), releases are always processed. Independent of the
+## order in which nodes receive input, so a tap that dismisses a card can never become a pedal press.
+var press_blocker: Callable = Callable()
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -88,6 +92,8 @@ func _zone_at(pos: Vector2, size_override: Vector2 = Vector2.ZERO) -> String:
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         var touch: InputEventScreenTouch = event
+        if touch.pressed and press_blocker.is_valid() and bool(press_blocker.call()):
+            return
         if touch.pressed:
             var zone: String = _zone_at(touch.position)
             if zone == "camera":

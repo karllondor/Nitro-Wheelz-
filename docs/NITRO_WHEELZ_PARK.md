@@ -59,3 +59,24 @@ fallback for Polish letters on the device). Eights and the long route are proven
 trajectories; a scripted DRIVER that drifts a full eight on the real model was not built, so "a human can drift the eights with the starter car" is NOT proven.
 Found by CI (the test ran with the RYU-32 in the garage): with full lock + full throttle (the digital touch controls) the RYU-32 does NOT hold a donut (45 % of a circle in 20 s), the E30 and the Lada do - the V8 needs throttle modulation, so the Park suits the starter cars and the RYU-32 is the hard mode; the tests now pin the car.
 Open owner decisions: pad outline / size / cone positions, the exact exercise thresholds, whether the white Lada (N20) should be the starter car here.
+
+## v0.1.39 tutorial bugfix (issue #27, owner phone QA c7082510153) - what changed and why
+The first real-phone test of v0.1.37 failed at lesson 6/10 (DONUT LEFT): the lesson could not be completed, the arrow pointed the same way, the distance looked frozen, the first
+instructions were missed. Findings (reproduced in the engine with real touch events; regression test `tests/park_navigation_test.gd`, which FAILS when the old code is put back):
+1. **Root cause: dead and stuck controls after a schematic.** `park_controller.gd` switched the touch layer OFF while a schematic was up (donut left / right, both eights, the route) and
+   nothing switched it on again. From lesson 6 on GAS, stick and handbrake did nothing, and whatever was pressed at that moment stayed pressed (probe: thumbs released during the schematic, then
+   `throttle=1.0 steer=-0.69 contacts=2` forever): the car circled by itself. The touch layer is now never disabled; the car is frozen by `freezes()`, and a new `press_blocker` in
+   `race_touch.gd` ignores NEW presses while a card is up and for the frame after it was dismissed (a touch also arrives as an emulated mouse press that dismisses the card first, then
+   the same touch would hit a pedal). Releases are always processed, so a thumb lifted during a card is released.
+2. **Dead timeout.** The 8 s auto-dismiss of the schematic ran inside the physics tick, which does not run while the car is frozen. The controller now feeds the card clock every frame
+   (`tick_overlay`): schematic 8 s, welcome card 14 s.
+3. **The player was never told WHERE the exercise is** (a cone 109 m west on a 340 m pad). New: a banner under the action buttons (large type) says `JEDŹ DO PIERŚCIENIA / 109 m NA LEWO`, then inside
+   the exercise zone `JESTEŚ NA MIEJSCU - KRĄŻ W LEWO ↺` plus the percentage of the circle; a big arrow **circles the car on screen** towards the exercise (it used to sit on the screen border, i.e. on top of the
+   joystick or the handbrake lever), with the distance beyond its tip; a **ring** (radius of the exercise) is painted on the pavement round the cone (teal far, gold inside the zone, greener as the circle
+   fills); a **dashed guide line** runs from the car to the ring while the car is far; the light beacon stays. Distance, side (ahead / left / right / behind the car) and arrow direction are recomputed from the
+   live car every frame (`nav_state()`, `nav_screen()`), never cached.
+4. **Welcome card** before lesson 1 (full size, labels over the REAL touch targets, tap to start or 14 s). Only when the tutorial starts at lesson 1; CONTINUE n/10 does not repeat it.
+5. **Wrong way** (circling the cone the other way by more than a quarter of the wanted angle) gives the hint "Kręć w LEWO - przeciwnie do ruchu wskazówek zegara".
+6. A calm line "Jedź wzdłuż niebieskiej linii na asfalcie" after 25 s of wandering far from the exercise.
+Unchanged: SKIP / FREE DRIVE (SKIP clears rings and line), movable cones, the Park layout and its 80 cones, the detectors' tolerances, the cameras, the physics modes, no stars.
+**Not explained:** the "129 m exactly" the owner's recording reportedly showed for 75 s. In the engine the label follows the car every tick; the video itself was not available here. If it still looks frozen in the next recording, I need that frame sequence.

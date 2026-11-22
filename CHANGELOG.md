@@ -1,3 +1,11 @@
+## [0.1.39] — NITRO WHEELZ PARK tutorial bugfix (TEST BUILD)
+Issue #27 (owner phone QA c7082510153), branch `agent/claude/issue-27-tutorial-bugfix` = v0.1.38 + this. Doc: docs/NITRO_WHEELZ_PARK.md (section "v0.1.39 tutorial bugfix"); handoff: docs/dev/handoffs/issue-27-tutorial-bugfix-20261122-claude.md.
+- ROOT CAUSE fixed: the touch layer was switched off during every exercise schematic and never back on (dead GAS / stick / handbrake from lesson 6/10, the pressed state stuck). New press blocker in `race_touch.gd` instead (ignores NEW presses while a card is up and the frame after it was dismissed; releases always work).
+- The 8 s schematic timeout never ran while the car was frozen: the card clock now runs every frame.
+- Navigation: big banner (WHERE the exercise is: distance + side, then what to do inside the zone), an arrow that circles the car, a ring on the pavement round the cone, a dashed guide line, distance / side recomputed from the live car each frame, wrong-way hint, wandering hint.
+- Full-size welcome card (labels over the real touch targets) before lesson 1; the lesson card shows number + title, the instruction is the big banner.
+- New test: park_navigation_test (real touch events: no dead / stuck controls, live navigation and arrow, rings, a real donut completes DONUT LEFT and advances to 7/10, wrong way / far / straight never count); screenshot tool tests/capture_park_tutorial_ux.gd. Android versionCode 39 / versionName 0.1.39. NOT RUN: the tutorial on a phone.
+
 ## [0.1.38] — Physics modes ARCADE_PLUS / REAL_POWER_TEST, white Lada N20B20, Android start screen (TEST BUILD, one version)
 Issue #25 (owner dispatch NW-START-20261122-B, #26 c7081190249). Branches `agent/claude/issue-25-physics-cplus-a` + `agent/claude/issue-25-android-splash` merged into one release branch. Docs: docs/PHYSICS_MODES.md, docs/ANDROID_START_SCREEN.md, docs/CAR_PROFILES.md; handoff: docs/dev/handoffs/issue-25-physics-modes-20261122-claude.md.
 - ARCADE_PLUS (default): the approved arcade handling and the same 0-100 km/h, each car's implausibly low top speed lifted to a per-car target (red 200, white 200, E30 220, RYU-32 225 km/h; PROPOSED, not owner-approved); bit-identical below 100.8 km/h (golden trace + an 8 s identity trace per car).

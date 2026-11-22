@@ -260,8 +260,25 @@ func _run() -> void:
     var hints: Array = []
     t.hint_shown.connect(func(h: String): hints.append(h))
     t.start(0)
+    # v0.1.39: the very first start shows the full-size WELCOME card (car frozen) before lesson 1;
+    # it ends by a tap or by itself (the clock runs even though the car is frozen).
+    if t.phase != "welcome" or not t.freezes_car() or t.lesson_index != 0:
+        _fail("starting at lesson 1 must show the welcome card first (phase %s)" % t.phase)
+        return
+    for k in range(240*5):
+        t.tick_overlay(DT)
+    if t.phase != "welcome":
+        _fail("the welcome card must stay up for the whole of its time, not vanish after 5 s")
+        return
+    for k in range(240*10):
+        t.tick_overlay(DT)
     if t.phase != "active" or t.freezes_car():
-        _fail("the GAS lesson starts active, not frozen")
+        _fail("the welcome card did not end by itself (phase %s): a card must never stay up forever" % t.phase)
+        return
+    t.start(0)
+    t.dismiss_intro()
+    if t.phase != "active" or t.freezes_car():
+        _fail("the GAS lesson starts active, not frozen, once the welcome card is dismissed")
         return
     var st := {"pos":Vector2.ZERO,"speed_kmh":0.0,"drift_angle":0.0,"steer":0.0,"gas":1.0,"brake":0.0,"handbrake":0.0}
     for k in range(240*3):
@@ -459,8 +476,12 @@ func _run() -> void:
     if race.park == null or race.park.tutorial == null or race.park.guide == null:
         _fail("TUTORIAL mode must create the tutorial and its guide")
         return
-    if race.park.tutorial.lesson_index != 0 or race.park.tutorial.phase != "active":
-        _fail("a fresh tutorial starts with the GAS lesson")
+    if race.park.tutorial.lesson_index != 0 or race.park.tutorial.phase != "welcome":
+        _fail("a fresh tutorial starts with the welcome card, then the GAS lesson")
+        return
+    race.park.tutorial.dismiss_intro()
+    if race.park.tutorial.phase != "active":
+        _fail("the tap must dismiss the welcome card")
         return
     if str(ProjectSettings.get_setting("nitro/park_mode","free")) != "free":
         _fail("the mode must be consumed so the next visit does not inherit it")

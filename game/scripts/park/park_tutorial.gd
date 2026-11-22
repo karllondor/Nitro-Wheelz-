@@ -62,6 +62,32 @@ const LESSONS: Array[Dictionary] = [
 const SUCCESS_TEXT: Array[Dictionary] = [
     {"pl":"DOBRZE!","en":"GOOD!"},{"pl":"ŚWIETNIE!","en":"GREAT!"},{"pl":"TAK TRZYMAJ!","en":"KEEP IT UP!"}]
 const CONE_TEXT: Dictionary = {"pl":"Spokojnie, pachołek jest lekki. Spróbuj jeszcze raz.","en":"Easy, the cone is light. Try again."}
+## Welcome card before the very first lesson (full size, tap to start; also starts by itself).
+const WELCOME_TITLE: Dictionary = {"pl":"WITAJ W NITRO WHEELZ PARK","en":"WELCOME TO NITRO WHEELZ PARK"}
+const WELCOME_BODY: Dictionary = {
+    "pl":"Lekcje przechodzą dalej same, gdy wykonasz ćwiczenie. POMIŃ możesz w każdej chwili.",
+    "en":"Lessons advance by themselves when you do the exercise. You can SKIP at any time."}
+const WELCOME_LABELS: Dictionary = {
+    "steer":{"pl":"KIEROWNICA","en":"STEERING"},"gas":{"pl":"GAZ","en":"GAS"},
+    "brake":{"pl":"HAMULEC","en":"BRAKE"},"drift":{"pl":"RĘCZNY (DRIFT)","en":"HANDBRAKE (DRIFT)"}}
+const TAP_TEXT: Dictionary = {"pl":"DOTKNIJ, ABY ZACZĄĆ","en":"TAP TO START"}
+## Navigation texts (the exercise is somewhere on a 340 m pad: say WHERE it is).
+const NAV_GO: Dictionary = {"pl":"JEDŹ DO PIERŚCIENIA","en":"DRIVE TO THE RING"}
+const NAV_GO_EIGHT: Dictionary = {"pl":"JEDŹ DO PACHOŁKÓW","en":"DRIVE TO THE CONES"}
+const NAV_GO_ROUTE: Dictionary = {"pl":"JEDŹ NA POCZĄTEK TRASY","en":"DRIVE TO THE START OF THE ROUTE"}
+const NAV_SIDE: Dictionary = {
+    "ahead":{"pl":"PROSTO","en":"AHEAD"},"left":{"pl":"NA LEWO","en":"TO THE LEFT"},
+    "right":{"pl":"NA PRAWO","en":"TO THE RIGHT"},"behind":{"pl":"ZA TOBĄ","en":"BEHIND YOU"}}
+const NAV_HERE_LEFT: Dictionary = {"pl":"JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺","en":"YOU ARE THERE — CIRCLE LEFT ↺"}
+const NAV_HERE_RIGHT: Dictionary = {"pl":"JESTEŚ NA MIEJSCU — KRĄŻ W PRAWO ↻","en":"YOU ARE THERE — CIRCLE RIGHT ↻"}
+const NAV_HERE_EIGHT: Dictionary = {"pl":"JESTEŚ NA MIEJSCU — JEDŹ ÓSEMKĄ","en":"YOU ARE THERE — DRIVE THE EIGHT"}
+const NAV_HERE_ROUTE: Dictionary = {"pl":"JESTEŚ NA MIEJSCU — JEDŹ TRASĄ","en":"YOU ARE THERE — DRIVE THE ROUTE"}
+const NAV_LINE_HINT: Dictionary = {"pl":"Jedź wzdłuż niebieskiej linii na asfalcie.","en":"Follow the blue line on the asphalt."}
+const WRONG_WAY_LEFT: Dictionary = {"pl":"Kręć w LEWO — przeciwnie do ruchu wskazówek zegara.","en":"Circle LEFT — counter-clockwise."}
+const WRONG_WAY_RIGHT: Dictionary = {"pl":"Kręć w PRAWO — zgodnie z ruchem wskazówek zegara.","en":"Circle RIGHT — clockwise."}
+const OVERLAY_SECONDS: float = 8.0
+const WELCOME_SECONDS: float = 14.0
+const NAV_HINT_AFTER: float = 25.0
 const FINISHED_TEXT: Dictionary = {"pl":"Gotowe! Masz wszystkie lekcje. Jedź swobodnie.","en":"Done! All lessons complete. Drive freely."}
 
 signal lesson_started(index: int)
@@ -69,8 +95,14 @@ signal lesson_completed(index: int)
 signal hint_shown(text: String)
 signal tutorial_finished
 
-## "off" (skipped / free), "intro" (schematic overlay, car frozen), "active", "success", "finished"
+## "off" (skipped / free), "welcome" (full-size first card, car frozen), "intro" (schematic overlay,
+## car frozen), "active", "success", "finished"
 var phase: String = "off"
+var nav_hint_given: bool = false
+## Process frame in which a card was dismissed. A touch also arrives as an emulated mouse press that
+## can dismiss the card first, so the touch layer ignores new presses for this frame and the next.
+var dismissed_frame: int = -100
+var wrong_way_clock: float = 0.0
 var lesson_index: int = 0
 var phase_time: float = 0.0
 var lesson_time: float = 0.0
@@ -101,18 +133,29 @@ func lesson() -> Dictionary:
 func is_active() -> bool:
     return phase != "off" and phase != "finished"
 
-## True while the car must stand still (the schematic overlay is up).
+## True while the car must stand still (a full-screen card is up).
 func freezes_car() -> bool:
-    return phase == "intro"
+    return phase == "intro" or phase == "welcome"
 
-## Start the tutorial at lesson `from_index`.
+## True while a NEW touch press must not reach the pedals: a card is up, or one was just dismissed.
+func blocks_presses() -> bool:
+    return freezes_car() or Engine.get_process_frames()-dismissed_frame <= 1
+
+## Start the tutorial at lesson `from_index`. Starting at the very first lesson shows the
+## full-size welcome card first (controls + how the lessons work).
 func start(from_index: int = 0) -> void:
     PROGRESS.set_seen()
     if from_index >= LESSONS.size():
         phase = "finished"
         tutorial_finished.emit()
         return
-    _begin_lesson(clampi(from_index,0,LESSONS.size()-1))
+    var index: int = clampi(from_index,0,LESSONS.size()-1)
+    if index == 0:
+        _begin_lesson(0)
+        phase = "welcome"
+        phase_time = 0.0
+    else:
+        _begin_lesson(index)
 
 ## SKIP TUTORIAL: free practice, nothing is reset, nothing is gated.
 func skip() -> void:
@@ -134,6 +177,8 @@ func _begin_lesson(index: int) -> void:
     _t_hand = 0.0
     detector = _make_detector(lesson())
     phase = "intro" if bool(lesson()["schematic"]) else "active"
+    nav_hint_given = false
+    wrong_way_clock = 0.0
     lesson_started.emit(index)
 
 func _make_detector(l: Dictionary) -> RefCounted:
@@ -152,11 +197,24 @@ func _make_detector(l: Dictionary) -> RefCounted:
             return DET.Route.new(LAYOUT.route_path(1.5),float(e3["width"]),0.7,0.12)
     return null
 
-## The player tapped the schematic away (or it timed out): driving starts.
+## The player tapped the card / schematic away (or it timed out): driving starts.
 func dismiss_intro() -> void:
-    if phase == "intro":
+    if phase == "intro" or phase == "welcome":
         phase = "active"
         phase_time = 0.0
+        dismissed_frame = Engine.get_process_frames()
+
+## Clock of the full-screen cards. The physics tick does not run while the car is frozen,
+## so the controller feeds this every frame: the card can never stay up forever.
+func tick_overlay(dt: float) -> void:
+    if phase == "intro":
+        phase_time += dt
+        if phase_time > OVERLAY_SECONDS:
+            dismiss_intro()
+    elif phase == "welcome":
+        phase_time += dt
+        if phase_time > WELCOME_SECONDS:
+            dismiss_intro()
 
 func repeat_lesson() -> void:
     _begin_lesson(lesson_index)
@@ -167,10 +225,8 @@ func update(dt: float, st: Dictionary) -> void:
     match phase:
         "off", "finished":
             return
-        "intro":
-            phase_time += dt
-            if phase_time > 8.0:
-                dismiss_intro()
+        "intro", "welcome":
+            tick_overlay(dt)
             return
         "success":
             phase_time += dt
@@ -189,6 +245,14 @@ func update(dt: float, st: Dictionary) -> void:
     if idle_time > 15.0:
         idle_time = 0.0
         hint_shown.emit(txt(lesson()["hint"]))
+    if detector != null and detector.has_method("wrong_way") and bool(detector.wrong_way()):
+        wrong_way_clock += dt
+        if wrong_way_clock > 6.0:
+            wrong_way_clock = 0.0
+            var left: bool = str(lesson()["id"]) == "donut_left"
+            hint_shown.emit(txt(WRONG_WAY_LEFT if left else WRONG_WAY_RIGHT))
+    else:
+        wrong_way_clock = 0.0
     if done:
         PROGRESS.mark_completed(str(lesson()["id"]))
         _success_pick = (lesson_index)%SUCCESS_TEXT.size()

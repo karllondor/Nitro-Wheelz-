@@ -72,6 +72,10 @@ class Orbit extends RefCounted:
     func progress() -> float:
         return clampf(accumulated/need_rad,0.0,1.0)
 
+    ## The car has clearly circled the cone the OTHER way (more than a quarter of the wanted angle).
+    func wrong_way() -> bool:
+        return accumulated < -need_rad*0.25
+
     func drift_share() -> float:
         return time_drifting/maxf(time_in,0.001)
 
