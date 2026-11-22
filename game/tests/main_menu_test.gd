@@ -85,7 +85,8 @@ func _run() -> void:
         _fail("DEVELOPER needs the baseline-physics switch and the audio benchmark")
         return
     var report: String = menu.call("audio_benchmark")
-    if not report.contains("I4") or not report.contains("V8") or not report.contains("ms per second"):
+    # v0.1.36: the Lada engine is the 13B rotary (was an I4); the benchmark lists the engines of the cars.
+    if not report.contains("ROTARY") or not report.contains("V8") or not report.contains("ms per second"):
         _fail("Audio benchmark must report both engines: "+report)
         return
     menu.queue_free()

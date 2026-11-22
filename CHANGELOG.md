@@ -1,3 +1,14 @@
+## [0.1.36] — Feel + visuals batch, power-to-weight calibration, 13B rotary Lada (TEST BUILD, one version)
+Issue #25 (owner request 2026-11-22 after the driftit.app comparison), branch `agent/claude/feel-visuals-v0.1.36` = v0.1.35 + this. Table of every wish: docs/FEEL_VISUALS_v0.1.36.md; calibration: docs/CAR_PROFILES.md (ADR-010); handoff + before / after screenshots: docs/dev/handoffs/issue-25-20261122-claude.md.
+- GAS pedal is an L-shape with a wing above the brake (drawn and touched as one polygon; brake / handbrake / joystick unchanged).
+- Tyre marks: soft-edged shader, thinner, opacity 0.40 (was 0.50 hard-edged), oldest marks lighter.
+- Asphalt about twice as bright; cloud shadows 64 m patches with strength 0.26 (were 150 m / 0.55: the track suddenly went dark).
+- One NITRO WHEELZ inscription on every straight >= 45 m (max 4, never near the start line); advertising band on both barriers; concrete slabs on street-circuit shoulders.
+- Cars calibrated by power-to-weight (0-100 ~ 1/PS-per-tonne, top ~ cube root): anchor = red / white Lada 2106 with its Mazda 13B rotary (231 PS, ~1,150 kg est., 3.29 s / 127.8 km/h unchanged); the E30 (193 PS / 1,250 kg) is now slower: 4.29 s / 116.9 km/h (was identical to the Lada); RYU-32 unchanged (+9 % vs its target, inside the tolerance of its estimated mass).
+- Lada: `lada_13b.json` (handling bit-identical to the baseline + rotary engine sound: two rotors, two banks, 9,200 rpm, bridgeport lope, popping) and a 13B engine bay in the red GLB (four trumpets in a row). `lada_baseline.json` stays the benchmark file.
+- New tests: gas_pedal_shape_test, track_details_test, car_performance_test; evidence tool tests/capture_feel_v0136.gd; texture generator tools/art/make_track_textures.py.
+- Android versionCode 36 / versionName 0.1.36. NOT RUN: every phone check.
+
 ## [0.1.35] — Player card, one RACE SETUP flow, results table layout (TEST BUILD, one version)
 Issue #24 (owner request 2026-11-22), branch `agent/claude/profile-flow-v0.1.35` = everything of v0.1.34 + this. Flow, rules and limits: docs/PLAYER_PROFILE_FLOW.md; handoff + screenshots: docs/dev/handoffs/issue-24-20261122-claude.md.
 - Finish screen TOP RUNS: POINTS flush right, TIME beside it, STARS, then DRIVER and CAR with all the remaining room (text shrinks to fit instead of being cut).
