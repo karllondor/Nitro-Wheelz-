@@ -1,6 +1,6 @@
 {
   "id": "ryu32_factory",
-  "status": "CAR FACTORY TEST MODEL - not approved; shown only with DEVELOPER > CAR FACTORY TEST MODELS: ON. The procedural RYU-32 stays the default until the owner accepts this one.",
+  "status": "CAR FACTORY MODEL - the DEFAULT player-visible RYU-32 since v0.1.34 (owner decision 2026-11-22, ADR-009); the earlier procedural model is available with DEVELOPER > CAR FACTORY GLB CARS: OFF. The owner's visual review of the final look continues.",
   "source": "tools/car_factory/blender/build_ryu32.py (one GLB; CLEAN and LIVERY differ only in the paint material)",
   "glb": "res://assets/cars/ryu32/ryu32.glb",
   "wheel_radius_m": 0.33,

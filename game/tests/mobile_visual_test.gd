@@ -20,11 +20,13 @@ func _run() -> void:
         return
     var model: NitroDriveModel = race.get("model")
     var track: NitroDriftTrack = race.get("track")
-    var car: NitroLadaLowPoly = race.get("car_root") as NitroLadaLowPoly
+    var car: Node3D = race.get("car_root") as Node3D
     if car == null:
-        _fail("Race does not contain the procedural low-poly Lada")
+        _fail("Race does not contain the selected player car")
         return
-    if car.rolling_wheels.size() != 4 or car.front_wheels.size() != 2:
+    var rolling: Array = car.get("rolling_wheels")
+    var front: Array = car.get("front_wheels")
+    if rolling.size() != 4 or front.size() != 2:
         _fail("Wrong count of functional wheels")
         return
     var forward2: Vector2 = model.forward()
@@ -102,7 +104,7 @@ func _run() -> void:
         return
     race.queue_free()
     await process_frame
-    print("PASS: Lada wheels, physics/render forward alignment, road spawn, camera toggle and touch hit areas")
+    print("PASS: selected car wheels, physics/render forward alignment, road spawn, camera toggle and touch hit areas")
     quit(0)
 
 func _fail(message: String) -> void:

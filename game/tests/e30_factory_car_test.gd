@@ -181,8 +181,8 @@ func _checks() -> String:
     if worst < 0.01:
         return "Zoomed E30 leaves the garage card during the turn (margin %.3f)" % worst
     garage.call("_choose","red")
-    if not (garage.get_node("Cosmetic paint") as Button).disabled:
-        return "Cosmetics must be disabled for non-factory cars"
+    if (garage.get_node("Cosmetic paint") as Button).disabled:
+        return "All player-visible factory GLB cars must have PAINT controls"
     garage.queue_free()
     await process_frame
     root.size = old_size
