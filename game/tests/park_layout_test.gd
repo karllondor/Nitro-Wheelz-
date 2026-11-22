@@ -270,6 +270,7 @@ func _run() -> void:
     # ------------------------------------------------- the race scene on the Park
     ProjectSettings.set_setting("nitro/selected_track",LAYOUT.TRACK_PATH)
     ProjectSettings.set_setting("nitro/park_mode","free")
+    ProjectSettings.set_setting("nitro/car_variant","red")      # pinned: the garage choice persists between tests
     var race: Node3D = RACE.instantiate()
     root.add_child(race)
     await process_frame

@@ -449,6 +449,9 @@ func _run() -> void:
     ProjectSettings.set_setting("nitro/selected_track",LAYOUT.TRACK_PATH)
     ProjectSettings.set_setting("nitro/park_mode","tutorial")
     ProjectSettings.set_setting("nitro/park_reset",true)
+    # The garage choice persists between tests (CI runs them in one user dir): pin the
+    # weakest starter car so the real-input donut does not depend on what ran before.
+    ProjectSettings.set_setting("nitro/car_variant","e30")
     var race: Node3D = RACE.instantiate()
     root.add_child(race)
     await process_frame
@@ -493,7 +496,7 @@ func _run() -> void:
     race.park.tutorial.start(5)
     race.park.tutorial.dismiss_intro()
     var centre: Vector2 = LAYOUT.DONUT_LEFT
-    var model_car: String = CARS.selected()
+    var model_car: String = "e30"
     race.model.reset(centre-_orbit_offset_digital(model_car),0.0)
     race.model.velocity = race.model.forward()*(45.0/3.6)
     Input.action_press("steer_left")

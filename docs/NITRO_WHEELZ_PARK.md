@@ -57,4 +57,5 @@ triangles (environment excluded) + 80 cones in one draw call (80 x ~110 triangle
 Everything on a phone (touch prompts, readability of the card and the buttons at real size, the beacon and arrow, cone feel, free-drive feel, the font
 fallback for Polish letters on the device). Eights and the long route are proven FEASIBLE for a starter car by a path follower, and the detectors on synthetic
 trajectories; a scripted DRIVER that drifts a full eight on the real model was not built, so "a human can drift the eights with the starter car" is NOT proven.
+Found by CI (the test ran with the RYU-32 in the garage): with full lock + full throttle (the digital touch controls) the RYU-32 does NOT hold a donut (45 % of a circle in 20 s), the E30 and the Lada do - the V8 needs throttle modulation, so the Park suits the starter cars and the RYU-32 is the hard mode; the tests now pin the car.
 Open owner decisions: pad outline / size / cone positions, the exact exercise thresholds, whether the white Lada (N20) should be the starter car here.
