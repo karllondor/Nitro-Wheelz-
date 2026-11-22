@@ -1534,8 +1534,8 @@ func _adapt_finish(prep: Dictionary) -> void:
         piece.event_mode=event_mode
         piece.road_style=road_style
         piece.apply_region_style(descriptor())
-        road_root.add_child(piece)
         piece._apply_compiled(comp)
+        road_root.add_child(piece)
         last_eval["event_layout"]=piece.event_layout
         var drivable: bool = (closed and topology == "loop") or (not closed and topology == "route")
         track_ok = bool(ev["ok"]) and drivable

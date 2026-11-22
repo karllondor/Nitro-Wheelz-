@@ -42,11 +42,12 @@ func run() -> void:
     var path: String=b.DRIVE_PATH
     b.free()
     ProjectSettings.set_setting("nitro/selected_track",path)
-    var race=RACE.instantiate()
-    root.add_child(race)
-    race.set_physics_process(false)
-    check(race.track.event_layout.zones==club,"Builder/race parity")
     for variant in ["e30","blue"]:
+        ProjectSettings.set_setting("nitro/car_variant",variant)
+        var race=RACE.instantiate()
+        root.add_child(race)
+        race.set_physics_process(false)
+        check(race.track.event_layout.zones==club,"Builder/race parity")
         for wrong_side in [true,false]:
             race._restart()
             race.CARS.configure_model(race.model,variant)
@@ -82,7 +83,7 @@ func run() -> void:
             for tick in range(60):
                 race._physics_process(1.0/120)
             check(race.judge.technical==original,"parked farm")
-    race.free()
+        race.free()
     if failures.is_empty():
         print("PASS: Event workshop modes, save/load, both vehicle traces and wrong-edge control")
     else:

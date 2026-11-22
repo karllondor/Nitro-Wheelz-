@@ -110,3 +110,28 @@ jobs:
           name: Workshop-gameplay
           path: ${{ runner.temp }}/workshop/*.png
           if-no-files-found: error
+
+  workshop-device:
+    if: github.head_ref == 'agent/codex/issue-29-procedural-events'
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Nitro-Wheelz_v0.1.40_Android-debug
+          path: builds/android
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          script: bash tools/android_event_smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Workshop-Android-evidence
+          path: builds/event-android/
