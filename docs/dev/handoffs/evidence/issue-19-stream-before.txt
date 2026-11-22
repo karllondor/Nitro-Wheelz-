@@ -1,0 +1,4 @@
+tag=before loop route seed 3, 816 samples, crossing at sample 43 (0.1 m from the stream axis)
+before (sample 38): road height 15.47 m, water level 16.10 m (natural 16.10 m) -> water is 0.63 m ABOVE the road surface
+on (sample 43): road height 15.60 m, water level 16.39 m (natural 16.39 m) -> water is 0.79 m ABOVE the road surface
+after (sample 48): road height 15.75 m, water level 16.81 m (natural 16.81 m) -> water is 1.06 m ABOVE the road surface
