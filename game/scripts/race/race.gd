@@ -7,6 +7,9 @@ const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
+const SKID_SHADER = preload("res://assets/shaders/skid_marks.gdshader")
+## Half width of one tyre mark in metres (v0.1.35: 0.15, hard edged and dark).
+const SKID_HALF_WIDTH: float = 0.12
 const TOUCH = preload("res://scripts/ui/race_touch.gd")
 const PAUSE_VIEW = preload("res://scripts/ui/race_pause.gd")
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
@@ -85,7 +88,7 @@ var tyre_smoke: Array[CPUParticles3D] = []
 
 var skid_mesh: ImmediateMesh
 var skid_node: MeshInstance3D
-var skid_material: StandardMaterial3D
+var skid_material: ShaderMaterial
 var skid_segments: Array[PackedVector2Array] = []
 var skid_heights: Array[float] = []
 var last_left: Vector2 = Vector2.ZERO
@@ -358,11 +361,8 @@ func _make_cameras() -> void:
 
 func _make_tyre_marks() -> void:
     skid_mesh = ImmediateMesh.new()
-    skid_material = StandardMaterial3D.new()
-    skid_material.albedo_color = Color(0.02,0.02,0.03,0.50)
-    skid_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    skid_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-    skid_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+    skid_material = ShaderMaterial.new()
+    skid_material.shader = SKID_SHADER
     var marks := MeshInstance3D.new()
     marks.name = "Persistent skid marks"
     marks.mesh = skid_mesh
@@ -627,9 +627,16 @@ func _refresh_skid_mesh() -> void:
         var delta: Vector2 = b-a
         if delta.length_squared() < 0.0001:
             continue
-        var n: Vector2 = Vector2(-delta.y,delta.x).normalized()*0.15
-        for p in [a-n,b-n,a+n,a+n,b-n,b+n]:
+        var n: Vector2 = Vector2(-delta.y,delta.x).normalized()*SKID_HALF_WIDTH
+        # The oldest marks are a little lighter (they wear off); u runs across.
+        var age: float = float(si)/float(maxi(skid_segments.size()-1,1))
+        var tone := Color(1,1,1,lerpf(0.55,1.0,age))
+        var corners: Array = [[a-n,0.0],[b-n,0.0],[a+n,1.0],[a+n,1.0],[b-n,0.0],[b+n,1.0]]
+        for corner in corners:
+            var p: Vector2 = corner[0]
             skid_mesh.surface_set_normal(Vector3.UP)
+            skid_mesh.surface_set_uv(Vector2(float(corner[1]),0.0))
+            skid_mesh.surface_set_color(tone)
             skid_mesh.surface_add_vertex(Vector3(p.x,sy,p.y))
     skid_mesh.surface_end()
 

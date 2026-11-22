@@ -17,9 +17,14 @@ const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
 const SKY_SHADER = preload("res://assets/shaders/dusk_sky.gdshader")
 const CLOUD_SHADOW_SHADER = preload("res://assets/shaders/cloud_shadows.gdshader")
 const CLOUDS = preload("res://assets/surfaces/cloud_noise.png")
+const ROAD_LOGO = preload("res://assets/brand/road_logo.png")
+const BARRIER_ADS = preload("res://assets/surfaces/barrier_ads.png")
+const CONCRETE_SLABS = preload("res://assets/surfaces/concrete_slabs.png")
 # Night drift-park palette (approved gameplay reference: dark asphalt,
 # blue/white kerbs, earth verge, olive grass, cherry blossom).
-const ASPHALT_TINT := Color(1.0,0.99,1.04)
+# v0.1.36 (owner, driftit.app comparison): the asphalt is a bit lighter so the
+# car, the tyre marks and the kerbs read better (was Color(1.0,0.99,1.04)).
+const ASPHALT_TINT := Color(2.1,2.08,2.18)
 const LINE_COLOUR := Color(0.88,0.88,0.86)
 const KERB_BLUE := Color(0.10,0.33,0.80)
 const KERB_WHITE := Color(0.86,0.87,0.90)
@@ -56,6 +61,10 @@ var with_environment: bool = true
 ## Roadside trees and verge flowers. Off when a procedural world (3D builder
 ## tracks, v0.1.23) provides the scenery, so builder and race match.
 var with_props: bool = true
+## v0.1.36: track-side decoration that is part of the race look (barrier
+## advertising band, NITRO WHEELZ road inscription). Off for the quick
+## track-builder previews (build_from_samples), on everywhere else.
+var with_decor: bool = true
 var world: Node3D = null
 ## v0.1.25 terrain worlds: road height per centreline sample (empty = the
 ## legacy flat road at y = 0) and the open-route layout (start a little
@@ -278,6 +287,7 @@ func build_from_samples(samples: Array[Vector2], halfwidth: float, closed: bool,
     closed_loop = closed
     heights = sample_heights if sample_heights.size() == samples.size() else PackedFloat32Array()
     with_environment = environment
+    with_decor = environment
     centerline = samples.duplicate()
     left_edge.clear()
     right_edge.clear()
@@ -314,9 +324,11 @@ func _build_visuals() -> void:
         _build_environment()
     # Layering outward from the racing surface (brief: surface -> painted
     # line -> safety gap -> kerb -> outer gap -> barrier -> verge).
+    # v0.1.36: street circuits get concrete SLABS (visible joints = a cheap sense
+    # of scale and speed) instead of the asphalt texture tinted light.
     _add_corridor("Compacted shoulder",_shift_edge(left_edge,-VERGE_WIDTH),
-        _shift_edge(right_edge,VERGE_WIDTH),0.018,Color(1.9,1.9,1.95) if shoulder_concrete else runoff_tint,
-        ASPHALT if shoulder_concrete else DIRT,6.0)
+        _shift_edge(right_edge,VERGE_WIDTH),0.018,Color(1.0,1.0,1.03) if shoulder_concrete else runoff_tint,
+        CONCRETE_SLABS if shoulder_concrete else DIRT,6.0)
     _add_corridor("Single continuous driving surface",left_edge,right_edge,
         0.05,ASPHALT_TINT,ASPHALT,7.0)
     _build_kerbs()
@@ -330,6 +342,9 @@ func _build_visuals() -> void:
         _build_start_line(start_index,false)
         _build_start_line(finish_index,true)
     _build_barriers()
+    if with_decor:
+        _build_barrier_ads()
+        _build_road_logos()
     if with_props:
         _build_track_props()
     if with_environment:
@@ -932,6 +947,192 @@ func _build_verge_flowers(rng: RandomNumberGenerator) -> void:
     var quad := PlaneMesh.new()
     quad.size = Vector2.ONE
     _multimesh("Verge blossom clusters",quad,mat,xf,cols)
+
+# ---------------------------------------------------------- barrier advertising
+## v0.1.36 (owner, driftit.app comparison): a band of printed boards on the inner
+## face of both barriers ("advertising strip by the walls ... a sense of scale and
+## speed at a low cost"). One extra mesh, one draw call. Only names of this game
+## are printed (tools/art/make_track_textures.py). Reads left -> right for a driver.
+const AD_PANEL_M: float = 2.4          # one board; the texture holds four
+const AD_BOTTOM: float = 0.40
+const AD_HEIGHT: float = 0.60
+const AD_INSET: float = 0.012          # in front of the wall face (no z-fighting)
+
+func _build_barrier_ads() -> void:
+    var count: int = centerline.size()
+    if count < 4:
+        return
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var texture_len: float = AD_PANEL_M*4.0
+    for side in [-1.0,1.0]:
+        var run: float = 0.0
+        for i in range(_segment_count()):
+            var j: int = (i+1)%count
+            var n0: Vector2 = (right_edge[i]-left_edge[i]).normalized()
+            var n1: Vector2 = (right_edge[j]-left_edge[j]).normalized()
+            var p: Vector2 = (left_edge[i] if side < 0.0 else right_edge[i])+n0*side*(0.10-AD_INSET)
+            var q: Vector2 = (left_edge[j] if side < 0.0 else right_edge[j])+n1*side*(0.10-AD_INSET)
+            var seg: float = p.distance_to(q)
+            if seg < 0.001:
+                continue
+            # u grows with the driving direction on the left wall and against it
+            # on the right wall, so the writing is never mirrored.
+            var u0: float = run/texture_len
+            var u1: float = (run+seg)/texture_len
+            if side > 0.0:
+                u0 = -u0
+                u1 = -u1
+            var ya: float = hy(i)
+            var yb: float = hy(j)
+            var pa := Vector3(p.x,ya+AD_BOTTOM,p.y)
+            var pb := Vector3(p.x,ya+AD_BOTTOM+AD_HEIGHT,p.y)
+            var qa := Vector3(q.x,yb+AD_BOTTOM,q.y)
+            var qb := Vector3(q.x,yb+AD_BOTTOM+AD_HEIGHT,q.y)
+            var tri: Array = [[pa,Vector2(u0,1)],[qa,Vector2(u1,1)],[pb,Vector2(u0,0)],
+                [pb,Vector2(u0,0)],[qa,Vector2(u1,1)],[qb,Vector2(u1,0)]]
+            for v in tri:
+                st.set_normal(Vector3.UP)
+                st.set_uv(v[1])
+                st.add_vertex(v[0])
+            run += seg
+    var mat := StandardMaterial3D.new()
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.albedo_texture = BARRIER_ADS
+    mat.albedo_color = Color(0.86,0.86,0.9)
+    mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+    var band := MeshInstance3D.new()
+    band.name = "Barrier advertising band"
+    band.mesh = st.commit()
+    band.material_override = mat
+    band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(band)
+
+# ------------------------------------------------- NITRO WHEELZ road inscription
+## v0.1.36 (owner, driftit.app comparison): ONE clear NITRO WHEELZ inscription in
+## the middle of the asphalt on the longer straight sections, painted like road
+## markings (letters stand up in the driving direction, stretched along the road).
+const LOGO_MIN_STRAIGHT_M: float = 45.0
+const LOGO_MAX_COUNT: int = 4
+const LOGO_END_MARGIN_M: float = 28.0      # keep clear of the start / finish line
+const LOGO_STRAIGHT_TOLERANCE_DEG: float = 6.0
+const LOGO_HEIGHT: float = 0.064           # over the asphalt (0.05), under the edge lines (0.066)
+
+## Centre arc length (m) and painted size of every inscription on this track:
+## [{"arc": m, "width": across, "length": along}], longest straights first.
+func road_logo_spots(min_straight_m: float = LOGO_MIN_STRAIGHT_M, tolerance_deg: float = LOGO_STRAIGHT_TOLERANCE_DEG) -> Array:
+    var spots: Array = []
+    var n: int = centerline.size()
+    var segs: int = _segment_count()
+    if n < 4 or segs < 4 or arc_lengths.size() < n:
+        return spots
+    var runs: Array = []
+    var start: int = 0
+    var heading0: float = 0.0
+    for i in range(segs):
+        var d: Vector2 = centerline[(i+1)%n]-centerline[i]
+        if d.length_squared() < 0.0001:
+            continue
+        var h: float = atan2(d.y,d.x)
+        if i == start:
+            heading0 = h
+            continue
+        if absf(wrapf(h-heading0,-PI,PI)) > deg_to_rad(tolerance_deg):
+            runs.append([start,i])
+            start = i
+            heading0 = h
+    runs.append([start,segs])
+    var finish_arcs: Array[float] = [arc_lengths[0]]
+    if not closed_loop and finish_index > 0:
+        finish_arcs = [arc_lengths[start_index],arc_lengths[finish_index]]
+    for r in runs:
+        var a0: float = arc_lengths[int(r[0])]
+        var a1: float = arc_lengths[mini(int(r[1]),n-1)] if int(r[1]) < n else length_metres
+        var run_len: float = a1-a0
+        if run_len < min_straight_m:
+            continue
+        var mid: float = (a0+a1)*0.5
+        var ok: bool = true
+        for fa in finish_arcs:
+            var gap: float = absf(mid-fa)
+            if closed_loop:
+                gap = minf(gap,length_metres-gap)
+            if gap < LOGO_END_MARGIN_M:
+                ok = false
+        if not ok:
+            continue
+        var mi: int = clampi(int(r[0])+(int(r[1])-int(r[0]))/2,0,n-1)
+        var width: float = minf(halfwidths[mi]*2.0*0.70,9.6)
+        spots.append({"arc":mid,"width":width,"length":width*1.4,"run":run_len})
+    spots.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["run"]) > float(y["run"]))
+    return spots.slice(0,LOGO_MAX_COUNT)
+
+## Road point at an arc length: centre, unit vector across the road
+## (left -> right), surface height.
+func _road_at_arc(arc: float) -> Dictionary:
+    var n: int = centerline.size()
+    var segs: int = _segment_count()
+    var a: float = arc
+    if closed_loop:
+        a = fposmod(arc,length_metres)
+    var i: int = 0
+    for k in range(segs):
+        if arc_lengths[k] <= a:
+            i = k
+        else:
+            break
+    var j: int = (i+1)%n
+    var seg_len: float = maxf(centerline[i].distance_to(centerline[j]),0.001)
+    var t: float = clampf((a-arc_lengths[i])/seg_len,0.0,1.0)
+    var left: Vector2 = left_edge[i].lerp(left_edge[j],t)
+    var right: Vector2 = right_edge[i].lerp(right_edge[j],t)
+    return {"centre":(left+right)*0.5,"across":(right-left).normalized(),
+        "y":lerpf(hy(i),hy(j),t)}
+
+func _build_road_logos() -> void:
+    var mat := StandardMaterial3D.new()
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.albedo_texture = ROAD_LOGO
+    mat.albedo_color = Color(1,1,1,0.92)
+    mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+    mat.no_depth_test = false
+    var count: int = 0
+    for spot in road_logo_spots():
+        var arc: float = float(spot["arc"])
+        var width: float = float(spot["width"])
+        var length: float = float(spot["length"])
+        var st := SurfaceTool.new()
+        st.begin(Mesh.PRIMITIVE_TRIANGLES)
+        var slices: int = 6
+        var rows: Array = []
+        for k in range(slices+1):
+            var f: float = float(k)/float(slices)
+            var at: Dictionary = _road_at_arc(arc+(f-0.5)*length)
+            var c: Vector2 = at["centre"]
+            var ac: Vector2 = at["across"]
+            var y: float = LOGO_HEIGHT+float(at["y"])
+            # v = 0 is the top of the picture = the far end (driving direction).
+            rows.append([Vector3(c.x-ac.x*width*0.5,y,c.y-ac.y*width*0.5),
+                Vector3(c.x+ac.x*width*0.5,y,c.y+ac.y*width*0.5),1.0-f])
+        for k in range(slices):
+            var r0: Array = rows[k]
+            var r1: Array = rows[k+1]
+            var quad: Array = [[r0[0],Vector2(0,r0[2])],[r0[1],Vector2(1,r0[2])],
+                [r1[0],Vector2(0,r1[2])],[r1[1],Vector2(1,r1[2])]]
+            for idx in [0,2,1,1,2,3]:
+                st.set_normal(Vector3.UP)
+                st.set_uv(quad[idx][1])
+                st.add_vertex(quad[idx][0])
+        var mesh := MeshInstance3D.new()
+        mesh.name = "NITRO WHEELZ road inscription %d" % count
+        mesh.mesh = st.commit()
+        mesh.material_override = mat
+        mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        add_child(mesh)
+        count += 1
 
 func _build_cloud_shadows() -> void:
     # One transparent plane over the whole park: drifting cloud shadows
