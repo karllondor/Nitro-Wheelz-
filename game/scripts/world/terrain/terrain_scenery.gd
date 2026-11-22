@@ -21,6 +21,7 @@ const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const MODS = preload("res://scripts/world/scenery_modules.gd")
 const VEG_SHADER = preload("res://assets/shaders/terrain_vegetation.gdshader")
+const DEV_SETTINGS = preload("res://scripts/dev_settings.gd")
 const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
 const CITY_SHADER = preload("res://assets/shaders/city_facade.gdshader")
 
@@ -94,6 +95,7 @@ var counts: Dictionary = {}
 var city_kinds: Dictionary = {}           # chunk -> {block kind: count} (Japan City)
 var _meshes: Dictionary = {}
 var _veg_mat: ShaderMaterial
+var _veg_baked_mat: ShaderMaterial    # merged roadside planting: sway lever / phase baked in UV2
 var _shadow_mat: ShaderMaterial
 var _rock_mat: StandardMaterial3D
 var _city_mat: ShaderMaterial
@@ -113,6 +115,10 @@ func setup(w: NitroTerrainWorld) -> void:
     seed_value = sc if sc >= 0 else int(w.desc.get("terrain_seed",1))
     _veg_mat = ShaderMaterial.new()
     _veg_mat.shader = VEG_SHADER
+    _veg_baked_mat = ShaderMaterial.new()
+    _veg_baked_mat.shader = VEG_SHADER
+    _veg_baked_mat.set_shader_parameter("baked",1.0)
+    set_wind(float(DEV_SETTINGS.get_value("developer","vegetation_wind",1.0)))
     _shadow_mat = ShaderMaterial.new()
     _shadow_mat.shader = SHADOW_SHADER
     _shadow_mat.set_shader_parameter("core",Vector2(0.16,0.16))
@@ -127,6 +133,14 @@ func setup(w: NitroTerrainWorld) -> void:
     _city_mat.shader = CITY_SHADER
 
 # ------------------------------------------------------------------ build
+
+## Wind strength of the foliage sway (1 = the build's default, 0 = none). Both
+## vegetation materials follow it. DEVELOPER > VEGETATION WIND sets it.
+func set_wind(factor: float) -> void:
+    if _veg_mat != null:
+        _veg_mat.set_shader_parameter("sway",factor)
+    if _veg_baked_mat != null:
+        _veg_baked_mat.set_shader_parameter("sway",factor)
 
 func rebuild_all() -> void:
     STEPS.run_now(rebuild_steps())
@@ -513,7 +527,7 @@ func _roadside(node: Node3D, id: Vector2i, x0: float, z0: float, span: float, pe
         var mi := MeshInstance3D.new()
         mi.name = "Roadside planting"
         mi.mesh = merged
-        mi.material_override = _veg_mat
+        mi.material_override = _veg_baked_mat
         mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         mi.position = _chunk_centre
         if draw_range > 0.0:
@@ -543,6 +557,7 @@ func _merge_instances(groups: Dictionary, keys: Array) -> ArrayMesh:
     var nrm := PackedVector3Array()
     var col := PackedColorArray()
     var uv := PackedVector2Array()
+    var uv2 := PackedVector2Array()
     var idx := PackedInt32Array()
     for k in keys:
         var src: ArrayMesh = _species_mesh(str(k))
@@ -558,12 +573,19 @@ func _merge_instances(groups: Dictionary, keys: Array) -> ArrayMesh:
             var xf: Transform3D = (xs[n_i] as Transform3D).translated(-_chunk_centre)
             var ic: Color = cs[n_i]
             var base: int = pos.size()
+            # Issue #20: the foliage sway lever (the plant's own height above its
+            # root, in metres, after the instance scale) and the phase (from the
+            # plant's world position) are baked here; see terrain_vegetation.gdshader.
+            var inst_scale: float = (xs[n_i] as Transform3D).basis.get_scale().y
+            var root_pos: Vector3 = (xs[n_i] as Transform3D).origin
+            var phase: float = root_pos.x*0.045+root_pos.z*0.061
             for v in range(sp.size()):
                 pos.append(xf*sp[v])
                 nrm.append((xf.basis*sn[v]).normalized())
                 var vc: Color = sc[v]
                 col.append(Color(vc.r*ic.r,vc.g*ic.g,vc.b*ic.b,1.0))
                 uv.append(su[v])
+                uv2.append(Vector2(maxf(sp[v].y-0.25,0.0)*su[v].x*inst_scale,phase))
             for t in si:
                 idx.append(base+t)
     if pos.is_empty():
@@ -574,6 +596,7 @@ func _merge_instances(groups: Dictionary, keys: Array) -> ArrayMesh:
     out[Mesh.ARRAY_NORMAL] = nrm
     out[Mesh.ARRAY_COLOR] = col
     out[Mesh.ARRAY_TEX_UV] = uv
+    out[Mesh.ARRAY_TEX_UV2] = uv2
     out[Mesh.ARRAY_INDEX] = idx
     var mesh := ArrayMesh.new()
     mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,out)

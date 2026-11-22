@@ -253,6 +253,20 @@ func _dev_page() -> void:
         show_page("dev"))
     dbg_b.name = "Audio debug"
     STYLE.style_button(dbg_b,ui_unit,dbg_on)
+    # Issue #20: strength of the foliage sway (trees); lets a phone test tell wind
+    # from any other movement. DEFAULT 1.0 / HALF 0.5 / OFF 0.0.
+    var wind: float = float(load("res://scripts/dev_settings.gd").get_value("developer","vegetation_wind",1.0))
+    var wind_steps: Array = [1.0,0.5,0.0]
+    var wind_names: Array = ["DEFAULT","HALF","OFF"]
+    var wind_i: int = 0
+    for wi in range(wind_steps.size()):
+        if absf(float(wind_steps[wi])-wind) < 0.01:
+            wind_i = wi
+    var wind_b: Button = _big("VEGETATION WIND: "+str(wind_names[wind_i])+"\nTREE SWAY • TERRAIN TRACKS",func():
+        load("res://scripts/dev_settings.gd").set_value("developer","vegetation_wind",float(wind_steps[(wind_i+1)%wind_steps.size()]))
+        show_page("dev"))
+    wind_b.name = "Vegetation wind"
+    STYLE.style_button(wind_b,ui_unit,wind_i != 0)
     _big("ELEVATION PHYSICS ▶\nTERRAIN TRACKS",func(): show_page("elev")).name = "Elevation physics"
     # v0.1.32 mobile QA: touch / hitbox / input-order / FPS / wheel-angle
     # overlay in the Track Builder and the race.
