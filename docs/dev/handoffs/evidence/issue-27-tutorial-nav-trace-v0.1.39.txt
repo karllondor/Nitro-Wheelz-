@@ -1,0 +1,17 @@
+TRACE lesson 6/10 DONUT W LEWO - pilot starts at (0.0, 30.0) heading north, exercise at (-105.0, 0.0)
+TRACE t=  0.0s pos=(  -0.0,  30.0) heading=  -0 deg speed=  0 km/h | label=109 m side=left   angle= -74 | banner: 109 m   NA LEWO
+TRACE t=  2.0s pos=(  -9.5,  19.7) heading= -81 deg speed= 38 km/h | label= 98 m side=ahead  angle=  +2 | banner: 98 m   PROSTO
+TRACE t=  4.0s pos=( -30.1,  14.8) heading= -79 deg speed= 38 km/h | label= 76 m side=ahead  angle=  +0 | banner: 76 m   PROSTO
+TRACE t=  6.0s pos=( -50.9,  10.7) heading= -79 deg speed= 38 km/h | label= 55 m side=ahead  angle=  +0 | banner: 55 m   PROSTO
+TRACE t=  8.0s pos=( -71.7,   6.6) heading= -79 deg speed= 38 km/h | label= 34 m side=ahead  angle=  -0 | banner: 34 m   PROSTO
+TRACE ARRIVED in the exercise zone after 9.6 s: distance 17.0 m, banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t= 2.0s progress   0% in_zone=false banner: JEDŹ DO PIERŚCIENIA
+TRACE donut t= 4.0s progress   0% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t= 6.0s progress   0% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t= 8.0s progress   0% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t=10.0s progress   5% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t=12.0s progress  59% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t=14.0s progress  73% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut t=16.0s progress  95% in_zone=true banner: JESTEŚ NA MIEJSCU — KRĄŻ W LEWO ↺
+TRACE donut completed: true at 16.6 s, saved=true, toast=TAK TRZYMAJ!
+TRACE advanced to lesson 7/10 DONUT W PRAWO (phase intro), next exercise at (105.0, 0.0)
