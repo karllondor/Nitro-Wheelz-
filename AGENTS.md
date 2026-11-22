@@ -28,3 +28,6 @@ Keyboard and Xbox controller support by default, touch on mobile-target games. M
 ## Handoff response
 MODEL | BRANCH/COMMIT | FILES | TESTS (PASS/FAIL/NOT RUN) | DEVICE | EVIDENCE | APPROVED ART | BLOCKERS | NEXT ACTION
 
+
+## Nitro Wheelz shared work + conflict safety (2026-11-21)
+Before every new session on Nitro Wheelz, read [docs/dev/COORDINATION_PROTOCOL.md](docs/dev/COORDINATION_PROTOCOL.md), [docs/dev/WORK_STATE.json](docs/dev/WORK_STATE.json), and [docs/dev/REVIEW_2026-11-21.md](docs/dev/REVIEW_2026-11-21.md). Then inspect ALL open PRs and issues (especially unmerged PR #15 and #16/#18/#19/#20) before editing overlapping files. Claim the issue, work on an isolated branch, provide an issue-specific handoff, and only integrate after reviewed approval. No regression may be declared fixed only because automated headless tests pass. The old HANDOFF.md is a release summary, not a substitute for the per-task ledger.
