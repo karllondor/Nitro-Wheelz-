@@ -14,11 +14,16 @@ func _run() -> void:
         {"track_id":ID,"seconds":61.28,"score":7105,"stars":2,"date":"2026-11-19T10:41:00"},
         {"track_id":ID,"seconds":54.24,"score":2460,"stars":3,"date":"2026-11-19T10:42:00"}]
     var stamp: String = "2026-11-19T11:00:00"
-    var mine: Dictionary = {"track_id":ID,"seconds":61.92,"score":7680,"stars":2,"date":stamp}
+    var mine: Dictionary = {"track_id":ID,"seconds":61.92,"score":7680,"stars":2,"date":stamp,
+        "driver":"KARLL","car":"blue"}
     var laps: Array = [{"time":21.84,"score":2210},{"time":19.66,"score":2890},{"time":20.42,"score":2580}]
     var sm: Dictionary = RESULTS.summarize(ID,"QA",61.92,7680,2,prev,prev+[mine],stamp,{"laps":laps})
     if int(sm["rank"]) != 1 or not bool(sm["new_best"]) or int(sm["prior_best_score"]) != 7259:
         _fail("Best run by points must rank #1 and read NEW BEST: "+str(sm["rank"]))
+        return
+    if str((sm["this_run"] as Dictionary).get("driver","")) != "KARLL" \
+            or str((sm["this_run"] as Dictionary).get("car","")) != "blue":
+        _fail("Results must preserve the driver and exact car used for the run")
         return
     if int(sm["best_lap"]) != 1:
         _fail("Fastest lap must be lap 2")

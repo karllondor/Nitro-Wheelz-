@@ -13,6 +13,10 @@ class_name NitroRaceResults
 ## Everything is drawn with the HUD style (glass panels, accent neon).
 const STORAGE: String = "user://nitro_local_runs.json"
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const CARS = preload("res://scripts/vehicles/car_catalog.gd")
+const DRIVER = preload("res://scripts/player/driver_profile.gd")
+## Column order of the TOP RUNS table (owner decision 2026-11-22, issue #23).
+const TOP_RUN_COLUMNS: Array[String] = ["#","DRIVER","CAR","STARS","TIME","POINTS"]
 const GOOD := Color(0.36,0.95,0.58)
 const BAD := Color(1.0,0.45,0.45)
 const SILVER := Color(0.80,0.83,0.90)
@@ -70,14 +74,16 @@ static func read_runs() -> Array:
     return []
 
 static func save_run(track_id: String,seconds: float,score: int,stars: int,
-        laps: Array = [],date: String = "") -> bool:
+        laps: Array = [],date: String = "",driver_name: String = "",car_variant: String = "") -> bool:
     var runs: Array = read_runs()
     var record: Dictionary = {
         "track_id":track_id,
         "seconds":snappedf(seconds,0.01),
         "score":score,
         "stars":stars,
-        "date":date if not date.is_empty() else Time.get_datetime_string_from_system()
+        "date":date if not date.is_empty() else Time.get_datetime_string_from_system(),
+        "driver":DRIVER.clean(driver_name) if not driver_name.is_empty() else DRIVER.get_driver_name(),
+        "car":CARS.valid(car_variant) if not car_variant.is_empty() else CARS.selected()
     }
     if not laps.is_empty():
         record["laps"] = laps
@@ -158,11 +164,13 @@ static func summarize(track_id: String,track_name: String,seconds: float,score: 
             return int(a["score"]) > int(b["score"])
         return float(a["seconds"]) < float(b["seconds"]))
     var rank: int = -1
+    var current_record: Dictionary = {}
     for i in range(ranked.size()):
         var r: Dictionary = ranked[i]
         if str(r.get("date","")) == stamp and int(r["score"]) == score \
                 and absf(float(r["seconds"])-snappedf(seconds,0.01)) < 0.005:
             rank = i+1
+            current_record = r
             break
     var laps: Array = stats.get("laps",[])
     var best_lap: int = -1
@@ -176,7 +184,9 @@ static func summarize(track_id: String,track_name: String,seconds: float,score: 
         "new_best":previous.is_empty() or score > prior_best_score,
         "faster":seconds < prior_best_time,
         "rank":rank,"runs":ranked.size(),"top":ranked.slice(0,5),
-        "this_run":{"seconds":snappedf(seconds,0.01),"score":score,"stars":stars,"date":stamp},
+        "this_run":{"seconds":snappedf(seconds,0.01),"score":score,"stars":stars,"date":stamp,
+            "driver":str(current_record.get("driver",DRIVER.get_driver_name())),
+            "car":str(current_record.get("car",CARS.selected()))},
         "laps":laps,"best_lap":best_lap,"stats":stats
     }
 
@@ -193,7 +203,8 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     var stars: int = star_count(score,length_m)
     var previous: Array = track_runs(track_id)
     var stamp: String = Time.get_datetime_string_from_system()
-    var stored: bool = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp)
+    var stored: bool = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp,
+        DRIVER.get_driver_name(),CARS.selected())
     data = summarize(track_id,track_name,seconds,score,stars,previous,track_runs(track_id),stamp,stats)
     data["tiers"] = star_tiers(length_m)
     # Older stored runs were starred by time: re-star every row by points.
@@ -441,13 +452,15 @@ func _chips(r: Rect2, k: float, u: float) -> void:
 
 func _top_runs(r: Rect2, k: float, u: float) -> void:
     var c: Control = canvas
-    var y: float = _section(r,"YOUR TOP RUNS","THIS TRACK  •  BY POINTS",k)
+    var y: float = _section(r,"TOP RUNS","THIS TRACK  •  LOCAL  •  BY POINTS",k)
     var box := Rect2(r.position.x,y,r.size.x,r.end.y-y)
     STYLE.panel(c,box,u,18.0,0.0,false,0.0)
-    # Column positions (units of the 1000-wide design).
-    var cx: Array[float] = [30.0,150.0,480.0,700.0,810.0]
+    # Compact mobile ranking, owner's column order (2026-11-22, issue #23):
+    # DRIVER, CAR, STARS, TIME, POINTS. Historical runs with no driver / car
+    # remain honest (UNKNOWN), never silently attributed to the newly selected car.
+    var cx: Array[float] = [30.0,96.0,296.0,486.0,600.0,740.0]
     var hy: float = box.position.y+40.0*k
-    var heads: Array[String] = ["#","POINTS","TIME","","DATE"]
+    var heads: Array[String] = TOP_RUN_COLUMNS.duplicate()
     for i in range(heads.size()):
         STYLE.text(c,Vector2(box.position.x+cx[i]*k,hy),heads[i],20.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
     var rows: Array = (data["top"] as Array).duplicate()
@@ -473,13 +486,17 @@ func _top_runs(r: Rect2, k: float, u: float) -> void:
         if place <= 3:
             c.draw_circle(Vector2(box.position.x+52.0*k,row.get_center().y),24.0*k,Color(medal.r,medal.g,medal.b,0.22))
         STYLE.text(c,Vector2(box.position.x+cx[0]*k,ty),str(place),32.0*k,medal,HORIZONTAL_ALIGNMENT_CENTER,46.0*k)
-        STYLE.text(c,Vector2(box.position.x+cx[1]*k,ty),points(int(run["score"])),38.0*k,
-            STYLE.GOLD if mine else (STYLE.WHITE if place == 1 else Color(0.90,0.90,0.94)))
-        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),clock(float(run["seconds"])),30.0*k,
-            STYLE.GOLD if mine else STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,mine)
+        var driver: String = str(run.get("driver","UNKNOWN"))
+        var car_id: String = str(run.get("car",""))
+        var car_text: String = str(CARS.info(car_id)["short"]) if CARS.CARS.has(car_id) else "UNKNOWN"
+        STYLE.text(c,Vector2(box.position.x+cx[1]*k,ty),driver,26.0*k,
+            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,190.0*k,mine)
+        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),car_text,22.0*k,
+            STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,180.0*k,false)
         var n_st: int = int(run.get("stars",0))
         for si in range(3):
-            STYLE.star(c,Vector2(box.position.x+(cx[3]+14.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
-        var when: String = "THIS RUN" if mine else short_date(str(run.get("date","")))
-        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),when,22.0*k,STYLE.GOLD if mine else STYLE.DIM,
-            HORIZONTAL_ALIGNMENT_LEFT,-1.0,mine)
+            STYLE.star(c,Vector2(box.position.x+(cx[3]+12.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
+        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),clock(float(run["seconds"])),24.0*k,
+            STYLE.GOLD if mine else STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,130.0*k,mine)
+        STYLE.text(c,Vector2(box.position.x+cx[5]*k,ty),points(int(run["score"])),31.0*k,
+            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,240.0*k,mine)

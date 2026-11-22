@@ -5,6 +5,7 @@ class_name NitroSettingsPanel
 ## (owner audit P1) and the interface accent colour. Everything persists in
 ## user://nitro_settings.cfg through NitroHudStyle.
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const DRIVER = preload("res://scripts/player/driver_profile.gd")
 
 signal accent_changed(accent: String)
 
@@ -37,6 +38,29 @@ func build(scale: float, show_header: bool = true) -> void:
     sound_button.pressed.connect(toggle_sound)
     add_child(sound_button)
     _refresh_sound()
+    # The local driver name is used on every new score record.
+    var driver_row := HBoxContainer.new()
+    driver_row.name = "Driver name"
+    driver_row.add_theme_constant_override("separation",int(10.0*sc))
+    var driver_label := Label.new()
+    driver_label.text = "DRIVER"
+    driver_label.custom_minimum_size.x = 130.0*sc
+    driver_label.add_theme_font_override("font",STYLE.BOLD)
+    driver_label.add_theme_font_size_override("font_size",int(17.0*sc))
+    driver_row.add_child(driver_label)
+    var driver_input := LineEdit.new()
+    driver_input.name = "Driver input"
+    driver_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    driver_input.custom_minimum_size.y = 46.0*sc
+    driver_input.max_length = DRIVER.MAX_LENGTH
+    driver_input.text = DRIVER.get_driver_name()
+    driver_input.placeholder_text = "DRIVER NAME"
+    driver_input.text_submitted.connect(func(value: String) -> void:
+        driver_input.text = DRIVER.set_driver_name(value))
+    driver_input.focus_exited.connect(func() -> void:
+        driver_input.text = DRIVER.set_driver_name(driver_input.text))
+    driver_row.add_child(driver_input)
+    add_child(driver_row)
     for spec in [["engine","ENGINE"],["tyres","TYRES"],["fx","EFFECTS"],["music","MUSIC"]]:
         add_child(_volume_row(str(spec[0]),str(spec[1])))
     var accent_label := Label.new()
