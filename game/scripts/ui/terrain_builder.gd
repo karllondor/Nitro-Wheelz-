@@ -40,6 +40,7 @@ var archetype: String = "jp_sakura"
 var terrain_seed: int = 1
 var event_mode: String = "club"
 var topology: String = "loop"          # loop | route
+var road_style := "circuit"
 var route_start: Vector2i = Vector2i(-1,-1)
 var generated_key: String = ""
 
@@ -209,7 +210,9 @@ func _build_scene_nodes() -> void:
     camera.current = true
 
 func descriptor() -> Dictionary:
-    return CAT.descriptor(archetype,terrain_seed,-1,event_mode)
+    var desc:=CAT.descriptor(archetype,terrain_seed,-1,event_mode)
+    desc["road_style"]=road_style
+    return desc
 
 ## (Re)generate the landscape for the current selection. new_seed = true
 ## rolls a new terrain seed ("NEW LANDSCAPE").
@@ -501,6 +504,7 @@ func _build_ui() -> void:
         y3,row_h,left,width,"")
     _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
         ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
+    _button(build_box,"Practice","_cycle_event",Rect2(left,y3-gap-row_h*0.95,width*0.32,row_h*0.85),"EVENT")
     var mw: float = width*0.30
     _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y3-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
     var top: float = header_rect.end.y+s.y*0.006
@@ -597,6 +601,7 @@ func _refresh_titles() -> void:
         gen.text = "NEW LANDSCAPE ↻" if generated_key == "%s/%d" % [archetype,terrain_seed] else "GENERATE TERRAIN"
         STYLE.style_button(gen,ui_unit,is_pending())
     if buttons.has("DRAW"):
+        buttons["EVENT"].text=TRACK.EVENT_LAYOUT.MODES.get(event_mode,"Practice")
         STYLE.style_button(buttons["DRAW"],ui_unit,mode == "draw" and not pan_mode)
         if buttons.has("MOVE"):
             STYLE.style_button(buttons["MOVE"],ui_unit,pan_mode)
@@ -673,12 +678,17 @@ func _pick_landscape(a: String) -> void:
     archetype = a
     _refresh_titles()
 
+func _cycle_event() -> void:
+    var modes:=["practice","club","pro"]
+    _pick_event(modes[(modes.find(event_mode)+1)%3])
+
 func _pick_event(e: String) -> void:
     event_mode = e
     if world != null:
         world.desc["event_mode"] = e
         if world.scenery != null:
             world.scenery._build_venue()
+        _after_edit()
     _refresh_titles()
     _save_draft()
 
@@ -1194,11 +1204,12 @@ func _flash(c: Vector2i, ok: bool) -> void:
     flash_time = 0.6
 
 func _snapshot() -> Dictionary:
-    return {"links":grid.snapshot(),"topology":topology,"route_start":route_start}
+    return {"links":grid.snapshot(),"style":road_style,"topology":topology,"route_start":route_start}
 
 func _restore(s: Dictionary) -> void:
     grid.restore(s["links"])
     topology = str(s["topology"])
+    road_style=s["style"]
     route_start = s["route_start"]
 
 func _push_undo() -> void:
@@ -1248,6 +1259,7 @@ func _after_edit() -> void:
 func _toggle_topology() -> void:
     _push_undo()
     topology = "route" if topology == "loop" else "loop"
+    road_style="road" if topology=="route" else "circuit"
     if topology == "route":
         # A closed loop becomes a route by opening it at its start tile.
         var ro: Dictionary = TT.route_order(grid)
@@ -1284,6 +1296,7 @@ func _close_loop() -> void:
         prev = c2
     grid.link(prev,b)
     topology = "loop"
+    road_style="circuit"
     _after_edit()
     _status("LOOP CLOSED WITH %d NEW TILES" % path.size(),true)
 
@@ -1386,13 +1399,15 @@ func _rebuild_preview() -> void:
             continue
         var hw := PackedFloat32Array()
         hw.resize(samples.size())
-        hw.fill(GRID.WIDTH_M*0.5)
+        hw.fill((12.0 if road_style=="road" else GRID.WIDTH_M)*0.5)
         var h: PackedFloat32Array = _draped_heights(samples,closed)
         var piece: NitroDriftTrack = TRACK.new()
         piece.name = "Road piece %d" % index
         piece.with_props = false
+        piece.event_mode=event_mode
+        piece.road_style=road_style
         piece.apply_region_style(descriptor())
-        piece.build_from_samples(samples,GRID.WIDTH_M*0.5,closed,"terrain_preview_%d" % index,false,h)
+        piece.build_from_samples(samples,(12.0 if road_style=="road" else GRID.WIDTH_M)*0.5,closed,"terrain_preview_%d" % index,false,h)
         road_root.add_child(piece)
         index += 1
 
@@ -1405,7 +1420,7 @@ func _draped_heights(samples: Array[Vector2], closed: bool) -> PackedFloat32Arra
     var n: int = samples.size()
     var raw := PackedFloat32Array()
     raw.resize(n)
-    var hw: float = GRID.WIDTH_M*0.5
+    var hw: float = (12.0 if road_style=="road" else GRID.WIDTH_M)*0.5
     for i in range(n):
         var a: Vector2 = samples[(i-1+n)%n] if (closed or i > 0) else samples[i]
         var b: Vector2 = samples[(i+1)%n] if (closed or i < n-1) else samples[i]
@@ -1516,9 +1531,12 @@ func _adapt_finish(prep: Dictionary) -> void:
         piece.name = "Race road"
         piece.with_props = false
         piece.with_environment = false
+        piece.event_mode=event_mode
+        piece.road_style=road_style
         piece.apply_region_style(descriptor())
         road_root.add_child(piece)
         piece._apply_compiled(comp)
+        last_eval["event_layout"]=piece.event_layout
         var drivable: bool = (closed and topology == "loop") or (not closed and topology == "route")
         track_ok = bool(ev["ok"]) and drivable
     _update_status()
@@ -1555,6 +1573,8 @@ func _update_status() -> void:
     var gmax: float = float(last_eval.get("max_grade",0.0))*100.0
     if not bool(last_eval.get("ok",false)):
         _status("RED: "+", ".join(PackedStringArray(cls.get("reasons",[]))),false)
+    elif not last_eval.get("event_layout",{}).get("warnings",[]).is_empty():
+        _status(str(last_eval.event_layout.warnings[0]),false)
     elif topology == "loop" and not closed:
         _status("%d m • MAX GRADE %.1f %% • CONNECT THE ENDS OR CLOSE LOOP" % [length,gmax],false)
     elif topology == "route" and closed:
@@ -1737,6 +1757,9 @@ func _open_tracks() -> void:
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     col.add_theme_constant_override("separation",int(10*ui_unit))
     scroll.add_child(col)
+    _dialog_button(col,"EVENT WORKSHOP  •  TEST ROUTE",func():
+        _close_dialog()
+        _open_saved("res://tracks/event_workshop_29.json"))
     if list.is_empty():
         var none := Label.new()
         none.text = "NO SAVED TERRAIN TRACKS YET\nDRAW A ROAD AND TAP SAVE"
@@ -1804,6 +1827,7 @@ func _load_draft() -> void:
         terrain_seed = int(w.get("terrain_seed",1))
         event_mode = str(w.get("event_mode","club"))
     topology = str(raw.get("topology","loop"))
+    road_style=str(w.get("road_style","road" if topology=="route" else "circuit"))
     var rs: Array = raw.get("route_start",[-1,-1])
     route_start = Vector2i(int(rs[0]),int(rs[1]))
     for t in raw.get("tiles",[]):
@@ -1830,9 +1854,10 @@ func load_track_file(path: String) -> bool:
     if not bool(lg.get("ok",false)):
         return false
     topology = "loop" if bool(lg["closed"]) else "route"
+    road_style=str(raw.get("road_style","road" if topology=="route" else "circuit"))
     var order: Array = lg["order"]
     route_start = order[0] if not order.is_empty() else Vector2i(-1,-1)
     stage = "build"
-    loaded_path = path
+    loaded_path = path if path.begins_with("user://") else ""
     loaded_name = str(raw.get("name","")).to_upper()
     return true

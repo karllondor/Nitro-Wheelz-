@@ -57,6 +57,17 @@ static func generate(track, mode: String) -> Dictionary:
             start = s
             radians = 0
         radians += curvature*(s-float(track.arc_lengths[i-1]))
+    var accepted: Array[Dictionary]=[]
+    for z in zones:
+        var ok:=true
+        for car in ["e30","blue"]:
+            if not preload("res://scripts/events/event_probe.gd").verify(track,z,mode,car):
+                warnings.append("%d m: ease bend or widen road (%s)" % [int(z.a),car])
+                ok=false
+                break
+        if ok:
+            accepted.append(z)
+    layout.zones=accepted
     return layout
 
 static func _add(zones: Array[Dictionary],kind: String,a: float,b: float,d: float,band: float,turn: int,pace: float) -> void:

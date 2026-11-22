@@ -257,3 +257,5 @@ Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/
 | Builder stills (partial chain, generated loop, race on built loop) | Xvfb + llvmpipe 720x1600 | RENDERED, NOT DEVICE | tests/capture_visuals.gd |
 | Synth engine offline render (9 s launch/drift/impact/coast) | Linux container | RENDERED, NOT LISTENED ON DEVICE | spectral check only |
 | Android look, frame rate, touch, smoke/scenery cost, builder finger feel, audio on speakers | Physical Android | NOT RUN | install CI APK v0.1.13 |
+
+#29 workshop • Local Godot 4.7.2: PASS for mode switching, Builder/race save parity, E30 and RYU-32 real race ticks at opposite edges, points isolation while parked. Physical Android device, sustained touch handling and performance: owner QA pending. See Issue #29 for exact CI and artifact.
