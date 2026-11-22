@@ -8,6 +8,18 @@ const SYNTH = preload("res://scripts/audio/engine_synth.gd")
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 const PHYS_DEV = preload("res://scripts/world/terrain/physics_dev.gd")
 const TERRAIN_TRACK = preload("res://scripts/world/terrain/terrain_track.gd")
+const PROFILE = preload("res://scripts/player/driver_profile.gd")
+const PROGRESS = preload("res://scripts/player/player_progress.gd")
+const AVATAR = preload("res://scripts/ui/avatar.gd")
+## v0.1.35 flow (owner: "garage: no track, track: no car" was confusing): ONE
+## RACE SETUP page (track + car + DRIVE) joins the track list and the garage.
+##   main DRIVE -> setup;  setup TRACK -> track list (pick -> back to setup);
+##   setup CAR -> garage (back -> setup);  garage TRACK -> track list (pick ->
+##   back to the garage);  profile track -> setup (then the garage for the car).
+## Scene changes remember where to land via ProjectSettings:
+##   nitro/boot_page    first page of the menu after the scene loads (consumed);
+##   nitro/track_return "setup" | "garage": where a picked track goes next;
+##   nitro/garage_return "main" | "setup": the garage's BACK target.
 ## Player main menu (owner audit P2): four clear choices — DRIVE, GARAGE,
 ## TRACK BUILDER, SETTINGS — each opening its own page; tools for testing
 ## (controller diagnostics) live under DEVELOPER. Portrait-first sizes,
@@ -22,6 +34,9 @@ var ui_unit: float = 1.0
 var page: VBoxContainer
 var page_name: String = ""
 var status_label: Label
+## Tests / tools: do not really change scene; the request is recorded instead.
+var navigate_enabled: bool = true
+var last_scene: String = ""
 
 func _ready() -> void:
     STYLE.ensure_settings()
@@ -65,7 +80,12 @@ func _ready() -> void:
     stamp.add_theme_font_size_override("font_size",int(15*ui_unit))
     stamp.add_theme_color_override("font_color",STYLE.DIM)
     column.add_child(stamp)
-    show_page("main")
+    var start: String = str(ProjectSettings.get_setting("nitro/boot_page","main"))
+    ProjectSettings.set_setting("nitro/boot_page","main")
+    # First launch (real game only): ask for the player's name before anything else.
+    if get_tree().get_script() == null and not PROFILE.has_profile():
+        start = "welcome"
+    show_page(start)
 
 func _clear_page() -> void:
     for child in page.get_children():
@@ -78,6 +98,9 @@ func show_page(which: String) -> void:
     page_name = which
     match which:
         "drive": _drive_page()
+        "setup": _setup_page()
+        "profile": _profile_page()
+        "welcome": _welcome_page()
         "build": _build_page()
         "settings": _settings_page()
         "dev": _dev_page()
@@ -89,9 +112,10 @@ func show_page(which: String) -> void:
             break
 
 func _main_page() -> void:
-    var drive: Button = _big("DRIVE",func(): show_page("drive"),true)
+    _profile_chip()
+    var drive: Button = _big("DRIVE",func(): show_page("setup"),true)
     drive.name = "DRIVE"
-    _big("GARAGE",func(): _go("res://scenes/garage.tscn")).name = "GARAGE"
+    _big("GARAGE",func(): _open_garage("main")).name = "GARAGE"
     _big("TRACK BUILDER",func(): show_page("build")).name = "TRACK BUILDER"
     _big("SETTINGS",func(): show_page("settings")).name = "SETTINGS"
     var hint := Label.new()
@@ -123,7 +147,7 @@ func _drive_page() -> void:
     for t in TRACKS:
         var best: int = _best(str(t[2]))
         var label: String = str(t[0])+("\nBEST %s PTS" % RESULTS.points(best) if best > 0 else "\nNO RUN YET")
-        var b: Button = _big(label,_race.bind(str(t[1])))
+        var b: Button = _big(label,_pick_track.bind(str(t[1])))
         b.name = "Track "+str(t[2])
         _move(b,list)
     var mine: Array[Dictionary] = saved_tracks()
@@ -136,7 +160,7 @@ func _drive_page() -> void:
         var best2: int = _best(str(t["id"]))
         var label2: String = "★ %s • %d m\n%s" % [str(t["name"]).to_upper(),int(t["length"]),
             "BEST %s PTS" % RESULTS.points(best2) if best2 > 0 else "NO RUN YET"]
-        var drive: Button = _big(label2,_race.bind(str(t["path"])))
+        var drive: Button = _big(label2,_pick_track.bind(str(t["path"])))
         drive.name = "Track custom"
         drive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         # Player tracks are framed in the accent colour (built-ins neutral).
@@ -148,7 +172,7 @@ func _drive_page() -> void:
         _move(edit_b,row)
     _section(list,"QUICK")
     _move(_big("RANDOM TRACK",_random_track),list).name = "Track random"
-    _small("◀  BACK",func(): show_page("main"))
+    _small("◀  BACK",_leave_track_list).name = "Back"
 
 ## Every valid player track on this device: [{path, id, name, length, time}].
 static func saved_tracks() -> Array[Dictionary]:
@@ -360,6 +384,238 @@ func audio_benchmark() -> String:
             str(CARS.engine(v).get("layout","?")),ms,ms/10.0])
     return "\n".join(lines)
 
+# ------------------------------------------------- v0.1.35 profile + flow
+
+## Every track that can be loaded again: built-in circuits + MY TRACKS.
+func _known_tracks() -> Array:
+    var out: Array = []
+    for t in TRACKS:
+        out.append({"id":str(t[2]),"name":str(t[0]),"path":str(t[1])})
+    for t2 in saved_tracks():
+        out.append({"id":str(t2["id"]),"name":str(t2["name"]).to_upper(),"path":str(t2["path"])})
+    return out
+
+## The track DRIVE would start now: this session's pick, else the last one the
+## player chose (saved), else SHIN-KAWA.
+static func current_track() -> String:
+    var chosen: String = str(ProjectSettings.get_setting("nitro/selected_track",""))
+    if chosen == "":
+        chosen = PROFILE.last_track()
+    if chosen == "" or not FileAccess.file_exists(chosen):
+        chosen = "res://tracks/shin_kawa_v2.json"
+    return chosen
+
+## Display name of a track file ("RANDOM TRACK" for a generated one).
+static func track_label(path: String) -> String:
+    for t in TRACKS:
+        if str(t[1]) == path:
+            return str(t[0])
+    for t2 in saved_tracks():
+        if str(t2["path"]) == path:
+            return str(t2["name"]).to_upper()
+    return "RANDOM TRACK"
+
+func _current_track() -> String:
+    return current_track()
+
+func _track_info(path: String) -> Dictionary:
+    for t in _known_tracks():
+        if str(t["path"]) == path:
+            return t
+    return {"id":"","name":"RANDOM TRACK","path":path}
+
+func _pick_track(path: String) -> void:
+    ProjectSettings.set_setting("nitro/selected_track",path)
+    PROFILE.set_last_track(path)
+    _after_track_pick()
+
+func _after_track_pick() -> void:
+    var back: String = str(ProjectSettings.get_setting("nitro/track_return","setup"))
+    ProjectSettings.set_setting("nitro/track_return","setup")
+    if back == "garage":
+        _go("res://scenes/garage.tscn")
+    else:
+        show_page("setup")
+
+func _leave_track_list() -> void:
+    var back: String = str(ProjectSettings.get_setting("nitro/track_return","setup"))
+    ProjectSettings.set_setting("nitro/track_return","setup")
+    if back == "garage":
+        _go("res://scenes/garage.tscn")
+    else:
+        show_page("setup")
+
+func _open_garage(from_page: String) -> void:
+    ProjectSettings.set_setting("nitro/garage_return",from_page)
+    _go("res://scenes/garage.tscn")
+
+func _open_track_list(from: String) -> void:
+    ProjectSettings.set_setting("nitro/track_return",from)
+    show_page("drive")
+
+## The profile picture + name + stars at the top of the main menu (opens the card).
+func _profile_chip() -> void:
+    var row := HBoxContainer.new()
+    row.name = "Player chip"
+    row.add_theme_constant_override("separation",int(12*ui_unit))
+    page.add_child(row)
+    var av: NitroAvatar = AVATAR.new()
+    av.name = "Avatar"
+    av.custom_minimum_size = Vector2(86,86)*ui_unit
+    av.set_look(PROFILE.avatar())
+    row.add_child(av)
+    var stars: int = PROGRESS.total_stars(PROGRESS.rows(_known_tracks()))
+    var chip: Button = _big("%s\n%s %d" % [PROFILE.get_driver_name().to_upper(),"★",stars]+" STARS",func(): show_page("profile"))
+    chip.name = "PROFILE"
+    chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    _move(chip,row)
+
+## RACE SETUP: the one place where track, car and DRIVE meet.
+func _setup_page() -> void:
+    _title("YOUR RACE")
+    var path: String = _current_track()
+    var info: Dictionary = _track_info(path)
+    var best: int = _best(str(info["id"])) if str(info["id"]) != "" else 0
+    var track_b: Button = _big("TRACK  ▸  %s\n%s" % [str(info["name"]),("BEST %s PTS" % RESULTS.points(best)) if best > 0 else "NO RUN YET"],
+        func(): _open_track_list("setup"))
+    track_b.name = "Setup track"
+    var car: String = CARS.selected()
+    var cinfo: Dictionary = CARS.info(car)
+    var car_b: Button = _big("CAR  ▸  %s\n%s • TAP TO CHANGE" % [str(cinfo["short"]),str(cinfo["paint"])],func(): _open_garage("setup"))
+    car_b.name = "Setup car"
+    var go: Button = _big("DRIVE",_race.bind(path),true)
+    go.name = "Setup drive"
+    _small("◀  BACK",func(): show_page("main")).name = "Back"
+
+## PLAYER CARD: avatar, name, stars, tracks driven (tap = load it, then pick a car).
+func _profile_page() -> void:
+    _title("PLAYER CARD")
+    var head := HBoxContainer.new()
+    head.name = "Card head"
+    head.add_theme_constant_override("separation",int(14*ui_unit))
+    page.add_child(head)
+    var av: NitroAvatar = AVATAR.new()
+    av.name = "Avatar"
+    av.custom_minimum_size = Vector2(150,150)*ui_unit
+    av.set_look(PROFILE.avatar())
+    head.add_child(av)
+    var col := VBoxContainer.new()
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    col.add_theme_constant_override("separation",int(8*ui_unit))
+    head.add_child(col)
+    var name_in := LineEdit.new()
+    name_in.name = "Player name"
+    name_in.text = PROFILE.get_driver_name()
+    name_in.max_length = PROFILE.MAX_LENGTH
+    name_in.placeholder_text = "YOUR NAME"
+    name_in.custom_minimum_size.y = 52.0*ui_unit
+    name_in.add_theme_font_size_override("font_size",int(24*ui_unit))
+    _style_input(name_in)
+    name_in.text_submitted.connect(func(v: String) -> void:
+        if PROFILE.is_valid_input(v):
+            name_in.text = PROFILE.set_driver_name(v))
+    name_in.focus_exited.connect(func() -> void:
+        if PROFILE.is_valid_input(name_in.text):
+            name_in.text = PROFILE.set_driver_name(name_in.text)
+        else:
+            name_in.text = PROFILE.get_driver_name())
+    col.add_child(name_in)
+    var rows: Array = PROGRESS.rows(_known_tracks())
+    var stars_l := Label.new()
+    stars_l.name = "Total stars"
+    stars_l.text = "★ %d STARS  •  %d TRACKS" % [PROGRESS.total_stars(rows),rows.size()]
+    stars_l.add_theme_font_override("font",STYLE.BOLD)
+    stars_l.add_theme_font_size_override("font_size",int(20*ui_unit))
+    stars_l.add_theme_color_override("font_color",STYLE.GOLD)
+    col.add_child(stars_l)
+    # Look: each button cycles one part of the character.
+    var look := HBoxContainer.new()
+    look.name = "Look"
+    look.add_theme_constant_override("separation",int(8*ui_unit))
+    page.add_child(look)
+    for part in [["skin","SKIN"],["hair","HAIR"],["style","STYLE"],["shirt","T-SHIRT"]]:
+        var lb := Button.new()
+        lb.name = "Look "+str(part[0])
+        lb.text = str(part[1])
+        lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        lb.custom_minimum_size.y = 56.0*ui_unit
+        lb.add_theme_font_size_override("font_size",int(17*ui_unit))
+        STYLE.style_button(lb,ui_unit)
+        lb.pressed.connect(func(): av.set_look(PROFILE.cycle_avatar(str(part[0]))))
+        look.add_child(lb)
+    var list: VBoxContainer = _scroll_list()
+    _section(list,"TRACKS DRIVEN  •  TAP TO DRIVE AGAIN" if not rows.is_empty() else "NO TRACK DRIVEN YET")
+    for r in rows:
+        var row: Dictionary = r
+        var label: String = "%s\n%s   %s  •  %s PTS" % [str(row["name"]),PROGRESS.star_text(int(row["best_stars"])),
+            RESULTS.clock(float(row["best_seconds"])),RESULTS.points(int(row["best_points"]))]
+        var b: Button = _big(label,_pick_track.bind(str(row["path"])))
+        b.name = "Driven "+str(row["id"])
+        _move(b,list)
+    _small("◀  BACK",func(): show_page("main")).name = "Back"
+
+## FIRST LAUNCH: the player card starts with a name.
+func _welcome_page() -> void:
+    _title("WELCOME, DRIVER")
+    var q := Label.new()
+    q.text = "WHAT SHOULD WE CALL YOU?"
+    q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    q.add_theme_font_size_override("font_size",int(20*ui_unit))
+    q.add_theme_color_override("font_color",STYLE.MUTED)
+    page.add_child(q)
+    var input := LineEdit.new()
+    input.name = "Welcome name"
+    input.max_length = PROFILE.MAX_LENGTH
+    input.placeholder_text = "YOUR NAME"
+    input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+    input.custom_minimum_size.y = 64.0*ui_unit
+    input.add_theme_font_size_override("font_size",int(28*ui_unit))
+    _style_input(input)
+    page.add_child(input)
+    var hint := Label.new()
+    hint.text = "%d – %d CHARACTERS  •  LETTERS, DIGITS, SPACE\nYOU CAN CHANGE IT AND DRESS YOUR DRIVER IN PROFILE" % [PROFILE.MIN_LENGTH,PROFILE.MAX_LENGTH]
+    hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hint.add_theme_font_size_override("font_size",int(15*ui_unit))
+    hint.add_theme_color_override("font_color",STYLE.DIM)
+    page.add_child(hint)
+    var go: Button = _big("CONTINUE",func(): _confirm_welcome(input),true)
+    go.name = "Welcome continue"
+    go.disabled = true
+    input.text_changed.connect(func(v: String) -> void: go.disabled = not PROFILE.is_valid_input(v))
+    input.text_submitted.connect(func(_v: String) -> void: _confirm_welcome(input))
+    _focus_later(input)
+
+## A readable text field in the menu style (glass fill, accent border, white text).
+func _style_input(le: LineEdit) -> void:
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color(0.07,0.06,0.11)
+    normal.border_color = STYLE.PINK_SOFT
+    normal.set_border_width_all(maxi(2,int(2.0*ui_unit)))
+    normal.set_corner_radius_all(int(12.0*ui_unit))
+    normal.content_margin_left = 14.0*ui_unit
+    normal.content_margin_right = 14.0*ui_unit
+    le.add_theme_stylebox_override("normal",normal)
+    var focus: StyleBoxFlat = normal.duplicate()
+    focus.border_color = STYLE.PINK
+    le.add_theme_stylebox_override("focus",focus)
+    le.add_theme_color_override("font_color",STYLE.WHITE)
+    le.add_theme_color_override("font_placeholder_color",STYLE.DIM)
+    le.add_theme_color_override("caret_color",STYLE.PINK)
+    le.add_theme_font_override("font",STYLE.BOLD)
+
+func _focus_later(c: Control) -> void:
+    await get_tree().process_frame
+    if is_instance_valid(c) and c.is_inside_tree():
+        c.grab_focus()
+
+func _confirm_welcome(input: LineEdit) -> void:
+    if not PROFILE.is_valid_input(input.text):
+        status_label.text = "NAME: AT LEAST %d LETTERS OR DIGITS" % PROFILE.MIN_LENGTH
+        return
+    PROFILE.set_driver_name(input.text)
+    show_page("main")
+
 func _title(txt: String) -> void:
     var l := Label.new()
     l.text = txt
@@ -405,11 +661,14 @@ func _random_track() -> void:
     var creator: Variant = load("res://scripts/world/track_generator.gd").new()
     var result: Dictionary = creator.generate(Time.get_ticks_usec())
     if bool(result.get("ok",false)):
-        _race(str(result["path"]))
+        _pick_track(str(result["path"]))
     else:
         status_label.text = "GENERATION FAILED: "+str(result.get("error","unknown"))
 
 func _go(scene: String) -> void:
+    last_scene = scene
+    if not navigate_enabled:
+        return
     if get_tree().get_script() == null and (scene.ends_with("race.tscn") or scene.ends_with("terrain_builder.tscn")):
         # v0.1.27: the loading card appears at once (no frozen menu while
         # the next screen is prepared).

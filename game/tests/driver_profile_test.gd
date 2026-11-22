@@ -2,7 +2,7 @@ extends SceneTree
 ## Owner decision 2026-11-22 (issue #23): a local driver name and a TOP RUNS table
 ## with the columns DRIVER | CAR | STARS | TIME | POINTS (selective port from PR #15,
 ## not merged).
-##  * the driver name is cleaned (spaces collapsed, <= 16 characters, DRIVER when
+##  * the driver name is cleaned (spaces collapsed, <= 14 characters, DRIVER when
 ##    empty) and saved locally; SETTINGS has the field and saves it;
 ##  * every new run stores the driver and the exact car; older runs without them
 ##    stay UNKNOWN (never backfilled with the current car); the run's rank / points
@@ -30,7 +30,7 @@ func _run() -> void:
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: driver profile - name cleaned (collapsed spaces, <= 16, DRIVER when empty) and saved locally, SETTINGS field saves it, new runs store driver + exact car, older runs stay UNKNOWN (not backfilled), TOP RUNS columns = DRIVER | CAR | STARS | TIME | POINTS, results screen fits portrait + landscape")
+    print("PASS: driver profile - name cleaned (collapsed spaces, <= 14, DRIVER when empty) and saved locally, SETTINGS field saves it, new runs store driver + exact car, older runs stay UNKNOWN (not backfilled), TOP RUNS columns = DRIVER | CAR | STARS | TIME | POINTS, results screen fits portrait + landscape")
     for _f in range(3):
         await process_frame
     quit(0)

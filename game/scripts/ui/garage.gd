@@ -4,6 +4,7 @@ extends Control
 const CAR = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
+const BOOT = preload("res://scripts/boot.gd")
 const LOGO = preload("res://assets/brand/nitro_wheelz_logo.svg")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const BACKDROP_SHADER = preload("res://assets/shaders/studio_backdrop.gdshader")
@@ -61,7 +62,7 @@ func _ready() -> void:
     # Card frame with the HUD's pink neon edge.
     var card := Panel.new()
     card.position = Vector2(s.x*0.045,s.y*0.180)
-    card.size = Vector2(s.x*0.91,s.y*0.455)
+    card.size = Vector2(s.x*0.91,s.y*0.40)
     card.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var frame := StyleBoxFlat.new()
     frame.bg_color = Color(0.05,0.045,0.07)
@@ -92,7 +93,7 @@ func _ready() -> void:
 
     var info := Label.new()
     info_label = info
-    info.position = Vector2(s.x*0.05,s.y*0.645)
+    info.position = Vector2(s.x*0.05,s.y*0.590)
     info.size = Vector2(s.x*0.90,s.y*0.035)
     info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     info.add_theme_font_size_override("font_size",int(15.0*sc))
@@ -100,7 +101,7 @@ func _ready() -> void:
     add_child(info)
 
     version_label = Label.new()
-    version_label.position = Vector2(s.x*0.05,s.y*0.680)
+    version_label.position = Vector2(s.x*0.05,s.y*0.625)
     version_label.size = Vector2(s.x*0.90,s.y*0.032)
     version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     version_label.add_theme_font_override("font",STYLE.BOLD)
@@ -114,20 +115,24 @@ func _ready() -> void:
     var bw: float = (0.90-gap*float(n-1))/float(n)
     for i in range(n):
         var v: String = CARS.ORDER[i]
-        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.718,bw,0.068,
+        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.663,bw,0.068,
             _choose.bind(v),sc)
         paint_buttons[v].name = "Car "+v
         paint_buttons[v].add_theme_font_size_override("font_size",int((18.0 if n <= 3 else (14.0 if n == 4 else 12.5))*sc))
     # Car Factory cosmetics (prototype): SIGNATURE resets to the authentic
     # look, PAINT and WHEELS cycle presets. Cosmetic only: never physics.
-    cosmetic_buttons["signature"] = _action("SIGNATURE",0.05,0.800,0.26,0.068,Callable(self,"_signature"),sc)
-    cosmetic_buttons["paint"] = _action("PAINT",0.33,0.800,0.30,0.068,Callable(self,"_next_paint"),sc)
-    cosmetic_buttons["wheels"] = _action("WHEELS",0.65,0.800,0.30,0.068,Callable(self,"_next_wheels"),sc)
+    cosmetic_buttons["signature"] = _action("SIGNATURE",0.05,0.738,0.26,0.068,Callable(self,"_signature"),sc)
+    cosmetic_buttons["paint"] = _action("PAINT",0.33,0.738,0.30,0.068,Callable(self,"_next_paint"),sc)
+    cosmetic_buttons["wheels"] = _action("WHEELS",0.65,0.738,0.30,0.068,Callable(self,"_next_wheels"),sc)
     for key in cosmetic_buttons.keys():
         cosmetic_buttons[key].name = "Cosmetic "+key
         cosmetic_buttons[key].add_theme_font_size_override("font_size",int(14.0*sc))
-    _action("BACK TO MENU",0.05,0.885,0.43,0.072,Callable(self,"_back"),sc)
-    _action("DRIVE",0.52,0.885,0.43,0.072,Callable(self,"_drive"),sc)
+    # v0.1.35: the track is choosable from the garage (owner: "from the garage
+    # you cannot pick a track"). The button shows the track DRIVE will use.
+    track_button = _action("TRACK  ▸  "+BOOT.track_label(BOOT.current_track()),0.05,0.812,0.90,0.062,Callable(self,"_pick_track"),sc)
+    track_button.name = "Garage track"
+    _action("BACK",0.05,0.885,0.43,0.072,Callable(self,"_back"),sc).name = "Garage back"
+    _action("DRIVE",0.52,0.885,0.43,0.072,Callable(self,"_drive"),sc).name = "Garage drive"
     _set_status()
 
 func _build_studio() -> void:
@@ -311,13 +316,32 @@ func _choose_red() -> void:
 func _choose_white() -> void:
     _choose("white")
 
+## Tests / tools: do not really change scene; the request is recorded instead.
+var navigate_enabled: bool = true
+var last_scene: String = ""
+var track_button: Button
+
+func _goto(scene: String) -> void:
+    last_scene = scene
+    if navigate_enabled:
+        get_tree().change_scene_to_file(scene)
+
+## BACK returns to where the garage was opened from (main menu or RACE SETUP).
 func _back() -> void:
-    get_tree().change_scene_to_file("res://scenes/boot.tscn")
+    var from_page: String = str(ProjectSettings.get_setting("nitro/garage_return","main"))
+    ProjectSettings.set_setting("nitro/garage_return","main")
+    ProjectSettings.set_setting("nitro/boot_page",from_page)
+    _goto("res://scenes/boot.tscn")
+
+## The track list, then back here.
+func _pick_track() -> void:
+    ProjectSettings.set_setting("nitro/track_return","garage")
+    ProjectSettings.set_setting("nitro/boot_page","drive")
+    _goto("res://scenes/boot.tscn")
 
 func _drive() -> void:
-    if not ProjectSettings.has_setting("nitro/selected_track"):
-        ProjectSettings.set_setting("nitro/selected_track","res://tracks/shin_kawa_v2.json")
-    get_tree().change_scene_to_file("res://scenes/race.tscn")
+    ProjectSettings.set_setting("nitro/selected_track",BOOT.current_track())
+    _goto("res://scenes/race.tscn")
 
 func _set_status() -> void:
     var info: Dictionary = CARS.info(active_variant)
@@ -404,4 +428,4 @@ func _action(caption: String,x: float,y: float,w: float,h: float,fn: Callable,sc
 
 func _unhandled_input(event: InputEvent) -> void:
     if event.is_action_pressed("ui_cancel"):
-        get_tree().change_scene_to_file("res://scenes/boot.tscn")
+        _back()

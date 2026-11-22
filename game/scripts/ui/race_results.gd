@@ -450,19 +450,48 @@ func _chips(r: Rect2, k: float, u: float) -> void:
         STYLE.text(c,Vector2(chip.position.x,chip.position.y+106.0*k),str(ch[0]),21.0*k,STYLE.MUTED,
             HORIZONTAL_ALIGNMENT_CENTER,chip.size.x,false)
 
+## Column positions of the TOP RUNS table in design units for a table `width`
+## units wide: POINTS flush right, then TIME, then STARS, and DRIVER / CAR share
+## everything that is left (DRIVER a bit more). Returned as left x + width per
+## column. tests/player_profile_test.gd checks that a 14-character name and car
+## label fit at the narrowest supported phone width.
+static func top_run_columns(width: float) -> Dictionary:
+    var right: float = width-24.0
+    var gap: float = 10.0
+    var points_w: float = 150.0
+    var time_w: float = 104.0
+    var stars_w: float = 96.0
+    var x_points: float = right-points_w
+    var x_time: float = x_points-gap-time_w
+    var x_stars: float = x_time-gap-stars_w
+    var x_driver: float = 80.0
+    var avail: float = x_stars-gap-x_driver
+    var driver_w: float = avail*0.56
+    var car_w: float = avail-driver_w-gap
+    return {"rank":22.0,"driver":x_driver,"driver_w":driver_w,"car":x_driver+driver_w+gap,"car_w":car_w,
+        "stars":x_stars,"stars_w":stars_w,"time":x_time,"time_w":time_w,"points":x_points,"points_w":points_w}
+
 func _top_runs(r: Rect2, k: float, u: float) -> void:
     var c: Control = canvas
     var y: float = _section(r,"TOP RUNS","THIS TRACK  •  LOCAL  •  BY POINTS",k)
     var box := Rect2(r.position.x,y,r.size.x,r.end.y-y)
     STYLE.panel(c,box,u,18.0,0.0,false,0.0)
     # Compact mobile ranking, owner's column order (2026-11-22, issue #23):
-    # DRIVER, CAR, STARS, TIME, POINTS. Historical runs with no driver / car
-    # remain honest (UNKNOWN), never silently attributed to the newly selected car.
-    var cx: Array[float] = [30.0,96.0,296.0,486.0,600.0,740.0]
+    # DRIVER, CAR, STARS, TIME, POINTS. POINTS sit flush right (owner, v0.1.35),
+    # TIME right-aligned next to it, and DRIVER / CAR share all the room that is
+    # left (a player name has at most NitroDriverProfile.MAX_LENGTH characters,
+    # a car label at most CAR_LABEL_MAX; a longer text shrinks to fit instead of
+    # being cut). Historical runs with no driver / car remain honest (UNKNOWN),
+    # never silently attributed to the newly selected car.
+    var lay: Dictionary = top_run_columns(box.size.x/k)
     var hy: float = box.position.y+40.0*k
     var heads: Array[String] = TOP_RUN_COLUMNS.duplicate()
+    var head_x: Array[float] = [float(lay["rank"]),float(lay["driver"]),float(lay["car"]),float(lay["stars"]),float(lay["time"]),float(lay["points"])]
+    var head_w: Array[float] = [46.0,float(lay["driver_w"]),float(lay["car_w"]),float(lay["stars_w"]),float(lay["time_w"]),float(lay["points_w"])]
     for i in range(heads.size()):
-        STYLE.text(c,Vector2(box.position.x+cx[i]*k,hy),heads[i],20.0*k,STYLE.DIM,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+        var right_aligned: bool = i >= 4
+        STYLE.text(c,Vector2(box.position.x+head_x[i]*k,hy),heads[i],20.0*k,STYLE.DIM,
+            HORIZONTAL_ALIGNMENT_RIGHT if right_aligned else HORIZONTAL_ALIGNMENT_LEFT,head_w[i]*k,false)
     var rows: Array = (data["top"] as Array).duplicate()
     var rank: int = int(data["rank"])
     var extra: bool = rank > rows.size()
@@ -485,18 +514,20 @@ func _top_runs(r: Rect2, k: float, u: float) -> void:
         var medal: Color = STYLE.GOLD if place == 1 else (SILVER if place == 2 else (BRONZE if place == 3 else STYLE.MUTED))
         if place <= 3:
             c.draw_circle(Vector2(box.position.x+52.0*k,row.get_center().y),24.0*k,Color(medal.r,medal.g,medal.b,0.22))
-        STYLE.text(c,Vector2(box.position.x+cx[0]*k,ty),str(place),32.0*k,medal,HORIZONTAL_ALIGNMENT_CENTER,46.0*k)
+        STYLE.text(c,Vector2(box.position.x+float(lay["rank"])*k,ty),str(place),32.0*k,medal,HORIZONTAL_ALIGNMENT_CENTER,46.0*k)
         var driver: String = str(run.get("driver","UNKNOWN"))
         var car_id: String = str(run.get("car",""))
         var car_text: String = str(CARS.info(car_id)["short"]) if CARS.CARS.has(car_id) else "UNKNOWN"
-        STYLE.text(c,Vector2(box.position.x+cx[1]*k,ty),driver,26.0*k,
-            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,190.0*k,mine)
-        STYLE.text(c,Vector2(box.position.x+cx[2]*k,ty),car_text,22.0*k,
-            STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,180.0*k,false)
+        var driver_size: float = STYLE.fit_size(driver,26.0*k,float(lay["driver_w"])*k,mine)
+        STYLE.text(c,Vector2(box.position.x+float(lay["driver"])*k,ty),driver,driver_size,
+            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,float(lay["driver_w"])*k,mine)
+        var car_size: float = STYLE.fit_size(car_text,22.0*k,float(lay["car_w"])*k,false)
+        STYLE.text(c,Vector2(box.position.x+float(lay["car"])*k,ty),car_text,car_size,
+            STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,float(lay["car_w"])*k,false)
         var n_st: int = int(run.get("stars",0))
         for si in range(3):
-            STYLE.star(c,Vector2(box.position.x+(cx[3]+12.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
-        STYLE.text(c,Vector2(box.position.x+cx[4]*k,ty),clock(float(run["seconds"])),24.0*k,
-            STYLE.GOLD if mine else STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,130.0*k,mine)
-        STYLE.text(c,Vector2(box.position.x+cx[5]*k,ty),points(int(run["score"])),31.0*k,
-            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_LEFT,240.0*k,mine)
+            STYLE.star(c,Vector2(box.position.x+(float(lay["stars"])+12.0+30.0*si)*k,row.get_center().y),12.0*k,si < n_st,u*0.6)
+        STYLE.text(c,Vector2(box.position.x+float(lay["time"])*k,ty),clock(float(run["seconds"])),24.0*k,
+            STYLE.GOLD if mine else STYLE.MUTED,HORIZONTAL_ALIGNMENT_RIGHT,float(lay["time_w"])*k,mine)
+        STYLE.text(c,Vector2(box.position.x+float(lay["points"])*k,ty),points(int(run["score"])),31.0*k,
+            STYLE.GOLD if mine else STYLE.WHITE,HORIZONTAL_ALIGNMENT_RIGHT,float(lay["points_w"])*k,mine)
