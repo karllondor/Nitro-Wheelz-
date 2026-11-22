@@ -1,3 +1,11 @@
+## [0.1.37] — NITRO WHEELZ PARK (open training pad + optional tutorial) (TEST BUILD)
+Issue #27 (owner dispatch 2026-11-22), branch `agent/claude/issue-27-nitro-wheelz-park` = v0.1.36 + this. Doc: docs/NITRO_WHEELZ_PARK.md; handoff + screenshots: docs/dev/handoffs/issue-27-20261122-claude.md; audit of the car performance (docs only): docs/CAR_PERFORMANCE_AUDIT_20261122.md.
+- New main-menu entry PARK: ONE big open paved surface (no walls, no collider, no lap / score / stars) with donut rings, a large and a small figure-eight, a long flattened eight (miniature drift circuit for starter cars), 80 orange cones that tip and slide and never touch the car, and the approved full NITRO WHEELZ logo painted flat in the middle (the existing SVG, unchanged, checked by a test).
+- START TUTORIAL (10 lessons judged by the real car and controls: GAS, steering, BRAKE, HANDBRAKE, first slide, donut left / right, large / small eight, the long route; automatic advance, schematic before a drill, highlights on the real touch targets, off-screen arrow, beacon, demonstration ghost, hints, saved progress) or FREE DRIVE = SKIP TUTORIAL on the same pavement; the pause menu toggles the tutorial; skipping keeps cones and paint where they are.
+- The full Exo 2 variable font is registered as glyph fallback: Polish letters (nicknames, lessons) render in the game's own typeface.
+- New tests: park_layout_test, park_tutorial_test; evidence tool tests/capture_park.gd; audit tool tests/car_performance_audit.gd + tools/perf/reference_model.py.
+- Android versionCode 37 / versionName 0.1.37. NOT RUN: every phone check. The layout (outline, dimensions, positions) is PROVISIONAL: not owner-approved.
+
 ## [0.1.36] — Feel + visuals batch, power-to-weight calibration, 13B rotary Lada (TEST BUILD, one version)
 Issue #25 (owner request 2026-11-22 after the driftit.app comparison), branch `agent/claude/feel-visuals-v0.1.36` = v0.1.35 + this. Table of every wish: docs/FEEL_VISUALS_v0.1.36.md; calibration: docs/CAR_PROFILES.md (ADR-010); handoff + before / after screenshots: docs/dev/handoffs/issue-25-20261122-claude.md.
 - GAS pedal is an L-shape with a wing above the brake (drawn and touched as one polygon; brake / handbrake / joystick unchanged).
