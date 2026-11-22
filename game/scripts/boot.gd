@@ -418,7 +418,7 @@ func _go(scene: String) -> void:
     if get_tree().get_script() == null and (scene.ends_with("race.tscn") or scene.ends_with("terrain_builder.tscn")):
         # v0.1.27: the loading card appears at once (no frozen menu while
         # the next screen is prepared).
-        var b: CanvasLayer = load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING")
+        var b: CanvasLayer = load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING",false,true)
         await get_tree().process_frame
         await get_tree().process_frame
     get_tree().change_scene_to_file(scene)
