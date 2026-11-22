@@ -1,3 +1,15 @@
+## [0.1.34] — Integration TEST build: four phone bugs, GLB cars by default, driver table, loading screen (TEST BUILD)
+Integration branch `agent/claude/integration-v0.1.34` = merges of the task branches below (each has its own handoff + evidence in `docs/dev/handoffs/`; nothing here is phone-verified; no PR was merged).
+- #18 open-route minimap: no false closing diagonal, START / FINISH markers, dot follows the real road (`race_hud.gd`).
+- #16 black discs at the rear wheels on the first drift: wheel geometry was correct; the tyre smoke (billboard `keep_scale = false` + vertex colour) drew its youngest particles black — fixed, plus DEVELOPER > DRIFT LAYER ISOLATION to prove it on the phone.
+- #19 Ojców stream over the asphalt: the water now follows the road (>= 2.2 m below the surface at every crossing, natural level elsewhere).
+- #20 sliding roadside bushes: merged roadside planting used the absolute terrain height as the sway lever (0.5 m on Ojców, ~2.3 m on Touge); fixed, tree sway unchanged; DEVELOPER > VEGETATION WIND.
+- Loading screen: the NITRO WHEELZ key art on the track loading card and as the boot splash (PNG, 0.8 s minimum).
+- #22 Car Factory GLB models are the DEFAULT for Lada RED / WHITE and RYU-32 (owner decision 2026-11-22, ADR-009), per-car PAINT / WHEELS / SIGNATURE from `car_factory_cosmetics.json`, RYU-32 stripes = a PAINT preset; DEVELOPER > CAR FACTORY GLB CARS (OFF = earlier procedural models). Selective port from PR #15 (not merged).
+- #23 local driver name + finish-screen TOP RUNS table: # | DRIVER | CAR | STARS | TIME | POINTS (owner's order); accessors renamed `get_driver_name` / `set_driver_name` (the PR #15 names are shadowed by Resource.get_name and returned null).
+- New tests: terrain_route_minimap_test, wheel_smoke_test, terrain_water_road_test, vegetation_stability_test, loading_screen_test, car_factory_default_test, driver_profile_test.
+- Android versionCode 34 / versionName 0.1.34. NOT RUN: every phone check (see the handoffs).
+
 ## [0.1.33] — AI-generated body test car "RYU-32 FLAME (AI TEST)" (TEST BUILD, not for release)
 Report: docs/car_factory/AI_BODY_PROTOTYPE.md (pipeline, licence status, known flaws).
 - New fifth garage car R32 • FLAME: a body generated with an image-to-3D service (flame livery baked into its texture) fitted to the RYU-32 footprint, tyres cut out, the wheel library's rotating RYU deep 5-spoke wheels on its hubs. Drives exactly like the RYU-32 (same handling profile, V8 sound, collision footprint); looks only. Always on (no DEVELOPER switch); falls back to the procedural coupe when the GLB is absent.
