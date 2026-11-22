@@ -162,7 +162,7 @@ func _snap_cameras() -> void:
 func _load_terrain() -> void:
     set_physics_process(false)
     var desc: Dictionary = track.pending_terrain
-    var b: NitroBusy = load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING TRACK")
+    var b: NitroBusy = load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING TRACK",false,true)
     var inf: Dictionary = load("res://scripts/world/terrain/terrain_catalog.gd").info(str(desc.get("archetype","")))
     b.set_text("LOADING TRACK","%s • %s" % [str(track.display_name).to_upper(),str(inf.get("name",""))])
     await get_tree().process_frame
