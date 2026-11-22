@@ -340,6 +340,10 @@ func _make_ui() -> void:
     hud.track_name = "SHIN-KAWA" if track.track_id=="shin_kawa_v2" else (
         "SHIN-KAWA FULL" if track.track_id=="shin_kawa_full_circuit" else track.display_name)
     hud.track_points = PackedVector2Array(track.centerline)
+    # Issue #18: an open route must not be drawn / measured as closed.
+    hud.closed_loop = track.closed_loop
+    hud.start_progress = 0.0 if track.closed_loop else float(track.arc_lengths[track.start_index])/maxf(track.length_metres,1.0)
+    hud.finish_progress = track.finish_progress
     hud.track_id = track.track_id
     hud.best_score = _local_best_score(track.track_id)
     # Next-star target of THIS track (same tiers as the finish screen).

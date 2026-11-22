@@ -26,6 +26,14 @@ var road_status: String = "ON TRACK"
 var track_name: String = "SHIN-KAWA"
 var track_id: String = ""
 var track_points: PackedVector2Array = PackedVector2Array()
+## Issue #18: false closing segment on open (point-to-point) routes. True =
+## circuit (the outline and the arc length wrap from the last point to the
+## first); false = open route (no closure, no wrap, START and FINISH markers).
+var closed_loop: bool = true
+## Open routes: where the start / finish lines sit along the route (0..1 of
+## the arc length; same numbers the race uses for `track_progress`).
+var start_progress: float = 0.0
+var finish_progress: float = 1.0
 var car_world_position: Vector2 = Vector2.ZERO
 var track_progress: float = 0.0
 var target_time: float = 0.0
@@ -43,11 +51,13 @@ var score_events: Array[Dictionary] = []
 var chain_alpha: float = 0.0
 var _outline_cache: PackedVector2Array = PackedVector2Array()
 var _outline_rect: Rect2 = Rect2()
+var _outline_sig: Array = []        # what the cached outline was built from
 var _map_scale: float = 1.0
 var _map_mid: Vector2 = Vector2.ZERO
 var _map_rot: float = 0.0
 var _cum: PackedFloat32Array = PackedFloat32Array()
 var _cum_points: int = -1
+var _cum_closed: bool = true
 var _shown_chain: int = 0
 
 func _ready() -> void:
@@ -189,14 +199,22 @@ func _draw_lap_line(r: Rect2, u: float) -> void:
 func _minimap(rect: Rect2, u: float) -> void:
     if track_points.size() < 8:
         return
-    if _outline_rect != rect or _outline_cache.is_empty():
+    if _outline_rect != rect or _outline_cache.is_empty() or _outline_sig != _signature():
         _rebuild_outline(rect)
     draw_polyline(_outline_cache,Color(1,1,1,0.10),9.0*u,true)
     draw_polyline(_outline_cache,STYLE.WHITE,3.0*u,true)
-    var start_dot: Vector2 = _map_point(track_points[0],rect)
-    var tangent: Vector2 = (_map_point(track_points[1],rect)-_map_point(track_points[track_points.size()-1],rect)).normalized()
-    var across := Vector2(-tangent.y,tangent.x)*6.0*u
-    draw_line(start_dot-across,start_dot+across,STYLE.WHITE,3.5*u,true)
+    if closed_loop:
+        # Circuit: the start line sits on the first point; the tangent is the
+        # neighbour on either side (the route wraps).
+        var start_dot: Vector2 = _map_point(track_points[0],rect)
+        var tangent: Vector2 = (_map_point(track_points[1],rect)-_map_point(track_points[track_points.size()-1],rect)).normalized()
+        var across := Vector2(-tangent.y,tangent.x)*6.0*u
+        draw_line(start_dot-across,start_dot+across,STYLE.WHITE,3.5*u,true)
+    else:
+        # Open route: a white START tick and a gold FINISH tick + ring on the
+        # start / finish lines (never a wrapped tangent).
+        _end_marker(rect,u,start_progress,STYLE.WHITE,false)
+        _end_marker(rect,u,finish_progress,STYLE.GOLD,true)
     var dot: Vector2 = _map_point(point_at_progress(track_progress),rect)
     draw_circle(dot,9.0*u,Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.28))
     draw_circle(dot,5.5*u,STYLE.PINK)
@@ -211,6 +229,10 @@ func _rebuild_outline(rect: Rect2) -> void:
     var sub := PackedVector2Array()
     for i in range(0,track_points.size(),step):
         sub.append(track_points[i])
+    # Open route: the sampling step may skip the real last point; the outline
+    # (and the box it is fitted into) must end exactly on it.
+    if not closed_loop and (track_points.size()-1) % step != 0:
+        sub.append(track_points[track_points.size()-1])
     var best: float = -1.0
     for k in range(36):
         var ang: float = PI*float(k)/36.0
@@ -228,26 +250,54 @@ func _rebuild_outline(rect: Rect2) -> void:
             _map_rot = ang
             _map_scale = sc
             _map_mid = (lo+hi)*0.5
+    _outline_sig = _signature()
     _outline_cache = PackedVector2Array()
     for p in sub:
         _outline_cache.append(_map_point(p,rect))
-    _outline_cache.append(_outline_cache[0])
+    if closed_loop:
+        _outline_cache.append(_outline_cache[0])   # open routes never close
+
+## What the cached outline depends on: a new track, a changed number of points
+## or a change of topology rebuilds it (not only a new map rectangle).
+func _signature() -> Array:
+    var n: int = track_points.size()
+    return [n,closed_loop,track_points[0] if n > 0 else Vector2.ZERO,
+        track_points[n-1] if n > 0 else Vector2.ZERO]
+
+## START / FINISH tick of an open route at a fraction of its length.
+func _end_marker(rect: Rect2, u: float, f: float, col: Color, ring: bool) -> void:
+    var at: Vector2 = _map_point(point_at_progress(f),rect)
+    var a: Vector2 = _map_point(point_at_progress(clampf(f-0.01,0.0,1.0)),rect)
+    var b: Vector2 = _map_point(point_at_progress(clampf(f+0.01,0.0,1.0)),rect)
+    var tangent: Vector2 = (b-a)
+    tangent = tangent.normalized() if tangent.length() > 0.001 else Vector2.RIGHT
+    var across := Vector2(-tangent.y,tangent.x)*6.0*u
+    draw_line(at-across,at+across,col,3.5*u,true)
+    if ring:
+        draw_arc(at,7.5*u,0.0,TAU,20,col,1.6*u,true)
 
 ## Centreline point at a lap fraction (same arc length as the race uses).
+## Circuit: wraps from the last point back to the first. Open route: only the
+## real segments 0..n-2 count and the fraction is clamped to 0..1 (no wrap, no
+## made-up last -> first distance).
 func point_at_progress(f: float) -> Vector2:
     var n: int = track_points.size()
     if n == 0:
         return car_world_position
-    if _cum_points != n:
+    if n == 1:
+        return track_points[0]
+    var segs: int = n if closed_loop else n-1
+    if _cum_points != n or _cum_closed != closed_loop:
         _cum_points = n
+        _cum_closed = closed_loop
         _cum = PackedFloat32Array()
-        _cum.resize(n+1)
+        _cum.resize(segs+1)
         _cum[0] = 0.0
-        for i in range(n):
+        for i in range(segs):
             _cum[i+1] = _cum[i]+track_points[i].distance_to(track_points[(i+1)%n])
-    var total: float = _cum[n]
-    var target: float = fposmod(f,1.0)*total
-    var i: int = clampi(_cum.bsearch(target)-1,0,n-1)
+    var total: float = _cum[segs]
+    var target: float = (fposmod(f,1.0) if closed_loop else clampf(f,0.0,1.0))*total
+    var i: int = clampi(_cum.bsearch(target)-1,0,segs-1)
     var seg: float = maxf(_cum[i+1]-_cum[i],0.0001)
     return track_points[i].lerp(track_points[(i+1)%n],clampf((target-_cum[i])/seg,0.0,1.0))
 

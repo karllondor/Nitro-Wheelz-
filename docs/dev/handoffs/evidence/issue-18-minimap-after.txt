@@ -1,0 +1,6 @@
+closed_loop(track)=false centerline=433 length=767.5 start_index=9 finish_index=419 finish_progress=0.9605
+hud.closed_loop=false
+start: progress=0.0265 dot=(-84.0, 343.6562)
+mid: progress=0.5001 dot=(55.99985, 84.00002)
+finish: progress=0.9605 dot=(308.0, -53.66672)
+end: progress=0.9968 dot=(308.0, -81.54456)
