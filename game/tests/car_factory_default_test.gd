@@ -24,10 +24,12 @@ func _run() -> void:
     var garage_backup := ConfigFile.new()
     var had_garage: bool = garage_backup.load(COSMETICS.GARAGE_PATH) == OK
     var was_legacy: Variant = DEV.get_value("developer","legacy_procedural_cars",false)
-    var was_old: Variant = DEV.get_value("developer","factory_test_models",null)
+    # NOT null as the default: Godot 4.7 treats a null default as "no default" and
+    # raises an ERROR on a clean machine (CI) where the old key does not exist.
+    var was_old: Variant = DEV.get_value("developer","factory_test_models","__unset__")
     var err: String = await _checks()
     DEV.set_value("developer","legacy_procedural_cars",was_legacy)
-    DEV.set_value("developer","factory_test_models",was_old if was_old != null else false)
+    DEV.set_value("developer","factory_test_models",was_old if was_old is bool else false)
     if had_garage:
         garage_backup.save(COSMETICS.GARAGE_PATH)
     elif FileAccess.file_exists(COSMETICS.GARAGE_PATH):
