@@ -69,7 +69,7 @@ Budget: 42 000 triangles and 8 draw calls (the E30 standard) held for both varia
 - The sheets are concept renders, not measurements: every position above is a scaled estimate (+/- 2-3 cm).
 - RED overfenders: the sheet shows a bulkier, more faceted flare; ours is a 14-facet smooth overfender limited by the
   1.91 m gameplay width and the chrome line above it.
-- The engine is a stylised VAZ inline four with 4 ITB trumpets (as on the sheet); intake, wiring and hoses simplified.
+- The engine (v0.1.36) is a stylised Mazda 13B two-rotor Wankel (the real red build, owner photos 2026-11-22): two rotor housings and iron plates stacked along the car, front cover with bolt heads and pulleys, an aluminium rail with FOUR polished trumpets in a row, oil filter, catch can, bridgeport headers. Before: a VAZ inline four with a 2 x 2 trumpet block (concept sheet). Intake plumbing, wiring and hoses simplified; the white (clean hood) car hides it. Triangle budget held (red 38,898 visible of 42,000).
 - Wheel spoke shapes / mesh spoke count and offsets are approximations of the sheet images.
 - Glass is the shared dark tint (both sheets show dark glass); the cabin is simple (seats, dash, wheel, door cards).
 - The old model's proportions (taller body, 0.39 m wheels, symmetric overhangs) are intentionally NOT kept: the brief

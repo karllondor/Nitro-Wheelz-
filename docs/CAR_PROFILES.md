@@ -5,9 +5,10 @@ Every car points at one profile file in `game/cars/`. A profile has two blocks:
 - `handling`: numbers for the shared drive model (`scripts/driving/drive_model.gd`). Any key from `NitroDriveModel.TUNABLE` may be set; missing keys keep the baseline. No driving code changes per car.
 - `engine`: the procedural engine sound (`scripts/audio/engine_synth.gd`): layout, cylinders, firing pattern, revs, gearing, exhaust geometry, resonances, combustion variability, mechanical noise and loudness (no recorded sound effects since v0.1.21).
 
-Paint variants of one car share one profile (Lada red + white -> `lada_baseline.json`). Car Factory cars (v0.1.24, `e30_blessed.json`) add a `model` block (GLB path, wheel radius, cosmetic camber, shadow size) and a `cosmetics` block (immutable `signature` preset, paint presets, wheel ids); cosmetics are stored per car in the garage file and never read by the drive model. Facts vs estimates vs untested tuning are recorded in `provenance`, `handling_notes` and `engine_notes`. Profiles are plain JSON inside the export (`include_filter="*.json"`), a few hundred bytes each.
+Paint variants of one car share one profile (Lada red + white -> `lada_13b.json`: the `lada_baseline.json` handling numbers + the rotary engine of the real build, v0.1.36). Car Factory cars (v0.1.24, `e30_blessed.json`) add a `model` block (GLB path, wheel radius, cosmetic camber, shadow size) and a `cosmetics` block (immutable `signature` preset, paint presets, wheel ids); cosmetics are stored per car in the garage file and never read by the drive model. Facts vs estimates vs untested tuning are recorded in `provenance`, `handling_notes` and `engine_notes`. Profiles are plain JSON inside the export (`include_filter="*.json"`), a few hundred bytes each.
 
 ## Rules
+- `lada_baseline.json` is the benchmark file (physics golden trace + the synth-default sound fingerprint). The Lada cars use `lada_13b.json` (identical handling numbers, rotary engine block); `car_profiles_test.gd` proves both.
 - `lada_baseline.json` is the benchmark. Its handling values equal the v0.1.12+ tune and `car_profiles_test.gd` proves the physics trace is bit-identical to the pre-profile code and that its engine block equals the synth defaults (engine-sound fingerprint, re-recorded once for the v0.1.21 engine model). Do not edit it to tune other cars.
 - DEVELOPER > BASELINE PHYSICS FOR ALL CARS puts every car back on the Lada physics (sound and looks stay per car).
 - DEVELOPER > AUDIO BENCHMARK reports the synth CPU cost per engine on the device it runs on (use it on Android and Web).
@@ -63,3 +64,27 @@ Sound: V8 firing 4x per crank turn, two exhaust banks in the 1UZ firing order wi
 | mech / mech_hz | 1.0 / 2900 | 0.45 / 3400 | valvetrain / timing-chain tick level and pitch |
 | room | 0.20 | 0.20 | stereo early reflections |
 | loudness | 1.0 | 1.2 | overall level |
+
+
+## Power-to-weight calibration (v0.1.36, ADR-010, owner decision 2026-11-22)
+Every profile has a `performance` block (power, mass, PS per tonne, sources). The law, anchored on the red / white Lada 2106 (13B rotary):
+
+- 0-100 km/h time = 3.29 s x (201 / PS-per-tonne)   (first-order physics: time ~ 1 / power-to-weight)
+- top speed = 127.8 km/h x (PS-per-tonne / 201) ^ (1/3)   (drag-limited speed)
+
+`tests/car_performance_test.gd` measures every catalog car on a scripted full-throttle run and fails when it leaves the tolerance (anchor exact, fitted E30 +-3 %, estimated-mass RYU-32 +-12 %).
+
+| car | power | mass | PS/t | 0-100 target / measured | top target / measured |
+|---|---|---|---|---|---|
+| Lada 2106 13B (red, white) | 231 PS series output of the donor engine | 1,150 kg estimate | 201 | 3.29 s / 3.29 s (anchor) | 127.8 / 127.8 km/h (anchor) |
+| E30 Blessed (M52B28) | 193 PS factory reference | 1,250 kg (research tuning start) | 154 | 4.28 s / 4.29 s | 116.9 / 116.9 km/h |
+| RYU-32 + FLAME (4.0 V8 ITB) | 350 HP (owner) | 1,300 kg estimate | 269 | 2.45 s / 2.68 s (+9 %) | 141.0 / 140.5 km/h |
+
+What changed: **E30** `drive_accel` 11.8 -> 10.1 and `drag_coeff` 0.009 -> 0.00915 (it was exactly as fast as the Lada, which is wrong for 154 vs 201 PS/t). **RYU-32** unchanged (inside the tolerance of its estimated mass: 100 kg more or less moves the target by about 0.2 s). **Lada** unchanged (the anchor).
+
+Facts vs estimates (also in the profiles): RX-8 13B-MSP series output 231 PS, 0-100 km/h about 6.4 s at 1,380-1,390 kg (auto-data.net, ultimatespecs.com, fastestlaps.com); VAZ-2106 1.6: 75 PS, 1,035 kg, 0-100 km/h 16-17.5 s (auto-data.net, autohints.com, Wikipedia). The rotary swap of the Nightride Lada (bridgeport, ITB, custom exhaust, E30 Compact rear axle, cage, arches) is the owner's summary quoting the Nightride videos; a web search found no page about the build, so it is NOT independently verified. Bridgeport / ITB power gains are unknown and not counted. The white (clean hood) Lada shares the profile (same mechanical car, paint variant): tell me if it should differ. A different mass moves the targets proportionally; edit `mass_kg` and the test follows.
+
+DEVELOPER > BASELINE PHYSICS FOR ALL CARS (unchanged) puts every car back on the Lada numbers for A/B comparison. The shared handling keys other than `drive_accel` / `drag_coeff` (grip, yaw, steering lock, power loss ...) are NOT calibrated by this law; they stay the approved baseline (E30) or the RYU-32 tune.
+
+## Lada 13B rotary engine sound (v0.1.36)
+`lada_13b.json` `engine`: a two-rotor Wankel fires twice per eccentric-shaft turn (the firing rate of a four-cylinder four-stroke), so the synth runs 4 "cylinders" on two exhaust banks. Character: bridgeport lope at 1,150 rpm idle (uneven_idle 0.34, jitter 0.03, wander 0.02), no valvetrain tick (mech 0.12), open ITB honk (intake_gain 1.7), short headers (0.5 m), bright raspy pipe (pipe_damp 1,400 Hz, jet 1.35), 9,200 rpm limiter, lots of overrun popping (misfire 0.30). Sound design in the character of a bridgeported 13B, not a recording; gearing / limiter of the real car are unknown. `car_profiles_test.gd` checks the layout, the firing rate, the banks and that it renders finite, audible audio.
