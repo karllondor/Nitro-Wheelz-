@@ -14,6 +14,7 @@ const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
 const SCORER = preload("res://scripts/race/drift_scorer.gd")
 const PHYS_DEV = preload("res://scripts/world/terrain/physics_dev.gd")
+const DEV_SETTINGS = preload("res://scripts/dev_settings.gd")
 
 var model: NitroDriveModel
 var sfx: NitroDriveAudio
@@ -83,6 +84,7 @@ var laps_total: int = 3
 var tyre_smoke: Array[CPUParticles3D] = []
 
 var skid_mesh: ImmediateMesh
+var skid_node: MeshInstance3D
 var skid_material: StandardMaterial3D
 var skid_segments: Array[PackedVector2Array] = []
 var skid_heights: Array[float] = []
@@ -131,6 +133,7 @@ func _ready() -> void:
         dbg_layer.add_child(dbg)
     _make_cameras()
     _make_tyre_marks()
+    _apply_layer_isolation()
     _make_ui()
     if hud != null:
         hud.lap_limit = laps_total
@@ -229,29 +232,86 @@ func _make_car() -> void:
     track.body_half_width = float(info["width"])*RACE_CAR_SCALE*0.5-0.048
     _make_tyre_smoke()
 
+## DEVELOPER > DRIFT LAYER ISOLATION (issue #16): hides ONE visual layer of the
+## car so a phone test can tell which one draws a black shape during the first
+## drift. Visual only; physics, scoring and collisions are untouched.
+## off / smoke / skid / shadow / wheels.
+const ISOLATION_LAYERS: Array[String] = ["off","smoke","skid","shadow","wheels"]
+var isolated_layer: String = "off"
+
+func _apply_layer_isolation() -> void:
+    isolated_layer = str(DEV_SETTINGS.get_value("developer","hide_layer","off"))
+    if not ISOLATION_LAYERS.has(isolated_layer) or isolated_layer == "off":
+        isolated_layer = "off"
+        return
+    match isolated_layer:
+        "smoke":
+            for smoke in tyre_smoke:
+                smoke.visible = false
+        "skid":
+            if skid_node != null:
+                skid_node.visible = false
+        "shadow":
+            var shadow: Node = car_root.find_child("Soft contact shadow",true,false)
+            if shadow is Node3D:
+                (shadow as Node3D).visible = false
+        "wheels":
+            var wheels: Variant = car_root.get("rolling_wheels")
+            if wheels is Array:
+                for w in wheels:
+                    (w as Node3D).visible = false
+
+## Issue #16 (black wheel-sized discs at the rear corners on the first drift,
+## Android): reproduced off-device in isolation (tests/capture_smoke_probe.gd,
+## Godot 4.7.2 GL Compatibility). The v0.1.33 smoke material was a billboard with
+## billboard_keep_scale = false AND vertex colour as albedo on a CPUParticles3D:
+## in a clean scene its youngest particles are drawn BLACK (soft round shape from
+## the radial alpha, older puffs grey), in the race scene opaque white - an
+## undefined colour that depends on driver / draw-order state, i.e. exactly the
+## "black disc at each rear wheel, only on the first drift" picture. With
+## billboard_keep_scale = true the same particles are the intended soft grey puffs
+## (also without BILLBOARD_PARTICLES). The quad also carries an explicit white
+## colour array and the radial puff is baked on the CPU at creation, so nothing
+## depends on GL defaults for missing data.
+## (Mechanism proven in the engine; on-phone confirmation still NOT RUN.)
+static func smoke_puff_texture() -> ImageTexture:
+    var img := Image.create(64,64,false,Image.FORMAT_RGBA8)
+    for y in range(64):
+        for x in range(64):
+            var d: float = Vector2(float(x)+0.5-32.0,float(y)+0.5-32.0).length()/32.0
+            img.set_pixel(x,y,Color(1.0,1.0,1.0,clampf(1.0-d,0.0,1.0)))
+    return ImageTexture.create_from_image(img)
+
+static func smoke_quad(mat: Material) -> ArrayMesh:
+    var arrays: Array = []
+    arrays.resize(Mesh.ARRAY_MAX)
+    arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.5,-0.5,0.0),Vector3(0.5,-0.5,0.0),
+        Vector3(0.5,0.5,0.0),Vector3(-0.5,0.5,0.0)])
+    arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK,Vector3.BACK,Vector3.BACK,Vector3.BACK])
+    arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)])
+    arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color.WHITE,Color.WHITE,Color.WHITE,Color.WHITE])
+    # Godot's front faces are CLOCKWISE seen from +Z (the side the camera sees).
+    arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0,2,1,0,3,2])
+    var mesh := ArrayMesh.new()
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+    mesh.surface_set_material(0,mat)
+    return mesh
+
 func _make_tyre_smoke() -> void:
     # Restrained white tyre smoke from both rear wheels while sliding.
     # CPU particles keep GL Compatibility / Android support predictable.
-    var puff := GradientTexture2D.new()
-    var ramp := Gradient.new()
-    ramp.set_color(0,Color(1,1,1,1))
-    ramp.set_color(1,Color(1,1,1,0))
-    puff.gradient = ramp
-    puff.fill = GradientTexture2D.FILL_RADIAL
-    puff.fill_from = Vector2(0.5,0.5)
-    puff.fill_to = Vector2(1.0,0.5)
-    puff.width = 64
-    puff.height = 64
+    var puff: ImageTexture = smoke_puff_texture()
     var mat := StandardMaterial3D.new()
     mat.albedo_texture = puff
     mat.vertex_color_use_as_albedo = true
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-    mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+    # keep_scale = true is the fix for the black young particles (see
+    # smoke_puff_texture); plain billboarding needs no particle-only shader inputs.
+    mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    mat.billboard_keep_scale = true
     mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-    var quad := QuadMesh.new()
-    quad.size = Vector2(1.0,1.0)
-    quad.material = mat
+    var quad: ArrayMesh = smoke_quad(mat)
     var fade := Gradient.new()
     fade.set_color(0,Color(0.92,0.92,0.98,0.42))
     fade.set_color(1,Color(0.80,0.80,0.90,0.0))
@@ -308,6 +368,7 @@ func _make_tyre_marks() -> void:
     marks.mesh = skid_mesh
     marks.material_override = skid_material
     add_child(marks)
+    skid_node = marks
 
 func _local_best_score(id: String) -> int:
     var best: int = -1
@@ -631,8 +692,9 @@ func diag_text() -> String:
             var at: Vector3 = basis*(n.global_position-car_root.global_position)
             parts.append("%s%s %.1f" % ["F" if at.z < 0.0 else "R","L" if at.x < 0.0 else "R",
                 rad_to_deg(atan2(axle.z,absf(axle.x)))])
-    return "RACE wheels (deg vs body): %s\nsteer %.1f deg  drift %.1f deg  %.0f km/h  run %.1f s" % [
-        "  ".join(parts),rad_to_deg(model.steering_angle),float(model.drift_angle),model.speed_kmh(),time_elapsed]
+    var iso: String = "" if isolated_layer == "off" else "\nLAYER HIDDEN: %s" % isolated_layer.to_upper()
+    return "RACE wheels (deg vs body): %s\nsteer %.1f deg  drift %.1f deg  %.0f km/h  run %.1f s%s" % [
+        "  ".join(parts),rad_to_deg(model.steering_angle),float(model.drift_angle),model.speed_kmh(),time_elapsed,iso]
 
 ## Developer telemetry (Developer Mode > ELEVATION PHYSICS > TELEMETRY).
 func telemetry_text() -> String:

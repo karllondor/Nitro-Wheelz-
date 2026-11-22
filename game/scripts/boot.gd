@@ -262,6 +262,18 @@ func _dev_page() -> void:
         show_page("dev"))
     td_b.name = "Touch diagnostics"
     STYLE.style_button(td_b,ui_unit,td_on)
+    # Issue #16: hide ONE visual layer of the car in a race so a phone test can
+    # tell which layer draws a black shape during the first drift.
+    var layers: Array = ["off","smoke","skid","shadow","wheels"]
+    var hidden: String = str(load("res://scripts/dev_settings.gd").get_value("developer","hide_layer","off"))
+    if not layers.has(hidden):
+        hidden = "off"
+    var iso_b: Button = _big("DRIFT LAYER ISOLATION: "+("OFF" if hidden == "off" else "HIDE "+hidden.to_upper())+"\nTYRE SMOKE • SKID MARKS • CONTACT SHADOW • WHEELS",func():
+        var next: String = str(layers[(layers.find(hidden)+1)%layers.size()])
+        load("res://scripts/dev_settings.gd").set_value("developer","hide_layer",next)
+        show_page("dev"))
+    iso_b.name = "Drift layer isolation"
+    STYLE.style_button(iso_b,ui_unit,hidden != "off")
     var dev_info := Label.new()
     dev_info.name = "Developer preset info"
     dev_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
