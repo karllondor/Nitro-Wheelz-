@@ -22,17 +22,17 @@ const PAD_CORNER: float = 40.0
 const SOFT_EDGE_M: float = 30.0
 
 ## The car starts south of the logo, facing it.
-const START_POS: Vector2 = Vector2(0.0,46.0)
+const START_POS: Vector2 = Vector2(0.0,30.0)
 const START_HEADING: float = 0.0
 
 ## Painted logo (centre of the surface). Width in metres; the height follows the
 ## artwork's proportion. "Up" of the artwork = north, so it reads from the start.
 const LOGO_CENTRE: Vector2 = Vector2(0.0,0.0)
-const LOGO_WIDTH: float = 40.0
+const LOGO_WIDTH: float = 36.0
 const LOGO_ASPECT: float = 349.0/620.0       # nitro_wheelz_logo.svg viewBox
 
 ## Donut rings (a single circle around a centre cone).
-const DONUT_RADIUS: float = 15.0
+const DONUT_RADIUS: float = 10.0          # measured: a starter car holds a donut at r = 5 .. 9 m
 const DONUT_LEFT: Vector2 = Vector2(-105.0,0.0)    # turn LEFT (counter-clockwise from above)
 const DONUT_RIGHT: Vector2 = Vector2(105.0,0.0)    # turn RIGHT (clockwise)
 
@@ -40,9 +40,9 @@ const DONUT_RIGHT: Vector2 = Vector2(105.0,0.0)    # turn RIGHT (clockwise)
 ## the x axis; the path runs around one circle, through the crossing point on a
 ## straight internal tangent, around the other circle the other way and back.
 const EIGHT_LARGE_CENTRE: Vector2 = Vector2(-70.0,80.0)
-const EIGHT_LARGE_RADIUS: float = 22.0
+const EIGHT_LARGE_RADIUS: float = 15.0
 const EIGHT_SMALL_CENTRE: Vector2 = Vector2(70.0,80.0)
-const EIGHT_SMALL_RADIUS: float = 12.0
+const EIGHT_SMALL_RADIUS: float = 9.0
 const EIGHT_SPREAD: float = 1.35
 
 ## The longer flattened eight ("a simple miniature drift circuit"): wide, forgiving

@@ -43,8 +43,7 @@ func build() -> void:
     _build_pad()
     _build_guide_paint()
     _build_logo()
-    if with_environment:
-        _build_cloud_shadows()
+    # (no cloud shadows on the Park: a flat training pad must read evenly everywhere)
 
 # ----------------------------------------------------------------- interface
 

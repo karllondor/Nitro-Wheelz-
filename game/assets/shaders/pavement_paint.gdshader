@@ -5,7 +5,7 @@
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
-uniform sampler2D logo : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform sampler2D logo : filter_linear_mipmap_anisotropic, repeat_disable;   // no source_color: the Compatibility renderer would darken the paint
 uniform vec2 size_m = vec2(40.0, 22.5);
 uniform float wear : hint_range(0.0, 0.5) = 0.16;
 uniform float paint_alpha : hint_range(0.0, 1.0) = 0.96;

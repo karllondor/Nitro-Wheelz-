@@ -40,25 +40,35 @@ func _run() -> void:
     # ---------------------------------------------------------------- free drive
     var race: Node3D = await _race("free")
     race.set_physics_process(false)
+    for i in range(60):
+        race.call("_update_camera",1.0/60.0)
+    await _shot("free_0_start_topdown")
     race._toggle_camera()
     for i in range(60):
         race.call("_update_camera",1.0/60.0)
     await _shot("free_1_start_chase")
-    # whole pad from straight above
+    # the car in front of the logo, top-down (the game camera of the owner QA)
+    race._toggle_camera()
+    race.model.position = Vector2(0,24)
+    for i in range(90):
+        race.call("_update_camera",1.0/60.0)
+    race._update_visuals()
+    await _shot("free_2_logo_topdown")
+    # whole pad from straight above, without the HUD
+    race.hud.visible = false
+    race.touch.visible = false
     var cam := Camera3D.new()
     cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-    cam.size = 420.0
+    cam.keep_aspect = Camera3D.KEEP_WIDTH
+    cam.size = 380.0
     cam.rotation_degrees = Vector3(-90,0,0)
     cam.position = Vector3(0,200,0)
     race.add_child(cam)
     cam.current = true
     await _shot("overview_pad")
-    cam.size = 120.0
-    cam.position = Vector3(0,200,10)
+    cam.size = 70.0
     await _shot("overview_logo")
     cam.queue_free()
-    race._toggle_camera()
-    race._toggle_camera()
     race.queue_free()
     await _frames(5)
     # ---------------------------------------------------------------- tutorial
@@ -71,14 +81,21 @@ func _run() -> void:
     race.park.tutorial._begin_lesson(5)        # donut left: the schematic overlay
     await _shot("tutorial_2_donut_schematic")
     race.park.tutorial.dismiss_intro()
-    race.model.position = Vector2(-60,10)
+    race.model.position = Vector2(-70,6)
     race.model.heading = deg_to_rad(90.0)
+    race.park.ghost.travelled = 10.0
+    race.park.ghost.advance(0.0)
     race.set_physics_process(true)
+    race._toggle_camera()
     Input.action_press("throttle")
-    for i in range(40):
+    for i in range(80):
         race._physics_process(DT)
         race.call("_update_camera",DT)
-    await _shot("tutorial_3_donut_running")
+    await _shot("tutorial_3_donut_topdown")
+    race._toggle_camera()
+    for i in range(60):
+        race.call("_update_camera",DT)
+    await _shot("tutorial_3b_donut_chase")
     race.park.tutorial._begin_lesson(7)        # large eight schematic
     await _shot("tutorial_4_eight_schematic")
     race.park.tutorial.dismiss_intro()
