@@ -93,6 +93,18 @@ var misfire: float = 0.10              # overrun lean-misfire probability
 var mech_level: float = 1.0            # valvetrain / timing-chain noise
 var mech_hz: float = 2900.0
 var room: float = 0.20                 # early-reflection level
+# Turbo layer (v0.1.38, white Lada N20B20): compressor whistle that rises with boost and a
+# short flutter / blow-off when the throttle closes. turbo_level 0 (every other engine) =
+# the layer does not run and the sound is bit-identical to before.
+var turbo_level: float = 0.0
+var turbo_hz: Vector2 = Vector2(2600.0,7200.0)   # whistle pitch at no boost .. full boost
+var turbo_spool_s: float = 0.45                  # time constant of the boost build-up
+var turbo_flutter: float = 1.0
+var boost: float = 0.0                           # 0..1 (state)
+var _flutter: float = 0.0
+var _turbo_ph: float = 0.0
+var _turbo_fph: float = 0.0
+var _turbo_lp: float = 0.0
 
 var rpm: float = IDLE_RPM
 var target_rpm: float = IDLE_RPM
@@ -248,6 +260,13 @@ func apply_profile(engine: Dictionary) -> void:
             set(key[1],float(engine[key[0]]))
     if engine.has("loudness"):
         master = 0.55*float(engine["loudness"])
+    var turbo: Dictionary = engine.get("turbo",{})
+    turbo_level = float(turbo.get("level",0.0))
+    if turbo_level > 0.0:
+        var hz: Array = turbo.get("whistle_hz",[turbo_hz.x,turbo_hz.y])
+        turbo_hz = Vector2(float(hz[0]),float(hz[1]))
+        turbo_spool_s = float(turbo.get("spool_seconds",turbo_spool_s))
+        turbo_flutter = float(turbo.get("flutter",turbo_flutter))
     # Firing pattern arrays must match the cylinder count.
     while cyl_gain.size() < cylinders:
         cyl_gain.append(1.0)
@@ -353,6 +372,8 @@ func reset_state() -> void:
     _a0 = 0.0
     _a1 = 0.0
     _mech = 0.0
+    boost = 0.0
+    _flutter = 0.0
     shifts = 0
     limiter_hits = 0
     misfires = 0
@@ -376,6 +397,14 @@ func set_state(speed_kmh: float, gas: float, slip: float, dt: float) -> void:
     afterfire = maxf(0.0,afterfire-dt*0.85)
     if gas > 0.4:
         afterfire = 0.0
+    if turbo_level > 0.0:
+        # Boost builds with revs and throttle (spool time), falls faster when the throttle closes;
+        # lifting off from boost lets the diverter / blow-off flutter.
+        var boost_target: float = clampf((rpm-1800.0)/2600.0,0.0,1.0)*clampf(gas,0.0,1.0)
+        var spool: float = turbo_spool_s if boost_target > boost else turbo_spool_s*0.45
+        boost = lerpf(boost,boost_target,1.0-exp(-dt/maxf(spool,0.05)))
+        if _prev_gas > 0.55 and gas < 0.15 and boost > 0.35:
+            _flutter = maxf(_flutter,boost)
     _prev_gas = gas
     load = lerpf(load,clampf(gas,0.0,1.0),1.0-exp(-10.0*dt))
     var squeal_target: float = clampf(slip,0.0,1.0)*clampf(speed_kmh/60.0,0.0,1.0)
@@ -549,6 +578,15 @@ func render(frames: int) -> PackedVector2Array:
     var sq4: float = _sq_state[4]
     var sq5: float = _sq_state[5]
     var fl_ph: float = _sq_flutter_ph
+    var turbo_on: bool = turbo_level > 0.0 and (boost > 0.02 or _flutter > 0.01)
+    var t_inc: float = lerpf(turbo_hz.x,turbo_hz.y,boost)/SAMPLE_RATE
+    var g_whistle: float = turbo_level*0.062*boost*lerpf(0.35,1.0,load)*master
+    var g_flut: float = turbo_level*turbo_flutter*0.55*master
+    var tfl_decay: float = exp(-1.0/(0.32*SAMPLE_RATE))
+    var t_ph: float = _turbo_ph
+    var t_fph: float = _turbo_fph
+    var t_lp: float = _turbo_lp
+    var t_fl: float = _flutter
     var sq_g: float = _sq_gain
     var sq_g_target: float = _sq_gain_target
     for i in range(frames):
@@ -623,6 +661,17 @@ func render(frames: int) -> PackedVector2Array:
         var e: float = dc*amp
         e = e*make_up/(1.0+drive*absf(e))
         var s: float = (e+ym*g_mech*amp)*engine_gain
+        if turbo_on:
+            t_ph += t_inc
+            if t_ph >= 1.0:
+                t_ph -= 1.0
+            t_fl *= tfl_decay
+            t_fph += 0.00045
+            if t_fph >= 1.0:
+                t_fph -= 1.0
+            t_lp += (noise2-t_lp)*0.30
+            s += (sin(TAU*t_ph)+0.28*sin(TAU*2.0*t_ph))*g_whistle*engine_gain
+            s += t_lp*t_fl*g_flut*(0.6+0.4*sin(TAU*t_fph))*engine_gain
         if squealing:
             var y0: float = q0.z*noise+q0.x*sq0-q0.y*sq1
             sq1 = sq0
@@ -683,6 +732,10 @@ func render(frames: int) -> PackedVector2Array:
     _hb1 = hb1
     _tb = tb
     _rb = rb
+    _turbo_ph = t_ph
+    _turbo_fph = t_fph
+    _turbo_lp = t_lp
+    _flutter = t_fl
     _cycle = cyc
     _next_fire = next_fire
     _e0 = e0

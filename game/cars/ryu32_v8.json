@@ -36,5 +36,32 @@
     "header_m": [0.62, 0.80], "bank_lag_m": 0.5, "tail_m": 3.6, "header_reflect": -0.34, "tail_reflect": 0.32,
     "pipe_damp_hz": 900, "jet": 0.6, "jitter_idle": 0.010, "jitter_high": 0.004, "wander": 0.007,
     "misfire": 0.08, "mech": 0.45, "mech_hz": 3400, "room": 0.20
+  },
+  "arcade_plus": {
+    "top_kmh": 225,
+    "status": "PROPOSED target, not owner-approved",
+    "basis": "= the REAL_POWER_TEST top speed rounded down to 5 km/h: the ESTIMATED 5-speed table at the 7,000 rpm limiter (228 km/h); the power / drag limit is about 286 km/h, so gearing / limiter sets the top (the real value is MISSING)."
+  },
+  "real_power": {
+    "power_ps": 350,
+    "mass_kg": 1300,
+    "cda": 0.7,
+    "efficiency": 0.85,
+    "crr": 0.012,
+    "launch_accel": 5.5,
+    "torque_table": [[1000, 280], [2500, 370], [4000, 400], [5200, 395], [6500, 378], [7000, 350]],
+    "provenance": {
+      "confirmed": [
+        "Owner reference: 4.0 L V8, individual throttle bodies, about 350 HP / 400 Nm."
+      ],
+      "estimates": [
+        "Torque peak at 4,000 rpm and power peak at 6,500 rpm are ESTIMATES (the owner gave only the two maxima); the rest of the curve is shape.",
+        "Mass 1,300 kg (V8-swapped coupe, +-100 kg), Cd*A 0.70 m2, efficiency 0.85, rolling 0.012, launch 5.5 m/s2.",
+        "Gear table [58,98,138,176,215] km/h at 6,600 rpm = the sound-design table, used as estimated gearing."
+      ],
+      "missing": [
+        "Which V8, gearbox, final drive, tyres, differential, mass."
+      ]
+    }
   }
 }

@@ -73,6 +73,18 @@ var flick_yaw_impulse: float = FLICK_YAW_IMPULSE
 var slide_drive_factor: float = SLIDE_DRIVE_FACTOR
 var engine_brake_decel: float = ENGINE_BRAKE_DECEL
 
+# ARCADE_PLUS (owner decision 2026-11-22, issue #25): above drag_knee_mps the
+# quadratic drag grows only drag_high_scale times as fast, which lifts the
+# implausibly low top speed of the arcade tune WITHOUT touching anything below
+# the knee (28 m/s = 100.8 km/h: handling envelope and 0-100 km/h stay
+# bit-identical). Defaults (knee = infinity) = the baseline model. Set through
+# a car profile's "arcade_plus" block, see NitroCarCatalog.arcade_plus().
+var drag_knee_mps: float = 1.0e9
+var drag_high_scale: float = 1.0
+# REAL_POWER_TEST (diagnostic mode "A"): a power-curve drivetrain replaces the
+# constant drive force and the arcade drag; null = the arcade model.
+var real: NitroRealPower = null
+
 ## The tunable parameter names, all of which a car profile may set.
 const TUNABLE: Array[String] = ["front_grip","rear_grip","rear_slide_grip","handbrake_grip",
     "reattach_seconds","countersteer_assist","wheelbase","drive_accel","brake_accel",
@@ -108,8 +120,31 @@ func apply_profile(handling: Dictionary) -> Array[String]:
             if v != float(get(str(key))):
                 changed.append(str(key))
             set(str(key),v)
+    if handling.has("drag_knee_mps"):
+        drag_knee_mps = float(handling["drag_knee_mps"])
+    if handling.has("drag_high_scale"):
+        drag_high_scale = float(handling["drag_high_scale"])
     half_wheelbase = wheelbase*0.5
     return changed
+
+## ARCADE_PLUS parameters for a handling set and a wanted terminal speed: the drag
+## above the knee is scaled so that  drive_accel - rolling = drag(v_top)  holds at
+## top_kmh. Returns {top_speed_mps, drag_knee_mps, drag_high_scale}.
+static func arcade_plus_for(h: Dictionary, top_kmh: float, knee_mps: float = 28.0) -> Dictionary:
+    var base: Dictionary = baseline()
+    var drive: float = float(h.get("drive_accel",base["drive_accel"]))
+    var roll: float = float(h.get("rolling_drag",base["rolling_drag"]))
+    var c: float = float(h.get("drag_coeff",base["drag_coeff"]))
+    var vt: float = top_kmh/3.6
+    var scale: float = (drive-roll-c*knee_mps*knee_mps)/(c*(vt*vt-knee_mps*knee_mps))
+    # the fade of the drive force (top_speed_mps - 5 ... top_speed_mps) must lie above the terminal speed
+    return {"top_speed_mps":vt+8.0,"drag_knee_mps":knee_mps,"drag_high_scale":clampf(scale,0.02,1.0)}
+
+## REAL_POWER_TEST: attach a power-curve drivetrain (see real_power.gd) built from a profile's
+## "real_power" block (the catalog merges in the engine / gearing data).
+func apply_real_power(d: Dictionary) -> void:
+    real = NitroRealPower.new()
+    real.configure(d)
 
 var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
@@ -317,6 +352,9 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
     var yaw_ceiling: float = _yaw_rate_limit(speed,slide_fraction)
     yaw_rate = clampf(yaw_rate,-yaw_ceiling,yaw_ceiling)
 
+    if real != null:
+        real.update(maxf(signed_speed,0.0),dt)
+
     # BRAKE doubles as REVERSE. Forward speed must be nearly zero before
     # negative motor torque engages; holding BRAKE then backs up to a limit.
     var longitudinal_accel: float = 0.0
@@ -333,20 +371,32 @@ func step(dt: float, steer: float, gas: float, brake: float, handbrake: float) -
         if signed_speed < -0.40:
             longitudinal_accel = minf(brake_accel*gas,-signed_speed/dt)
         else:
-            longitudinal_accel = drive_accel*gas
-            if speed > top_speed_mps-5.0:
-                longitudinal_accel *= clampf(1.0-(speed-(top_speed_mps-5.0))/5.0,0.0,1.0)
+            if real != null:
+                longitudinal_accel = real.drive_accel(maxf(signed_speed,0.0),gas)
+            else:
+                longitudinal_accel = drive_accel*gas
+                if speed > top_speed_mps-5.0:
+                    longitudinal_accel *= clampf(1.0-(speed-(top_speed_mps-5.0))/5.0,0.0,1.0)
             if sliding:
                 longitudinal_accel *= slide_drive_factor
 
     if absf(signed_speed) > 0.02:
-        longitudinal_accel -= rolling_drag*signf(signed_speed)
+        longitudinal_accel -= (rolling_drag if real == null else real.rolling)*signf(signed_speed)
     # Engine braking when the throttle is closed (profile; 0 for the Lada).
     if engine_brake_decel > 0.0 and gas < 0.01 and brake < 0.01 and signed_speed > 1.0:
         longitudinal_accel -= engine_brake_decel
+    if real != null and gas < 0.01 and brake < 0.01 and signed_speed > 1.0:
+        longitudinal_accel -= real.engine_brake_accel(signed_speed)
     var acceleration: Vector2 = f*longitudinal_accel
     acceleration += r*(front_lateral+rear_lateral)
-    acceleration -= velocity*speed*drag_coeff
+    if real != null:
+        acceleration -= velocity*speed*real.drag_k
+    elif speed > drag_knee_mps:
+        # ARCADE_PLUS: continuous at the knee, then a gentler quadratic.
+        var over: float = drag_coeff*(drag_knee_mps*drag_knee_mps+drag_high_scale*(speed*speed-drag_knee_mps*drag_knee_mps))
+        acceleration -= velocity*(over/speed)
+    else:
+        acceleration -= velocity*speed*drag_coeff
     if handbrake > 0.10:
         acceleration -= velocity*(handbrake_decel*handbrake/maxf(speed,1.0))
     if external_accel != Vector2.ZERO:

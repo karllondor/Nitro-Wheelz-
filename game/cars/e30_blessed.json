@@ -215,5 +215,32 @@
     "mass_kg": 1250,
     "power_to_weight_ps_per_t": 154,
     "source": "Power: factory M52B28 193 PS (SRC07). Mass: the research tuning start (1,250 kg, four-door sedan with the 2.8 six). Neither is dyno / scale data of this build."
+  },
+  "arcade_plus": {
+    "top_kmh": 220,
+    "status": "PROPOSED target, not owner-approved",
+    "basis": "= the REAL_POWER_TEST top speed rounded down to 5 km/h: the ESTIMATED 5-speed table of the engine block at the 6,500 rpm limiter (220.2 km/h); the power / drag limit is about 231 km/h. It agrees with the owner's remark that this build should reach about 220 km/h (not verified). Real gearbox + final drive: MISSING."
+  },
+  "real_power": {
+    "power_ps": 193,
+    "mass_kg": 1250,
+    "cda": 0.7,
+    "efficiency": 0.85,
+    "crr": 0.012,
+    "launch_accel": 5.5,
+    "torque_table": [[1000, 170], [2000, 235], [3000, 270], [3950, 280], [5300, 256], [6000, 220], [6500, 200]],
+    "provenance": {
+      "confirmed": [
+        "M52B28: 193 PS (142 kW) at 5,300 rpm and 280 Nm at 3,950 rpm (ADAC; one catalogue lists 5,500 rpm for the power peak). The same engine in the E36 328i manual: 0-100 km/h 7.3 s (ADAC, auto-data.net) in a heavier body."
+      ],
+      "estimates": [
+        "Torque shape away from the two published points is an ESTIMATE.",
+        "Mass 1,250 kg (research tuning start), Cd*A 0.70 m2 (0.36-0.38 x 1.9), efficiency 0.85, rolling 0.012, launch 5.5 m/s2.",
+        "Gear table [55,92,132,170,210] km/h at 6,200 rpm = the sound-design table, used as estimated gearing."
+      ],
+      "missing": [
+        "Gearbox, final drive, differential, tyre size, build mass, any dyno / GPS figure."
+      ]
+    }
   }
 }

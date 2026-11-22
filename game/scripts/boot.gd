@@ -255,6 +255,16 @@ func _settings_page() -> void:
 func _dev_page() -> void:
     _title("DEVELOPER")
     _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
+    # v0.1.38 (owner decision 2026-11-22, #25): the physics mode used by the NEXT race. ARCADE_PLUS
+    # (default) = the approved arcade handling with credible top speeds; REAL_POWER_TEST = a power-curve
+    # drivetrain with game-shifted gears for a same-car A/B test. Runs in REAL_POWER_TEST are not saved.
+    var pmode: String = CARS.physics_mode()
+    var real_on: bool = pmode == CARS.MODE_REAL_POWER
+    var mode_b: Button = _big("ACTIVE PHYSICS MODE:\n"+pmode+(" (DEFAULT)" if not real_on else "  •  RUNS NOT SAVED")+"\nAPPLIES TO THE NEXT RACE • TAP TO SWITCH",func():
+        CARS.set_physics_mode(CARS.MODE_ARCADE_PLUS if CARS.physics_mode() == CARS.MODE_REAL_POWER else CARS.MODE_REAL_POWER)
+        show_page("dev"))
+    mode_b.name = "Physics mode"
+    STYLE.style_button(mode_b,ui_unit,real_on)
     # Way back to the old handling: every car on the Lada baseline physics.
     var forced: bool = CARS.baseline_physics_forced()
     var phys: Button = _big("BASELINE PHYSICS FOR ALL CARS: "+("ON" if forced else "OFF"),func():

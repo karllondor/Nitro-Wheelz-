@@ -3,10 +3,11 @@ class_name NitroCarCatalog
 ## The selectable cars. A "variant" id is what the garage stores
 ## (user://nitro_garage.cfg) and passes to the race (nitro/car_variant).
 ## Each variant points at a car PROFILE (game/cars/*.json): handling numbers
-## for the shared drive model and an engine/sound block for the synth. Paint
-## variants of one car share one mechanical profile (Lada red/white ->
-## lada_13b: the handling numbers of lada_baseline + the rotary engine of the
-## real build). Profiles are data, so cars can be tuned without touching the
+## for the shared drive model and an engine/sound block for the synth. The RED
+## Lada (lada_13b: the handling numbers of lada_baseline + the rotary engine of
+## the real build) and the WHITE Lada (lada_n20: the same chassis numbers + the
+## tuned BMW N20B20 turbo four, owner decision 2026-11-22) are two different
+## mechanical cars on one body. Profiles are data, so cars can be tuned without touching the
 ## driving code; the Lada handling stays the 1:1 reference (lada_baseline.json
 ## is kept as the benchmark file for the physics and sound fingerprints).
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
@@ -14,6 +15,7 @@ const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
 const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 const DEV = preload("res://scripts/dev_settings.gd")
+const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const COSMETIC_DATA_PATH: String = "res://cars/car_factory_cosmetics.json"
 
 const ORDER: Array[String] = ["red","white","blue","e30","flame"]
@@ -22,8 +24,8 @@ const CARS: Dictionary = {
         "length":4.166,"wheelbase":2.424,"width":1.91,"note":"13B ROTARY • EXPOSED",
         "profile":"res://cars/lada_13b.json","factory_model":"res://cars/models/lada_2106.json"},
     "white":{"name":"LADA 2106 DRIFT SPEC","paint":"PEARL WHITE","short":"LADA • WHITE",
-        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"13B ROTARY • CLEAN HOOD",
-        "profile":"res://cars/lada_13b.json","factory_model":"res://cars/models/lada_2106.json"},
+        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"N20B20 TURBO • STAGE 1 • CLEAN HOOD",
+        "profile":"res://cars/lada_n20.json","factory_model":"res://cars/models/lada_2106.json"},
     "blue":{"name":"RYU-32 COUPE","paint":"DEEP BLUE","short":"RYU-32 • BLUE",
         "length":4.545,"wheelbase":2.615,"width":1.90,"note":"4.0 V8 ITB • 350 HP • 400 NM",
         "profile":"res://cars/ryu32_v8.json","factory_model":"res://cars/models/ryu32.json"},
@@ -148,10 +150,68 @@ static func uses_factory_test_model(variant: String) -> bool:
         return ResourceLoader.exists(str((fm["model"] as Dictionary).get("glb","")))   # cars that only exist as a GLB
     return factory_test_models()
 
-static func handling(variant: String) -> Dictionary:
+## v0.1.38 (owner decision 2026-11-22, issue #25 c7080962400): the physics MODE.
+##  ARCADE_PLUS (default, "C+"): the approved arcade handling and the same 0-100 km/h, with the
+##    implausibly low top speed of every car lifted to a documented per-car target above 100 km/h.
+##  REAL_POWER_TEST (DEVELOPER only, "A"): a power-curve drivetrain with game-shifted gears and real
+##    drag replaces the constant drive force (steering / grip / drift stay arcade). Not saved to
+##    records or stars (race_results.gd); applies when a race starts.
+const MODE_ARCADE_PLUS: String = "ARCADE_PLUS"
+const MODE_REAL_POWER: String = "REAL_POWER_TEST"
+const MODES: Array[String] = [MODE_ARCADE_PLUS,MODE_REAL_POWER]
+
+static func physics_mode() -> String:
+    var m: String = str(DEV.get_value("developer","physics_mode",MODE_ARCADE_PLUS))
+    return m if MODES.has(m) else MODE_ARCADE_PLUS
+
+static func set_physics_mode(mode: String) -> void:
+    DEV.set_value("developer","physics_mode",mode if MODES.has(mode) else MODE_ARCADE_PLUS)
+
+## True when the A diagnostic drivetrain is on for races (the legacy BASELINE switch wins over it).
+static func real_power_active() -> bool:
+    return physics_mode() == MODE_REAL_POWER and not baseline_physics_forced()
+
+## Handling numbers of a car in the current mode. BASELINE (developer switch) = none (Lada defaults).
+static func handling(variant: String, mode: String = "") -> Dictionary:
     if baseline_physics_forced():
         return {}
-    return profile(variant).get("handling",{})
+    var h: Dictionary = profile(variant).get("handling",{})
+    if (mode if mode != "" else physics_mode()) == MODE_ARCADE_PLUS:
+        var plus: Dictionary = arcade_plus(variant)
+        if not plus.is_empty():
+            h = h.duplicate()
+            h.merge(plus,true)
+    return h
+
+## ARCADE_PLUS additions of a car (top speed target -> drag above the knee), or {} when it has none.
+static func arcade_plus(variant: String) -> Dictionary:
+    var block: Dictionary = profile(variant).get("arcade_plus",{})
+    if block.is_empty():
+        return {}
+    return DRIVE.arcade_plus_for(profile(variant).get("handling",{}),float(block["top_kmh"]),float(block.get("knee_mps",28.0)))
+
+## Power-curve drivetrain of a car for REAL_POWER_TEST: its "real_power" block + the engine block
+## (idle / limiter / gear table, the same numbers the engine sound uses).
+static func real_power(variant: String) -> Dictionary:
+    var prof: Dictionary = profile(variant)
+    if not prof.has("real_power"):
+        return {}
+    var rp: Dictionary = (prof["real_power"] as Dictionary).duplicate()
+    var eng: Dictionary = prof.get("engine",{})
+    rp["idle_rpm"] = float(eng.get("idle_rpm",900.0))
+    rp["limit_rpm"] = float(eng.get("limit_rpm",7000.0))
+    rp["shift_up_rpm"] = float(eng.get("gear_end_rpm",6500.0))
+    rp["gear_top_kmh"] = eng.get("gear_top_kmh",[48.0,82.0,116.0,150.0,195.0])
+    return rp
+
+## The one place that sets a drive model up for a car: handling + (A mode) the power-curve drivetrain.
+static func configure_model(model, variant: String, mode: String = "") -> void:
+    var m: String = mode if mode != "" else physics_mode()
+    model.apply_profile(handling(variant,m))
+    if m == MODE_REAL_POWER and not baseline_physics_forced():
+        var rp: Dictionary = real_power(variant)
+        if not rp.is_empty():
+            model.apply_real_power(rp)
 
 static func engine(variant: String) -> Dictionary:
     return profile(variant).get("engine",{})

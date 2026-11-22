@@ -196,8 +196,24 @@ func _run() -> void:
     if not _same(_trace(DRIVE.new()),GOLDEN) or not _same(_trace(_car("red")),GOLDEN):
         _fail("Lada baseline physics changed")
         return
-    if CARS.profile("white") != lada_json:
-        _fail("Paint variants of one car must share one mechanical profile")
+    # v0.1.38: red = 13B rotary, white = tuned N20B20 turbo (owner decision 2026-11-22): two
+    # mechanical cars on one body. The chassis numbers (everything the owner approved as the
+    # Lada handling) are identical; only the power calibration (drive_accel, drag_coeff) differs.
+    var white_json: Dictionary = CARS.profile("white")
+    if str(white_json.get("id","")) != "lada_n20" or white_json == lada_json:
+        _fail("The white Lada must have its own N20 profile")
+        return
+    for key in DRIVE.TUNABLE:
+        if key == "drive_accel" or key == "drag_coeff":
+            continue
+        if float(white_json["handling"][key]) != float(lada_json["handling"][key]):
+            _fail("The white Lada must keep the red Lada's chassis numbers (approved handling): "+key)
+            return
+    if float(white_json["handling"]["drive_accel"]) <= float(lada_json["handling"]["drive_accel"]):
+        _fail("The tuned N20 Lada (275 PS) must pull harder than the 13B (231 PS series output)")
+        return
+    if str(white_json["engine"]["layout"]) == str(lada_json["engine"]["layout"]) or int(white_json["engine"]["cylinders"]) != 4:
+        _fail("The white Lada engine must be its own four-cylinder turbo, not the rotary")
         return
     # v0.1.36: the Lada cars carry the rotary engine of the real build
     # (lada_13b.json); lada_baseline.json stays the benchmark file whose engine

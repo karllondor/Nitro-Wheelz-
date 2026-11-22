@@ -120,8 +120,9 @@ func _ready() -> void:
     route_mode = not track.closed_loop
     laps_total = 1 if route_mode else 3
     model = DRIVE.new()
-    # Per-car handling from its profile (Lada = baseline, unchanged).
-    model.apply_profile(CARS.handling(CARS.selected()))
+    # Per-car handling from its profile in the current physics mode (ARCADE_PLUS
+    # default; DEVELOPER > PHYSICS MODE can switch a race to REAL_POWER_TEST).
+    CARS.configure_model(model,CARS.selected())
     model.reset(track.start_position(),track.start_heading())
     _make_car()
     sfx = AUDIO.new()
@@ -718,13 +719,21 @@ func diag_text() -> String:
             parts.append("%s%s %.1f" % ["F" if at.z < 0.0 else "R","L" if at.x < 0.0 else "R",
                 rad_to_deg(atan2(axle.z,absf(axle.x)))])
     var iso: String = "" if isolated_layer == "off" else "\nLAYER HIDDEN: %s" % isolated_layer.to_upper()
-    return "RACE wheels (deg vs body): %s\nsteer %.1f deg  drift %.1f deg  %.0f km/h  run %.1f s%s" % [
+    return "PHYSICS MODE %s%s\nRACE wheels (deg vs body): %s\nsteer %.1f deg  drift %.1f deg  %.0f km/h  run %.1f s%s" % [
+        physics_mode_text(),"" if model.real == null else "  "+model.real.status_text(model.speed_mps()),
         "  ".join(parts),rad_to_deg(model.steering_angle),float(model.drift_angle),model.speed_kmh(),time_elapsed,iso]
+
+## ACTIVE PHYSICS MODE for developer overlays (never shown in the player HUD).
+func physics_mode_text() -> String:
+    if model != null and model.real != null:
+        return CARS.MODE_REAL_POWER
+    return "BASELINE (all cars)" if CARS.baseline_physics_forced() else CARS.MODE_ARCADE_PLUS
 
 ## Developer telemetry (Developer Mode > ELEVATION PHYSICS > TELEMETRY).
 func telemetry_text() -> String:
     var grade_force: int = int(dev.get("grade_force",0))
-    return "ELEVATION PHYSICS\n" + \
+    return "PHYSICS MODE %s\n" % physics_mode_text() + \
+        "ELEVATION PHYSICS\n" + \
         "grade road %+.1f %%  heading %+.1f %%\n" % [road_grade*100.0,heading_grade*100.0] + \
         "grade force %d %%  accel %.2f m/s2\n" % [grade_force,grade_accel.length()] + \
         "camera pitch %s  %.1f deg\n" % ["ON" if bool(dev.get("camera_pitch",true)) else "OFF",rad_to_deg(atan(heading_grade))] + \

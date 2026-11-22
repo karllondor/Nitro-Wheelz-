@@ -65,6 +65,10 @@ static func star_count(score: int, length_m: float) -> int:
             count += 1
     return count
 
+## False while the diagnostic physics mode is active: such runs are not comparable with the records.
+static func record_allowed() -> bool:
+    return not CARS.real_power_active()
+
 static func read_runs() -> Array:
     if not FileAccess.file_exists(STORAGE):
         return []
@@ -203,14 +207,19 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     var stars: int = star_count(score,length_m)
     var previous: Array = track_runs(track_id)
     var stamp: String = Time.get_datetime_string_from_system()
-    var stored: bool = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp,
-        DRIVER.get_driver_name(),CARS.selected())
+    # REAL_POWER_TEST (DEVELOPER physics diagnostic) never writes a record or a star: the run is
+    # shown, nothing is saved (owner decision 2026-11-22, #25 c7080962400).
+    var stored: bool = false
+    if record_allowed():
+        stored = save_run(track_id,seconds,score,stars,stats.get("laps",[]),stamp,
+            DRIVER.get_driver_name(),CARS.selected())
     data = summarize(track_id,track_name,seconds,score,stars,previous,track_runs(track_id),stamp,stats)
     data["tiers"] = star_tiers(length_m)
     # Older stored runs were starred by time: re-star every row by points.
     for run in data["top"]:
         run["stars"] = star_count(int(run["score"]),length_m)
     data["stored"] = stored
+    data["diagnostic"] = not record_allowed()
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/720.0,0.85,1.85)
     theme = STYLE.screen_theme(sc)
@@ -304,11 +313,14 @@ func _draw_board() -> void:
     _top_runs(Rect2(lay["top"]),k,u)
     var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS = DRIFT POINTS  •  v"+str(
         ProjectSettings.get_setting("application/config/version","?"))
-    if not bool(data.get("stored",true)):
+    var diagnostic: bool = bool(data.get("diagnostic",false))
+    if diagnostic:
+        foot = "DIAGNOSTIC PHYSICS (REAL_POWER_TEST)  •  THIS RUN IS NOT SAVED"
+    elif not bool(data.get("stored",true)):
         foot = "WARNING: THIS RUN COULD NOT BE SAVED ON THIS DEVICE"
     var menu: Rect2 = lay["menu"]
     STYLE.text(canvas,Vector2(Rect2(lay["restart"]).position.x,menu.end.y+34.0*k),foot,22.0*k,
-        STYLE.DIM if bool(data.get("stored",true)) else BAD,HORIZONTAL_ALIGNMENT_CENTER,
+        STYLE.DIM if (bool(data.get("stored",true)) or diagnostic) else BAD,HORIZONTAL_ALIGNMENT_CENTER,
         menu.end.x-Rect2(lay["restart"]).position.x,false)
 
 func _title(r: Rect2, k: float, u: float) -> void:

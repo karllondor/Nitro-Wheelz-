@@ -77,8 +77,11 @@ func _run() -> void:
         if not err.is_empty():
             _fail(err)
             return
-    if engines["red"] != engines["white"] or engines["red"] == engines["blue"]:
-        _fail("Lada red/white must share one profile, RYU-32 its own: "+str(engines))
+    # v0.1.38: the red Lada (13B rotary) and the white Lada (tuned N20B20 turbo) are two cars on
+    # one body: same chassis (wheelbase), different engine; the RYU-32 has its own body and V8.
+    if engines["red"][1] != engines["white"][1] or engines["red"][0] == engines["white"][0] \
+            or engines["white"][0] == engines["blue"][0] or engines["red"][0] == engines["blue"][0]:
+        _fail("Lada red (13B) and white (N20 turbo) must share the chassis but not the engine, RYU-32 its own: "+str(engines))
         return
     # 3) Garage choice survives an app restart (no garage visit).
     CARS.select("blue")

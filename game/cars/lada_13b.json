@@ -119,5 +119,32 @@
     "physical_layout": "A two-rotor Wankel fires twice per eccentric-shaft turn, exactly the firing rate of a four-cylinder four-stroke at the same shaft speed, so the synth runs 4 'cylinders' (two rotors x two exhaust ports) on two exhaust banks.",
     "character": "Bridgeport lope at idle (1,150 rpm, uneven pulses, hunting), no valvetrain tick (mech 0.12), open ITB intake honk, short headers, bright raspy pipe, 9,200 rpm limiter, lots of overrun popping (misfire 0.30).",
     "not_car_data": "Gear ratios, the final drive and the exact limiter of the real build are unknown; the numbers are sound design in the character of a bridgeported 13B."
+  },
+  "arcade_plus": {
+    "top_kmh": 200,
+    "status": "PROPOSED target, not owner-approved",
+    "basis": "ARCADE_PLUS lifts only the top speed (drag above 100.8 km/h); 0-100 km/h and the handling below the knee are unchanged. 200 km/h = the REAL_POWER_TEST top speed of this build rounded down to 5 km/h: the ESTIMATED 5-speed table of the engine block at the 9,200 rpm limiter (203.9 km/h), which lies below the power / drag limit of about 232 km/h (tools/perf/reference_model.py). Real gearbox + final drive: MISSING."
+  },
+  "real_power": {
+    "power_ps": 231,
+    "mass_kg": 1150,
+    "cda": 0.85,
+    "efficiency": 0.85,
+    "crr": 0.012,
+    "launch_accel": 5.5,
+    "torque_table": [[2000, 120], [3000, 165], [4000, 195], [5500, 211], [7000, 208], [8200, 198], [9000, 168]],
+    "provenance": {
+      "confirmed": [
+        "13B-MSP (RX-8 high-power version): 231 PS at 8,200 rpm and 211 Nm at 5,500 rpm, redline about 9,000 rpm (auto-data.net, ultimatespecs.com; some listings give 8,500 rpm for the power peak)."
+      ],
+      "estimates": [
+        "Torque between the two published points and below 4,000 / above 8,200 rpm is an ESTIMATE of a peaky rotary (shape only).",
+        "Mass 1,150 kg (shell + rotary + box + cage, +-100 kg). Drag area Cd*A 0.85 m2 (0.45-0.50 x 1.9). Drivetrain efficiency 0.85, rolling resistance 0.012, launch traction limit 5.5 m/s2 (RWD street tyres).",
+        "Gear table [48,82,116,150,195] km/h at 8,800 rpm is the SOUND-DESIGN table of the engine block, used here as the estimated gearing."
+      ],
+      "missing": [
+        "Real gearbox + final drive, tyre size, the real build's power after bridgeport / ITB / exhaust work (not counted: conservative)."
+      ]
+    }
   }
 }
