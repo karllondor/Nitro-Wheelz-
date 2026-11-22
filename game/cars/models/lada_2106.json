@@ -1,6 +1,6 @@
 {
   "id": "lada_2106_factory",
-  "status": "CAR FACTORY TEST MODEL - not approved; shown only with DEVELOPER > CAR FACTORY TEST MODELS: ON. The procedural model stays the default until the owner accepts this one.",
+  "status": "CAR FACTORY MODEL - the DEFAULT player-visible Lada since v0.1.34 (owner decision 2026-11-22, ADR-009); the earlier procedural model is available with DEVELOPER > CAR FACTORY GLB CARS: OFF. The owner's visual review of the final look continues.",
   "source": "tools/car_factory/blender/build_lada_2106.py (one GLB, geometry variants RED = slot 1, WHITE = slot 2)",
   "glb": "res://assets/cars/lada_2106/lada_2106.glb",
   "wheel_radius_m": 0.295,

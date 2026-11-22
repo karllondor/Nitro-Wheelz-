@@ -12,6 +12,7 @@ const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
 const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
 const COSMETICS = preload("res://scripts/vehicles/car_cosmetics.gd")
 const DEV = preload("res://scripts/dev_settings.gd")
+const COSMETIC_DATA_PATH: String = "res://cars/car_factory_cosmetics.json"
 
 const ORDER: Array[String] = ["red","white","blue","e30","flame"]
 const CARS: Dictionary = {
@@ -57,15 +58,18 @@ static func baseline_physics_forced() -> bool:
 static func set_baseline_physics_forced(on: bool) -> void:
     DEV.set_value("developer","baseline_physics",on)
 
-## DEVELOPER switch (v0.1.30): show the Car Factory TEST models (Blender ->
-## GLB) of cars that still have an approved procedural model. OFF by
-## default: the old model stays until the owner accepts the new one. Looks
-## only: handling, sound, collisions and saves never change.
+## v0.1.34 (owner decision 2026-11-22, issue #22): the Car Factory GLB models
+## (Blender -> GLB) are the NORMAL player-visible models of Lada RED / WHITE and
+## RYU-32. DEVELOPER > CAR FACTORY GLB CARS = OFF shows the earlier procedural
+## models for comparison. Stored as "legacy_procedural_cars" (default false): an
+## old saved "factory_test_models" value (the previous opt-in switch, default
+## OFF) is ignored, so every install gets the GLB cars. Looks only: handling,
+## sound, collisions and saves never change.
 static func factory_test_models() -> bool:
-    return bool(DEV.get_value("developer","factory_test_models",false))
+    return not bool(DEV.get_value("developer","legacy_procedural_cars",false))
 
 static func set_factory_test_models(on: bool) -> void:
-    DEV.set_value("developer","factory_test_models",on)
+    DEV.set_value("developer","legacy_procedural_cars",not on)
 
 ## DEVELOPER: which look a factory test model with several looks wears
 ## (RYU-32: "clean" or "livery"). Looks only.
@@ -76,6 +80,35 @@ static func set_factory_test_look(look: String) -> void:
     DEV.set_value("developer","factory_test_look",look)
 
 static var _models: Dictionary = {}
+static var _cosmetics_data: Dictionary = {}
+
+## Cosmetic presets (paint palette, wheels, SIGNATURE) of a car. A profile with
+## its own "cosmetics" block (E30) keeps it; the Car Factory cars take theirs
+## from game/cars/car_factory_cosmetics.json, apart from the physics profile and
+## from the Blender-generated model JSON (a model rebuild must not erase them).
+## Cars without presets (the AI test body: paint is baked) return an empty block.
+static func cosmetic_profile(variant: String) -> Dictionary:
+    var v: String = valid(variant)
+    var original: Dictionary = profile(v)
+    if COSMETICS.supported(original):
+        return original
+    if _cosmetics_data.is_empty():
+        var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(COSMETIC_DATA_PATH))
+        _cosmetics_data = raw if raw is Dictionary else {}
+    return {"cosmetics":_cosmetics_data.get(v,{})}
+
+## One appearance pipeline for the garage and the race: the saved choice plus
+## what belongs to the model (paint shader tweaks, and for the RYU-32 the stripes
+## livery, which is a normal PAINT preset on the same GLB).
+static func visual_choice(variant: String, choice: Dictionary) -> Dictionary:
+    var out: Dictionary = choice.duplicate(true)
+    var fm: Dictionary = factory_model(variant)
+    if not fm.is_empty():
+        out["paint_shader"] = (fm["look"] as Dictionary).get("paint_shader",{})
+    if valid(variant) == "blue":
+        out["livery_texture"] = "res://assets/cars/ryu32/ryu32_livery_provisional.png" \
+            if str(out.get("livery_id","clean")) == "stripes" else ""
+    return out
 
 ## {"model": <model block for NitroGlbCar>, "look": <paint + wheels>} of a
 ## variant's Car Factory test model, or {} when it has none.
@@ -133,7 +166,11 @@ static func make(variant: String) -> Node3D:
     var v: String = valid(variant)
     if uses_factory_test_model(v):
         var fm: Dictionary = factory_model(v)
-        return FACTORY_CAR.new().setup(v,{"model":fm["model"]},fm["look"])
+        var cprof: Dictionary = cosmetic_profile(v)
+        # Cars with presets wear the player's saved look; the others (AI test
+        # body, baked paint) the look from their model file.
+        var chosen: Dictionary = COSMETICS.current(v,cprof) if COSMETICS.supported(cprof) else (fm["look"] as Dictionary)
+        return FACTORY_CAR.new().setup(v,{"model":fm["model"]},visual_choice(v,chosen))
     if v == "blue" or v == "flame":      # "flame" without its GLB falls back to the coupe
         return COUPE.new()
     if bool(info(v).get("factory",false)):

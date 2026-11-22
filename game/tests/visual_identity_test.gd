@@ -78,7 +78,7 @@ func _run() -> void:
         return
     var cat = load("res://scripts/vehicles/car_catalog.gd")
     var made: Node3D = cat.make("blue")
-    var is_coupe: bool = made is NitroCoupeLowPoly
+    var is_coupe: bool = (made is NitroGlbCar) if cat.factory_test_models() else (made is NitroCoupeLowPoly)
     made.free()
     if not is_coupe or cat.valid("nope") != "red":
         _fail("Car catalog must build the coupe for 'blue' and fall back to red")

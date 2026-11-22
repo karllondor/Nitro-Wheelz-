@@ -5,6 +5,7 @@ const CAR = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const AUDIO = preload("res://scripts/audio/drive_audio.gd")
 const GARAGE = preload("res://scenes/garage.tscn")
+const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 
 func _initialize() -> void:
     call_deferred("_run")
@@ -61,7 +62,8 @@ func _run() -> void:
         _fail("White variant not persisted for race")
         return
     garage.call("_choose","blue")
-    if garage.get("active_variant") != "blue" or not (garage.get("car") is NitroCoupeLowPoly):
+    var coupe_visible: bool = (garage.get("car") is NitroGlbCar) if CARS.factory_test_models() else (garage.get("car") is NitroCoupeLowPoly)
+    if garage.get("active_variant") != "blue" or not coupe_visible:
         _fail("Garage cannot select the RYU-32 coupe")
         return
     if ProjectSettings.get_setting("nitro/car_variant","") != "blue":

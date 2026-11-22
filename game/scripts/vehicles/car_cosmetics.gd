@@ -64,6 +64,14 @@ static func sanitize(choice: Dictionary, profile: Dictionary) -> Dictionary:
     for old in aliases.keys():
         if str(old).to_upper() == hex:
             out["paint_color_hex"] = str(aliases[old])
+    var allowed_liveries: Array[String] = ["clean"]
+    for p in paints(profile):
+        if p is Dictionary:
+            var lid: String = str(p.get("livery_id","clean"))
+            if not allowed_liveries.has(lid):
+                allowed_liveries.append(lid)
+    if not allowed_liveries.has(str(out.get("livery_id","clean"))):
+        out["livery_id"] = sig.get("livery_id","clean")
     return out
 
 static func save(variant: String, choice: Dictionary) -> void:
@@ -97,7 +105,8 @@ static func paint_index(choice: Dictionary, profile: Dictionary) -> int:
     for i in range(list.size()):
         var p: Dictionary = list[i]
         if str(p["hex"]).to_lower() == str(choice.get("paint_color_hex","")).to_lower() \
-                and str(p["finish"]) == str(choice.get("paint_finish","")):
+                and str(p["finish"]) == str(choice.get("paint_finish","")) \
+                and str(p.get("livery_id","clean")) == str(choice.get("livery_id","clean")):
             return i
     return -1
 
@@ -114,6 +123,7 @@ static func next_paint(variant: String, profile: Dictionary) -> Dictionary:
     var p: Dictionary = list[(paint_index(choice,profile)+1)%list.size()]
     choice["paint_color_hex"] = str(p["hex"])
     choice["paint_finish"] = str(p["finish"])
+    choice["livery_id"] = str(p.get("livery_id","clean"))
     save(variant,choice)
     return choice
 
