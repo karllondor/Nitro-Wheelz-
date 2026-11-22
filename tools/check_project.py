@@ -127,11 +127,40 @@ def validate_structure(root):
         errors.append("Project configuration unreadable: "+str(exc))
     return errors
 
+COORDINATION_MAX_BYTES = 64*1024
+
+def validate_coordination_docs(root):
+    """Coordination files (docs/dev) are small text. A runaway automatic edit once turned a
+    5 KB handoff into 1.4 MB by inserting one sentence before every character (found only
+    hours later by another agent). Fail on a huge file or on one line repeated all over it."""
+    errors = []
+    base = Path(root)/"docs"/"dev"
+    if not base.is_dir():
+        return errors
+    for path in sorted(base.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in (".md",".json",".txt"):
+            continue
+        size = path.stat().st_size
+        rel = path.relative_to(root).as_posix()
+        if size > COORDINATION_MAX_BYTES:
+            errors.append("%s is %d bytes (coordination docs must stay under %d; corrupted by an automatic edit?)" % (rel,size,COORDINATION_MAX_BYTES))
+            continue
+        lines = path.read_text(encoding="utf-8",errors="replace").splitlines()
+        if len(lines) > 200:
+            counts = {}
+            for line in lines:
+                if len(line) > 40:
+                    counts[line] = counts.get(line,0)+1
+            if counts and max(counts.values()) > len(lines)*0.3:
+                errors.append("%s repeats one line %d times (corrupted by an automatic edit?)" % (rel,max(counts.values())))
+    return errors
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-ref",help="Trusted git baseline e.g. origin/main or HEAD^")
     args = parser.parse_args()
     errors = validate_structure(ROOT)
+    errors += validate_coordination_docs(ROOT)
     baseline = None
     if args.base_ref:
         try:

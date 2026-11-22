@@ -69,3 +69,19 @@ NEXT EXACT COMMAND/ACTION FOR OTHER AGENT:
 ```
 
 **Single rule:** An agent cannot call something DONE until its own code, tests, CI status and necessary phone proof are linked to a specific merged SHA.
+
+## v1.1 addendum - message hygiene for Claude Code web sessions (2026-11-22, PROPOSED by Claude Code, owner approval pending)
+Evidence and reasoning: `docs/dev/COMMUNICATION_AUDIT_20261122.md`. One-page checklist: `docs/dev/START_HERE.md`.
+1. **GitHub from a Claude Code web session is REST only.** `gh issue view|list` and `gh pr list` (named above and in the #26
+   handshake) FAIL with HTTP 403 (GraphQL blocked). Use `python3 tools/coord/inbox.py` or `gh api repos/{owner}/{repo}/...`.
+2. **Authorship line.** The GitHub login of every comment is the owner's account (`karllondor` / `fottokarll`), whoever typed it.
+   First line of each agent comment: `FROM: CLAUDE | CHATGPT | OWNER`. A decision relayed by ChatGPT: `FROM: CHATGPT (relaying OWNER)`
+   plus the owner's own words in quotes.
+3. **ACK format.** First line `ACK <token>`; then model, branch, full SHA and `READ-UP-TO: #<issue>:<comment id>` for every issue read
+   (the next session's `inbox.py` starts from that watermark, so no local state is needed).
+4. **Delivery is asynchronous.** A comment never starts or wakes a session. Only an acknowledgement quoting something the other side
+   could not guess (`RECEIVED <token> head=<sha7>`) proves it was read. Do not write "dispatched" for "posted".
+5. **Decisions** that survive a day go into `docs/dev/OWNER_DECISIONS.md` (append-only) so nobody replays long comment chains with
+   several "supersedes". **Corruption guard:** `tools/check_project.py` fails a `docs/dev` file over 64 KB or with one line repeated
+   over 30 % of it (a 5 KB handoff once grew to 1.4 MB unnoticed).
+
