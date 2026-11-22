@@ -697,8 +697,9 @@ def build_bonnet():
 
 def build_engine_bay():
     """RED: open bay (body-colour inner wings, firewall, slam panel, dark
-    floor), the VAZ inline four with four polished ITB trumpets, radiator,
-    headers, battery and a red reservoir (concept sheet)."""
+    floor), the Mazda 13B two-rotor Wankel with four polished ITB trumpets
+    (v0.1.36; was a VAZ inline four), radiator, headers, battery and a red
+    reservoir (concept sheet + owner photos)."""
     part = nwcf.Part("engine_bay")
     ys = [y for y in stations() if HOOD_Y0 - 1e-6 <= y <= HOOD_Y1 + 1e-6]
     floor_z = 0.40
@@ -726,28 +727,64 @@ def build_engine_bay():
     # Radiator behind the slam panel.
     nwcf.box(part, (0.0, y1 - 0.055, 0.565), (1.10, 0.050, 0.250), "radiator", bevel=0.006)
     nwcf.box(part, (0.0, y1 - 0.055, 0.700), (1.14, 0.070, 0.030), "alu_cast", bevel=0.008)
-    # Engine: block, cam cover, intake plenum with four trumpets (2 x 2).
+    # Engine (v0.1.36): the red Lada carries a Mazda 13B-MSP two-rotor Wankel
+    # (RX-8 donor engine, bridgeported, four individual throttle bodies in a row,
+    # owner photos 2026-11-22): rotor housings stacked along the car, iron
+    # plates between them, front cover with the pulleys, an aluminium rail with
+    # four polished trumpets on top, an oil filter and a breather catch can.
     ey = 1.40
-    nwcf.box(part, (0.02, ey, 0.510), (0.34, 0.56, 0.230), "engine_black", bevel=0.020)
-    nwcf.box(part, (0.02, ey, 0.660), (0.25, 0.50, 0.075), "alu_cast", bevel=0.022, segments=3)
-    for k in range(5):
-        nwcf.box(part, (0.02, ey - 0.18 + 0.09 * k, 0.699), (0.21, 0.012, 0.010), "alu_cast", bevel=0.003)
-    nwcf.box(part, (-0.17, ey, 0.640), (0.16, 0.48, 0.080), "alu_cast", bevel=0.015)
-    for i in range(2):
-        for j in range(2):
-            at = Vector((-0.12 - 0.13 * i + 0.065, ey - 0.095 + 0.19 * j, 0.690))
-            m = nwcf.frame_from_axis(tuple(at), (0, 0, 1))
-            bell = [(0.0, 0.034), (0.050, 0.034), (0.085, 0.040), (0.108, 0.054), (0.118, 0.066),
-                    (0.121, 0.068), (0.120, 0.060), (0.112, 0.056)]
-            nwcf.lathe(part, m, bell, "chrome", segments=20,
-                       orient=lambda c, at=at: Vector((c.x - at.x, c.y - at.y, 0.25)))
-            nwcf.lathe(part, m, [(0.112, 0.056), (0.050, 0.030), (0.050, 0.0)], "soot", segments=12,
-                       orient=lambda c: (0.0, 0.0, 1.0))
+    ex, ez = 0.02, 0.545                      # eccentric-shaft axis (along Y)
+
+    def disc(y_lo, y_hi, r, key, x=ex, z=ez, cap=True, segments=24, bevel=True):
+        """Cylinder along Y from y_lo to y_hi (front = +Y), optionally bevelled.
+        (The triangle budget of the car is 42,000: keep the segment counts low.)"""
+        mm = nwcf.frame_from_axis((x, y_lo, z), (0, 1, 0))
+        ln = y_hi - y_lo
+        bv = min(0.006, ln * 0.2)
+        prof = [(0.0, r - bv), (bv, r), (ln - bv, r), (ln, r - bv)] if bevel else [(0.0, r), (ln, r)]
+        nwcf.lathe(part, mm, prof, key, segments=segments, cap_start=key if cap else None, cap_end=key if cap else None,
+                   orient=lambda c, x=x, z=z: Vector((c.x - x, 0.0, c.z - z)))
+
+    disc(ey + 0.165, ey + 0.235, 0.150, "engine_black")             # front cover
+    disc(ey + 0.015, ey + 0.165, 0.178, "alu_cast")                  # rotor housing A
+    disc(ey - 0.015, ey + 0.015, 0.168, "engine_black")              # intermediate plate
+    disc(ey - 0.165, ey - 0.015, 0.178, "alu_cast")                  # rotor housing B
+    disc(ey - 0.235, ey - 0.165, 0.150, "engine_black")              # rear iron
+    # Tie-rod bolt heads around the front cover.
+    for k in range(8):
+        ang = math.tau * k / 8.0
+        bx, bz = ex + 0.128 * math.cos(ang), ez + 0.128 * math.sin(ang)
+        disc(ey + 0.235, ey + 0.244, 0.011, "chrome", x=bx, z=bz, segments=6, bevel=False)
+    # Crank pulley + belt pulleys and the alternator on the front cover.
+    disc(ey + 0.244, ey + 0.276, 0.062, "alu_cast", segments=18)
+    disc(ey + 0.276, ey + 0.290, 0.030, "black_satin", segments=12, bevel=False)
+    disc(ey + 0.235, ey + 0.272, 0.036, "alu_cast", x=ex - 0.150, z=ez + 0.040, segments=14, bevel=False)   # alternator pulley
+    nwcf.box(part, (ex - 0.150, ey + 0.200, ez + 0.040), (0.085, 0.060, 0.085), "alu_cast", bevel=0.012)
+    # Aluminium intake rail along the top and four individual throttle trumpets.
+    nwcf.box(part, (ex, ey, 0.708), (0.060, 0.44, 0.034), "alu_cast", bevel=0.010, segments=3)
+    for k in range(4):
+        yk = ey - 0.165 + 0.110 * k
+        nwcf.box(part, (ex, yk, 0.690), (0.052, 0.050, 0.060), "alu_cast", bevel=0.010)  # throttle body
+        at = Vector((ex, yk, 0.725))
+        m = nwcf.frame_from_axis(tuple(at), (0, 0, 1))
+        bell = [(0.0, 0.026), (0.040, 0.026), (0.066, 0.031), (0.084, 0.042), (0.092, 0.051),
+                (0.095, 0.053), (0.094, 0.046), (0.087, 0.043)]
+        nwcf.lathe(part, m, bell, "chrome", segments=20,
+                   orient=lambda c, at=at: Vector((c.x - at.x, c.y - at.y, 0.25)))
+        nwcf.lathe(part, m, [(0.087, 0.043), (0.040, 0.023), (0.040, 0.0)], "soot", segments=12,
+                   orient=lambda c: (0.0, 0.0, 1.0))
+    # Oil filter (black can, silver cap) on the right side and a breather catch can.
+    mf = nwcf.frame_from_axis((ex + 0.178, ey - 0.02, ez - 0.035), (1, 0, 0))
+    nwcf.lathe(part, mf, [(0.0, 0.038), (0.060, 0.038), (0.066, 0.032), (0.068, 0.0)], "black_satin", segments=18,
+               cap_start="black_satin", orient=lambda c, y0=ey - 0.02, z0=ez - 0.035: Vector((0.3, c.y - y0, c.z - z0)))
+    mc = nwcf.frame_from_axis((ex - 0.118, ey + 0.150, 0.690), (0, 0, 1))
+    nwcf.lathe(part, mc, [(0.0, 0.030), (0.075, 0.030), (0.082, 0.024), (0.086, 0.0)], "alu_cast", segments=16,
+               cap_start="alu_cast", orient=lambda c, x0=ex - 0.118, y0=ey + 0.150: Vector((c.x - x0, c.y - y0, 0.3)))
     # Headers on the right side, dropping into the bay.
     for k in range(4):
         yk = ey - 0.19 + 0.127 * k
         nwcf.tube(part, [(0.19, yk, 0.560), (0.30, yk, 0.545), (0.36, yk - 0.03, 0.47),
-                         (0.38, ey - 0.10, 0.41)], 0.019, "header", sides=8, cap=False)
+                         (0.38, ey - 0.10, 0.41)], 0.019, "header", sides=8, cap=False)  # bridgeport ports -> custom headers
     # Battery + red reservoir, hoses.
     nwcf.box(part, (0.50, 1.09, 0.500), (0.17, 0.25, 0.170), "black_satin", bevel=0.010)
     nwcf.box(part, (0.50, 1.04, 0.590), (0.12, 0.06, 0.020), "red_part", bevel=0.005)

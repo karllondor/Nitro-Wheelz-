@@ -3,6 +3,13 @@
   "name": "RYU-32 COUPE",
   "role": "Heavier V8 drift coupe: stronger exits, stable long drifts, more throttle and countersteer work, grips up sooner when you lift; harder to throw in and longer to stop. Not better at everything.",
   "spec": "4.0 V8 ITB • 350 HP • 400 Nm (owner's reference car)",
+  "performance": {
+    "power_ps": 350,
+    "mass_kg": 1300,
+    "power_to_weight_ps_per_t": 269,
+    "source": "Power: the owner's reference (4.0 V8 ITB, 350 HP). Mass: ESTIMATE for a V8-swapped coupe, +-100 kg; the owner has not given a weight.",
+    "calibration": "Target from the power-to-weight law: 2.43 s and 141.5 km/h. Measured 2.68 s / 140.5 km/h: +10 % slower than the target, inside the +-12 % tolerance of the mass estimate, so the approved handling is left untouched."
+  },
   "handling": {
     "wheelbase": 2.615,
     "drive_accel": 13.4, "top_speed_mps": 54.0, "drag_coeff": 0.0085,

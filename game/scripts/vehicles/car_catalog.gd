@@ -5,8 +5,10 @@ class_name NitroCarCatalog
 ## Each variant points at a car PROFILE (game/cars/*.json): handling numbers
 ## for the shared drive model and an engine/sound block for the synth. Paint
 ## variants of one car share one mechanical profile (Lada red/white ->
-## lada_baseline). Profiles are data, so cars can be tuned without touching
-## the driving code; the Lada baseline stays the 1:1 reference.
+## lada_13b: the handling numbers of lada_baseline + the rotary engine of the
+## real build). Profiles are data, so cars can be tuned without touching the
+## driving code; the Lada handling stays the 1:1 reference (lada_baseline.json
+## is kept as the benchmark file for the physics and sound fingerprints).
 const LADA = preload("res://scripts/vehicles/lada_lowpoly.gd")
 const COUPE = preload("res://scripts/vehicles/coupe_lowpoly.gd")
 const FACTORY_CAR = preload("res://scripts/vehicles/glb_car.gd")
@@ -17,11 +19,11 @@ const COSMETIC_DATA_PATH: String = "res://cars/car_factory_cosmetics.json"
 const ORDER: Array[String] = ["red","white","blue","e30","flame"]
 const CARS: Dictionary = {
     "red":{"name":"LADA 2106 DRIFT SPEC","paint":"RACING RED","short":"LADA • RED",
-        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"EXPOSED ENGINE",
-        "profile":"res://cars/lada_baseline.json","factory_model":"res://cars/models/lada_2106.json"},
+        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"13B ROTARY • EXPOSED",
+        "profile":"res://cars/lada_13b.json","factory_model":"res://cars/models/lada_2106.json"},
     "white":{"name":"LADA 2106 DRIFT SPEC","paint":"PEARL WHITE","short":"LADA • WHITE",
-        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"CLEAN HOOD",
-        "profile":"res://cars/lada_baseline.json","factory_model":"res://cars/models/lada_2106.json"},
+        "length":4.166,"wheelbase":2.424,"width":1.91,"note":"13B ROTARY • CLEAN HOOD",
+        "profile":"res://cars/lada_13b.json","factory_model":"res://cars/models/lada_2106.json"},
     "blue":{"name":"RYU-32 COUPE","paint":"DEEP BLUE","short":"RYU-32 • BLUE",
         "length":4.545,"wheelbase":2.615,"width":1.90,"note":"4.0 V8 ITB • 350 HP • 400 NM",
         "profile":"res://cars/ryu32_v8.json","factory_model":"res://cars/models/ryu32.json"},

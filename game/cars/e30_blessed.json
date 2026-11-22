@@ -31,12 +31,12 @@
     "reattach_seconds": 0.45,
     "countersteer_assist": 0.66,
     "wheelbase": 2.57,
-    "drive_accel": 11.8,
+    "drive_accel": 10.1,
     "brake_accel": 17.0,
     "reverse_accel": 4.8,
     "reverse_limit": 8.5,
     "handbrake_decel": 2.0,
-    "drag_coeff": 0.009,
+    "drag_coeff": 0.00915,
     "rolling_drag": 0.45,
     "yaw_damping": 1.22,
     "yaw_torque_gain": 0.522,
@@ -56,7 +56,7 @@
     "engine_brake_decel": 0.0
   },
   "handling_notes": {
-    "source": "Copy of lada_baseline handling (v0.1.12+ tune). Only 'wheelbase' changed to the confirmed factory 2.570 m. Lada and RYU-32 profiles are untouched.",
+    "source": "Copy of lada_baseline handling (v0.1.12+ tune) with only 'wheelbase' (confirmed factory 2.570 m) and, since v0.1.36, 'drive_accel' / 'drag_coeff' changed: the power-to-weight calibration (193 PS / 1,250 kg = 154 PS/t vs 201 PS/t of the Lada 13B). Target 0-100 km/h 4.29 s and 116.9 km/h, measured 4.29 s / 116.9 km/h (tests/car_performance_test.gd). DEVELOPER > BASELINE PHYSICS FOR ALL CARS gives the old equal-performance behaviour.",
     "proposed_tuning_not_applied": {
       "note": "From the research JSON 'provisional_game_profile_not_actual_vehicle'. NOT applied: needs an A/B drive test against the Lada baseline on the same course.",
       "vehicle_mass_kg_tuning_start": 1250,
@@ -209,5 +209,11 @@
   "presentation": {
     "garage_framing": "auto",
     "garage_framing_note": "v0.3: the garage fits the lens to the real car every frame (90 % of the card, widest angle of a full turn = floor, up to 22 % closer at front / rear views). The v0.2 fixed garage_zoom 1.18 is superseded."
+  },
+  "performance": {
+    "power_ps": 193,
+    "mass_kg": 1250,
+    "power_to_weight_ps_per_t": 154,
+    "source": "Power: factory M52B28 193 PS (SRC07). Mass: the research tuning start (1,250 kg, four-door sedan with the 2.8 six). Neither is dyno / scale data of this build."
   }
 }

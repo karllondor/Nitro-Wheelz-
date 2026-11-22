@@ -199,14 +199,45 @@ func _run() -> void:
     if CARS.profile("white") != lada_json:
         _fail("Paint variants of one car must share one mechanical profile")
         return
+    # v0.1.36: the Lada cars carry the rotary engine of the real build
+    # (lada_13b.json); lada_baseline.json stays the benchmark file whose engine
+    # block still equals the synth defaults (the sound fingerprint below).
+    var baseline_json: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://cars/lada_baseline.json"))
+    for key in DRIVE.TUNABLE:
+        if float(baseline_json["handling"][key]) != float(base[key]):
+            _fail("lada_baseline.json must keep the baseline value for "+key)
+            return
     var s_default = SYNTH.new()
     var s_lada = SYNTH.new()
-    s_lada.apply_profile(lada_json["engine"])
+    s_lada.apply_profile(baseline_json["engine"])
     for s in [s_default,s_lada]:
         var fp: Array = _audio_fingerprint(s)
         if absf(float(fp[0])-float(AUDIO_GOLDEN[0])) > 1e-4 or absf(float(fp[1])-float(AUDIO_GOLDEN[1])) > 1e-2 or int(fp[2]) != int(AUDIO_GOLDEN[2]):
             _fail("Lada engine sound changed: "+str(fp))
             return
+    # 1b) Lada cars = 13B rotary: two rotors fire like four cylinders, two
+    #     exhaust banks, a much higher limiter, renders finite and audible.
+    var rot = SYNTH.new()
+    rot.apply_profile(CARS.engine("red"))
+    if not rot.layout.contains("ROTARY") or rot.cylinders != 4 or rot._banks != 2 or rot.limit_rpm < 8500.0:
+        _fail("The Lada must be a two-rotor 13B (4 firing events per turn, two banks, limiter >= 8,500 rpm)")
+        return
+    rot.rpm = 6000.0
+    rot.load = 1.0
+    rot.render(4096)
+    var rbuf: PackedVector2Array = rot.render(8192)
+    var rpeak: float = 0.0
+    for rv in rbuf:
+        if is_nan(rv.x) or is_inf(rv.x):
+            _fail("rotary engine sound produced NaN / inf")
+            return
+        rpeak = maxf(rpeak,absf(rv.x))
+    if rpeak < 0.02 or rpeak > 1.5:
+        _fail("rotary engine sound level %.3f outside 0.02 .. 1.5" % rpeak)
+        return
+    if absf(rot.firing_hz()-6000.0/60.0*2.0) > 0.01:
+        _fail("a two-rotor engine must fire twice per shaft turn")
+        return
     # 2) RYU-32 V8 profile: different handling and a V8 engine.
     var ryu = _car("blue")
     if absf(ryu.wheelbase-2.615) > 1e-6 or not _same([_trace(ryu)[0]],[GOLDEN[0]]) == false:
@@ -263,7 +294,7 @@ func _check(lm: Dictionary, rm: Dictionary) -> void:
     if not _same(_trace(fm),GOLDEN):
         _fail("Baseline-physics switch must give every car the Lada physics")
         return
-    print("PASS: Lada baseline physics bit-identical, Lada engine sound = synth defaults (v0.1.21 fingerprint), RYU-32 V8 profile loads with two exhaust banks, measured character differs as intended, baseline switch")
+    print("PASS: Lada baseline physics bit-identical, lada_baseline.json engine sound = synth defaults (v0.1.21 fingerprint), the Lada cars carry the 13B rotary (two rotors fire twice per shaft turn, two exhaust banks, 9,200 rpm limiter), RYU-32 V8 profile loads with two exhaust banks, measured character differs as intended, baseline switch")
     print("NOT RUN: human feel on a phone, synth CPU on Android / Web (use DEVELOPER > AUDIO BENCHMARK)")
     quit(0)
 

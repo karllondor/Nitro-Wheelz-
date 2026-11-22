@@ -35,7 +35,7 @@ func _run() -> void:
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: E30 Blessed factory car (GLB) in the catalog, Lada/RYU-32 profiles untouched, E30 handling = Lada baseline + confirmed wheelbase (proposed tuning not applied), 3 body materials converted, 4 hubs, budget held, factory dimensions, wheel clearance, cosmetics persist without touching handling, garage = race car, I6 sound")
+    print("PASS: E30 Blessed factory car (GLB) in the catalog, Lada/RYU-32 profiles untouched, E30 handling = Lada baseline + confirmed wheelbase + the power-to-weight calibration (drive_accel, drag_coeff; proposed tuning not applied), 3 body materials converted, 4 hubs, budget held, factory dimensions, wheel clearance, cosmetics persist without touching handling, garage = race car, I6 sound")
     print("NOT RUN: frame time / GPU cost on a real Android phone and in a mobile browser; visual approval by the owner")
     quit(0)
 
@@ -45,15 +45,20 @@ func _checks() -> String:
         return "E30 missing from the car catalog"
     var lada: Dictionary = CARS.profile("red")
     var e30: Dictionary = CARS.profile("e30")
-    if str(CARS.profile("blue").get("id","")) != "ryu32_v8" or str(lada.get("id","")) != "lada_baseline":
+    if str(CARS.profile("blue").get("id","")) != "ryu32_v8" or str(lada.get("id","")) != "lada_13b":
         return "Existing car profiles changed"
     var lh: Dictionary = lada["handling"]
     var eh: Dictionary = e30["handling"]
+    # v0.1.36: apart from the confirmed wheelbase the E30 copies the Lada
+    # handling except the two power-to-weight calibration numbers (drive_accel,
+    # drag_coeff: 193 PS / 1,250 kg vs 231 PS / 1,150 kg; car_performance_test).
     for key in lh.keys():
-        if key == "wheelbase":
+        if key == "wheelbase" or key == "drive_accel" or key == "drag_coeff":
             continue
         if not eh.has(key) or float(eh[key]) != float(lh[key]):
             return "E30 handling must copy the Lada baseline (%s)" % key
+    if float(eh["drive_accel"]) >= float(lh["drive_accel"]) or float(eh["drag_coeff"]) >= float(lh["drag_coeff"])*1.05:
+        return "E30 must have less drive than the rotary Lada (calibration)"
     if eh.size() != lh.size() or absf(float(eh["wheelbase"])-2.570) > 1e-6:
         return "E30 wheelbase must be the confirmed factory 2.570 m"
     if not (e30.get("handling_notes",{}) as Dictionary).has("proposed_tuning_not_applied"):

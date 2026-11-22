@@ -49,7 +49,7 @@ func _checks() -> String:
         if not ok:
             return "Switch OFF must keep the procedural model (%s)" % v
     CARS.set_factory_test_models(true)
-    if CARS.handling("red") != handling_off or str(CARS.profile("red").get("id","")) != "lada_baseline":
+    if CARS.handling("red") != handling_off or str(CARS.profile("red").get("id","")) != "lada_13b":
         return "Factory test models must not touch the Lada handling profile"
     if CARS.handling("blue") != ryu_off or CARS.engine("blue") != ryu_engine or int(ryu_engine["cylinders"]) != 8:
         return "Factory test models must not touch the RYU-32 handling / V8 engine profile"

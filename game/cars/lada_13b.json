@@ -1,0 +1,123 @@
+{
+  "id": "lada_13b",
+  "name": "LADA 2106 DRIFT SPEC",
+  "role": "The starter car and the physics benchmark: light, agile, easy short drifts. Same handling numbers as lada_baseline.json (bit-identical, car_profiles_test); since v0.1.36 it carries the rotary engine of the real build and the performance reference of the power-to-weight calibration.",
+  "spec": "13B-MSP Renesis rotary (RX-8) • bridgeport + ITB • ~231 PS",
+  "provenance": {
+    "confirmed": [
+      "13B-MSP Renesis 1.3 L two-rotor engine from the Mazda RX-8 swapped into the red Lada 2106 of the Nightride crew, bridgeported, individual throttle bodies, custom exhaust, rear suspension from a BMW E30 Compact, roll cage, wider arches (owner-supplied summary quoting the Nightride videos, 2026-11-22; NOT independently verified: a web search found no page about this build).",
+      "RX-8 13B-MSP series output 231 PS, 0-100 km/h about 6.4 s at 1,380-1,390 kg (auto-data.net, ultimatespecs.com, fastestlaps.com).",
+      "Lada 2106 (VAZ-2106) 1.6: 75 PS, 1,035 kg, 0-100 km/h 16-17.5 s, about 150 km/h (auto-data.net, autohints.com, Wikipedia)."
+    ],
+    "estimates": [
+      "Build mass about 1,150 kg: 1,035 kg shell + about 100 kg for the larger rotary engine and gearbox + about 40 kg cage - weight saved by gutting. +-100 kg.",
+      "Power 231 PS is the series output of the donor engine. Bridgeport / ITB / exhaust work raises it by an unknown amount; it is NOT counted (conservative).",
+      "White paint variant (clean hood) = the same mechanical car (the catalog rule: paint variants share one profile). If the white car should have another engine, give it its own profile."
+    ]
+  },
+  "performance": {
+    "power_ps": 231,
+    "mass_kg": 1150,
+    "power_to_weight_ps_per_t": 201,
+    "reference": "The calibration anchor: 0-100 km/h 3.29 s and 127.8 km/h in the game's drive model (the approved v0.1.12+ tune). Every other car is scaled from it, see docs/CAR_PROFILES.md and tests/car_performance_test.gd."
+  },
+  "handling": {
+    "front_grip": 6.15,
+    "rear_grip": 5.95,
+    "rear_slide_grip": 0.6,
+    "handbrake_grip": 0.1,
+    "reattach_seconds": 0.45,
+    "countersteer_assist": 0.66,
+    "wheelbase": 2.424,
+    "drive_accel": 11.8,
+    "brake_accel": 17.0,
+    "reverse_accel": 4.8,
+    "reverse_limit": 8.5,
+    "handbrake_decel": 2.0,
+    "drag_coeff": 0.009,
+    "rolling_drag": 0.45,
+    "yaw_damping": 1.22,
+    "yaw_torque_gain": 0.522,
+    "yaw_lateral_budget": 13.5,
+    "slide_yaw_bonus": 2.4,
+    "low_speed_grip_start": 2.7,
+    "top_speed_mps": 50.0,
+    "steer_lock_rest_deg": 35.5,
+    "steer_lock_mid_deg": 22.0,
+    "steer_lock_high_deg": 8.5,
+    "power_loss_base": 0.83,
+    "power_loss_per_mps": 0.023,
+    "power_loss_max": 0.6,
+    "power_entry_kick": 0.252,
+    "flick_yaw_impulse": 0.56,
+    "slide_drive_factor": 0.76,
+    "engine_brake_decel": 0.0
+  },
+  "engine": {
+    "layout": "13B ROTARY ITB",
+    "cylinders": 4,
+    "idle_rpm": 1150,
+    "limit_rpm": 9200,
+    "shift_floor_rpm": 4300,
+    "gear_end_rpm": 8800,
+    "gear_top_kmh": [
+      48,
+      82,
+      116,
+      150,
+      195
+    ],
+    "cylinder_gain": [
+      1.0,
+      0.9,
+      0.97,
+      0.88
+    ],
+    "cylinder_timing": [
+      0.0,
+      0.012,
+      -0.008,
+      0.01
+    ],
+    "boom_hz": 120,
+    "boom_bw": 90,
+    "pipe_hz": 360,
+    "pipe_bw": 130,
+    "rasp_hz": 1050,
+    "rasp_bw": 340,
+    "intake_hz": 720,
+    "intake_bw": 240,
+    "boom_gain": 0.85,
+    "intake_gain": 1.7,
+    "uneven_idle": 0.34,
+    "uneven_high": 0.05,
+    "loudness": 1.18,
+    "bank": [
+      0,
+      1,
+      0,
+      1
+    ],
+    "header_m": [
+      0.5,
+      0.5
+    ],
+    "tail_m": 2.6,
+    "header_reflect": -0.3,
+    "tail_reflect": 0.3,
+    "pipe_damp_hz": 1400,
+    "jet": 1.35,
+    "jitter_idle": 0.03,
+    "jitter_high": 0.004,
+    "wander": 0.02,
+    "misfire": 0.3,
+    "mech": 0.12,
+    "mech_hz": 5200,
+    "room": 0.2
+  },
+  "engine_notes": {
+    "physical_layout": "A two-rotor Wankel fires twice per eccentric-shaft turn, exactly the firing rate of a four-cylinder four-stroke at the same shaft speed, so the synth runs 4 'cylinders' (two rotors x two exhaust ports) on two exhaust banks.",
+    "character": "Bridgeport lope at idle (1,150 rpm, uneven pulses, hunting), no valvetrain tick (mech 0.12), open ITB intake honk, short headers, bright raspy pipe, 9,200 rpm limiter, lots of overrun popping (misfire 0.30).",
+    "not_car_data": "Gear ratios, the final drive and the exact limiter of the real build are unknown; the numbers are sound design in the character of a bridgeported 13B."
+  }
+}
