@@ -1,3 +1,12 @@
+## [0.1.35] — Player card, one RACE SETUP flow, results table layout (TEST BUILD, one version)
+Issue #24 (owner request 2026-11-22), branch `agent/claude/profile-flow-v0.1.35` = everything of v0.1.34 + this. Flow, rules and limits: docs/PLAYER_PROFILE_FLOW.md; handoff + screenshots: docs/dev/handoffs/issue-24-20261122-claude.md.
+- Finish screen TOP RUNS: POINTS flush right, TIME beside it, STARS, then DRIVER and CAR with all the remaining room (text shrinks to fit instead of being cut).
+- Limits: player name 2–14 characters (letters incl. Polish, digits, space `- _ . '`), every car label at most 14 characters (tested for the whole catalog).
+- First launch asks for the player name (WELCOME). New PLAYER CARD (tap the player chip in the main menu): vector avatar with skin / hair colour / hair style / t-shirt colour, editable name, total stars, list of the tracks driven with the best time / points / stars; a tap selects that track and opens RACE SETUP, where CAR opens the garage.
+- DRIVE now opens RACE SETUP (TRACK + CAR + DRIVE). The track list only picks a track and returns to where it was opened from (it no longer starts the race); the garage has a TRACK button and BACK returns to the menu or to RACE SETUP; the last track is remembered.
+- New tests: player_profile_test (limits, table columns at 900 / 960 / 1000 px design width, avatar, progress, the whole menu -> setup -> track -> garage flow); evidence tool tests/capture_profile_flow.gd.
+- Android versionCode 35 / versionName 0.1.35. NOT RUN: every phone check (keyboard on the name fields, touch targets, long names on the phone, fresh install vs upgrade).
+
 ## [0.1.34] — Integration TEST build: four phone bugs, GLB cars by default, driver table, loading screen (TEST BUILD)
 Integration branch `agent/claude/integration-v0.1.34` = merges of the task branches below (each has its own handoff + evidence in `docs/dev/handoffs/`; nothing here is phone-verified; no PR was merged).
 - #18 open-route minimap: no false closing diagonal, START / FINISH markers, dot follows the real road (`race_hud.gd`).
