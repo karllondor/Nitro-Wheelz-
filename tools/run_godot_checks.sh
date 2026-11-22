@@ -54,7 +54,7 @@ run_spec() {
     fi
 }
 
-for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test benchmark_track_test generated_track_test editor_results_test brand_pause_surface_test garage_audio_test dynamic_camera_test visual_identity_test track_builder_test drift_scoring_test engine_audio_test wall_body_test results_screen_test main_menu_test car_profiles_test audio_regression_test editor_geometry_test hud_layout_test procedural_world_test e30_factory_car_test factory_models_test builder_touch_test wheel_visual_test track_records_test terrain_world_test terrain_scenery_test terrain_builder_test terrain_physics_test terrain_route_minimap_test wheel_smoke_test; do
+for spec in import smoke_test input_test driving_test mobile_visual_test track_dna_test benchmark_track_test generated_track_test editor_results_test brand_pause_surface_test garage_audio_test dynamic_camera_test visual_identity_test track_builder_test drift_scoring_test engine_audio_test wall_body_test results_screen_test main_menu_test car_profiles_test audio_regression_test editor_geometry_test hud_layout_test procedural_world_test e30_factory_car_test factory_models_test builder_touch_test wheel_visual_test track_records_test terrain_world_test terrain_scenery_test terrain_builder_test terrain_physics_test terrain_route_minimap_test wheel_smoke_test terrain_water_road_test; do
     echo "START TEST: $spec"
     LIMIT=45
     case "$spec" in terrain_*) LIMIT=150;; esac

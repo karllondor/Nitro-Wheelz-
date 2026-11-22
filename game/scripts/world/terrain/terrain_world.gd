@@ -181,6 +181,8 @@ func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, he
         more.append(func(): _build_chunk(id2))
     more.append(func():
         _build_structures()
+        if field.relief == "canyon":
+            _build_stream()
         var tail: Array = scenery.on_road_changed_steps(dirty) if scenery != null else []
         tail.append(func():
             last_stats = {"dirty":dirty.size(),"ms":float(Time.get_ticks_usec()-t0)/1000.0}
@@ -565,35 +567,99 @@ func _build_water() -> void:
         sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         add_child(sea)
     if field.relief == "canyon":
-        # Stream ribbon on the valley floor (water at the channel bed + 1.2 m).
-        var st := SurfaceTool.new()
-        st.begin(Mesh.PRIMITIVE_TRIANGLES)
-        var prev_l := Vector3.ZERO
-        var prev_r := Vector3.ZERO
-        var first: bool = true
-        var z: float = -FIELD.HALF_Z
-        while z <= FIELD.HALF_Z:
-            var cx: float = field.stream_x(z)
-            var wc: Vector2 = field.to_world(cx,z)
-            var y: float = field.base_at(wc.x,wc.y)+1.0
-            var wl: Vector2 = field.to_world(cx-4.6,z)
-            var wr: Vector2 = field.to_world(cx+4.6,z)
-            var l := Vector3(wl.x,y,wl.y)
-            var r := Vector3(wr.x,y,wr.y)
-            if not first:
-                for p in [prev_l,prev_r,l,l,prev_r,r]:
-                    st.set_normal(Vector3.UP)
-                    st.add_vertex(p)
-            prev_l = l
-            prev_r = r
-            first = false
-            z += 6.0
-        var mesh: ArrayMesh = st.commit()
-        var node := MeshInstance3D.new()
-        node.name = "Stream"
-        node.mesh = mesh
-        node.material_override = _water_material()
-        add_child(node)
+        _build_stream()
+
+## Issue #19 (owner: "rzeka na drodze", Ojców, v0.1.33). The stream ribbon was
+## built once at the channel ground + 1.0 m, before - and independent of - the
+## road. The road solver puts the deck where the terrain is, and the terrain
+## under a bridge is cut to 2.65 m BELOW the deck, so on the Ojców valley floor
+## the water surface was 0.3 .. 1.9 m ABOVE the asphalt over 30 .. 230 road
+## samples of a loop (measured on seed 621727 and others; coplanar flicker where
+## it was within centimetres). The ribbon now follows the road: wherever any
+## part of the asphalt (+ the bridge sides) lies over it, the water surface is
+## held STREAM_DECK_CLEAR_M below the road surface (the slab underside is 1.6 m
+## below it), kept there STREAM_PLATEAU_M further along the stream (more than the
+## road sample spacing, so it holds between samples) and rises back to its natural
+## level at STREAM_RAMP_SLOPE (a short run of rapids, never a cliff). Rebuilt on every road change (edit / undo /
+## clear / load), so the builder, the race and a reload agree.
+const STREAM_HALF_M: float = 4.6
+const STREAM_STEP_M: float = 3.0
+const STREAM_DECK_CLEAR_M: float = 2.2
+const STREAM_ROAD_MARGIN_M: float = 2.0
+const STREAM_PLATEAU_M: float = 4.0     # the lowered level is held this far along the stream of a crossing (> the road sample spacing)
+const STREAM_RAMP_SLOPE: float = 0.5
+var stream_node: MeshInstance3D
+var _stream_caps: Array = []       # [local z, max water level] per road sample over the ribbon
+
+## Natural water level of the stream at local z: the channel ground + 1.0 m.
+func stream_natural_level(lz: float) -> float:
+    var wc: Vector2 = field.to_world(field.stream_x(lz),lz)
+    return field.base_at(wc.x,wc.y)+1.0
+
+## Water level at local z with the current road (see above).
+func stream_level(lz: float) -> float:
+    var y: float = stream_natural_level(lz)
+    for cap in _stream_caps:
+        y = minf(y,float(cap[1])+STREAM_RAMP_SLOPE*maxf(absf(lz-float(cap[0]))-STREAM_PLATEAU_M,0.0))
+    return y
+
+func _refresh_stream_caps() -> void:
+    _stream_caps = []
+    if field.relief != "canyon" or road.is_empty():
+        return
+    var samples: Array[Vector2] = road["samples"]
+    var hw: PackedFloat32Array = road["halfwidths"]
+    var rh: PackedFloat32Array = road["heights"]
+    for i in range(samples.size()):
+        var l: Vector2 = field.to_local(samples[i].x,samples[i].y)
+        if absf(l.x-field.stream_x(l.y)) < STREAM_HALF_M+hw[i]+STREAM_ROAD_MARGIN_M:
+            _stream_caps.append([l.y,rh[i]-STREAM_DECK_CLEAR_M])
+
+## Local z of every ribbon vertex: a regular grid plus every road sample that
+## lowers the water, so the lowest point sits exactly on the crossing.
+func _stream_zs() -> PackedFloat32Array:
+    var zs: Array[float] = []
+    var z: float = -FIELD.HALF_Z
+    while z <= FIELD.HALF_Z:
+        zs.append(z)
+        z += STREAM_STEP_M
+    for cap in _stream_caps:
+        zs.append(clampf(float(cap[0]),-FIELD.HALF_Z,FIELD.HALF_Z))
+    zs.sort()
+    var out := PackedFloat32Array()
+    for v in zs:
+        if out.is_empty() or v-out[out.size()-1] > 0.25:
+            out.append(v)
+    return out
+
+func _build_stream() -> void:
+    _refresh_stream_caps()
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var prev_l := Vector3.ZERO
+    var prev_r := Vector3.ZERO
+    var first: bool = true
+    for z in _stream_zs():
+        var cx: float = field.stream_x(z)
+        var y: float = stream_level(z)
+        var wl: Vector2 = field.to_world(cx-STREAM_HALF_M,z)
+        var wr: Vector2 = field.to_world(cx+STREAM_HALF_M,z)
+        var l := Vector3(wl.x,y,wl.y)
+        var r := Vector3(wr.x,y,wr.y)
+        if not first:
+            for p in [prev_l,prev_r,l,l,prev_r,r]:
+                st.set_normal(Vector3.UP)
+                st.add_vertex(p)
+        prev_l = l
+        prev_r = r
+        first = false
+    var mesh: ArrayMesh = st.commit()
+    if stream_node == null:
+        stream_node = MeshInstance3D.new()
+        stream_node.name = "Stream"
+        stream_node.material_override = _water_material()
+        add_child(stream_node)
+    stream_node.mesh = mesh
 
 func _build_cliff_face() -> void:
     # v0.1.27: dedicated vertical rock face along the sea cliff with basalt
