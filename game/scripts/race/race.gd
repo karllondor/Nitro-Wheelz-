@@ -3,6 +3,9 @@ extends Node3D
 ## Authoritative vehicle state is planar; camera/visuals never modify the physics.
 
 const TRACK = preload("res://scripts/world/drift_track.gd")
+const PARK_TRACK = preload("res://scripts/park/park_track.gd")
+const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
+const PARK = preload("res://scripts/park/park_controller.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
@@ -22,6 +25,8 @@ const DEV_SETTINGS = preload("res://scripts/dev_settings.gd")
 var model: NitroDriveModel
 var sfx: NitroDriveAudio
 var track: NitroDriftTrack
+## NITRO WHEELZ PARK (issue #27): the controller exists only on the Park pad.
+var park: Node = null
 var car_root: Node3D
 var front_wheels: Array[Node3D] = []
 var overhead: Camera3D
@@ -99,9 +104,10 @@ var skid_clock: float = 0.0
 func _ready() -> void:
     (load("res://scripts/ui/hud_style.gd")).ensure_settings()
     TOUCH_DIAG.attach(self)
-    track = TRACK.new()
-    track.track_data_path = str(ProjectSettings.get_setting(
-        "nitro/selected_track",TRACK.TRACK_DATA))
+    var wanted_track: String = str(ProjectSettings.get_setting("nitro/selected_track",TRACK.TRACK_DATA))
+    # The Park is a special "track" (open pad, no walls); every circuit keeps the DNA class.
+    track = (PARK_TRACK if wanted_track == PARK_LAYOUT.TRACK_PATH else TRACK).new()
+    track.track_data_path = wanted_track
     track.name = "Nitro Track DNA"
     # Game: terrain tracks load behind the loading animation (tests keep the
     # synchronous build).
@@ -140,6 +146,10 @@ func _ready() -> void:
     _make_ui()
     if hud != null:
         hud.lap_limit = laps_total
+    if track.has_method("is_park") and track.is_park():
+        park = PARK.new()
+        add_child(park)
+        park.setup(self)
     _make_telemetry()
     var info0: Dictionary = track.sample_info(model.position)
     last_progress = float(info0["progress"])
@@ -431,6 +441,8 @@ func _make_ui() -> void:
 func _physics_process(delta: float) -> void:
     if paused or finished:
         return
+    if park != null and park.freezes():
+        return        # a Park lesson schematic is up: the car stands still
     collision_cooldown = maxf(0.0,collision_cooldown-delta)
 
     var steer: float = Input.get_axis("steer_left","steer_right")
@@ -471,6 +483,8 @@ func _physics_process(delta: float) -> void:
         if float(collision["impact_speed"]) > 1.2:
             _wall_feedback(float(collision["impact_speed"]))
         scorer.wall_hit(float(collision["impact_speed"]))
+    if park != null:
+        park.after_step(delta,steer,gas,braking,handbrake)   # cones, soft edge, lessons
     var info: Dictionary = track.sample_info(model.position)
     offroad = false
     if sfx != null:
@@ -868,7 +882,9 @@ func _toggle_pause() -> void:
         pause_layer.add_child(panel)
         panel.show_pause(Callable(self,"_toggle_pause"),Callable(self,"_restart"),
             func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
-            _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable())
+            _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable(),
+            Callable(self,"_park_toggle_tutorial") if park != null else Callable(),
+            park.pause_label() if park != null else "")
     else:
         if pause_layer != null:
             pause_layer.queue_free()
@@ -877,6 +893,13 @@ func _toggle_pause() -> void:
             touch.set_process_input(true)
             touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     _update_visuals()
+
+## Pause menu of the Park: switch the tutorial on / off, then back to driving. Paint
+## and cones stay exactly as they are.
+func _park_toggle_tutorial() -> void:
+    if park != null:
+        park.toggle_tutorial()
+    _toggle_pause()
 
 func _restart() -> void:
     if pause_layer != null:
@@ -894,6 +917,8 @@ func _restart() -> void:
     model.reset(track.start_position(),track.start_heading())
     car_y = track.road_height_at(model.position)
     car_y_vel = 0.0
+    if park != null:
+        park.restart()
     if sfx != null:
         sfx.reset()
     time_elapsed = 0.0

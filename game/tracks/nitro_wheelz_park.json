@@ -1,0 +1,6 @@
+{
+  "id": "nitro_wheelz_park",
+  "name": "NITRO WHEELZ PARK",
+  "type": "park",
+  "note": "Marker file only. NITRO WHEELZ PARK is not a corridor track: scripts/park/park_track.gd builds the open pad from scripts/park/park_layout.gd (PROVISIONAL layout, issue #27). Selected like a track through nitro/selected_track; never listed in the circuit registry."
+}

@@ -10,6 +10,9 @@ class_name NitroRaceHUD
 
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 
+## NITRO WHEELZ PARK (issue #27): no lap, no score, no minimap, no callouts - only the
+## speedometer and the drift angle; the lesson card (park_guide.gd) uses the header.
+var park_mode: bool = false
 var race_time: float = 0.0
 var lap: int = 1
 var lap_limit: int = 3
@@ -126,6 +129,10 @@ func _draw() -> void:
     var s: Vector2 = get_viewport_rect().size
     var m: Dictionary = STYLE.metrics(s)
     var u: float = float(m["unit"])
+    if park_mode:
+        _draw_gauge(Vector2(m["gauge_centre"]),float(m["gauge_radius"]),u)
+        _draw_angle(Rect2(m["angle"]),u)
+        return
     _draw_header(m,u)
     _draw_chain(Rect2(m["score"]),u)
     _draw_gauge(Vector2(m["gauge_centre"]),float(m["gauge_radius"]),u)

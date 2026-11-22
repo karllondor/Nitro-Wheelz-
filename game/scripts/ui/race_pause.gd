@@ -12,11 +12,17 @@ var _on_resume: Callable
 var _on_restart: Callable
 var _on_garage: Callable
 var _on_edit: Callable
+## NITRO WHEELZ PARK (issue #27): an optional extra row (TUTORIAL ON / OFF).
+var extra_label: String = ""
+var _on_extra: Callable
 var settings: NitroSettingsPanel
 ## v0.1.27: settings fold away under SOUND & STYLE (more readable menu).
 static var settings_open: bool = false
 
-func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable,on_edit: Callable = Callable()) -> void:
+func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable,on_edit: Callable = Callable(),
+        on_extra: Callable = Callable(),label_extra: String = "") -> void:
+    _on_extra = on_extra
+    extra_label = label_extra
     _on_resume = on_resume
     _on_restart = on_restart
     _on_garage = on_garage
@@ -75,6 +81,8 @@ func _build() -> void:
     rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RESTART",_on_restart))
     if _on_edit.is_valid():
         _menu_button(row,"✎  EDIT TRACK",_on_edit,sc,60.0,21.0).name = "EDIT TRACK"
+    if _on_extra.is_valid() and extra_label != "":
+        _menu_button(stack,extra_label,_on_extra,sc,60.0,19.0).name = "Park tutorial toggle"
     var gb: Button = _menu_button(stack,"GARAGE / MENU",Callable(),sc,60.0,21.0)
     gb.name = "GARAGE / MENU"
     gb.pressed.connect(_confirm.bind(gb,"TAP AGAIN TO LEAVE THE RUN",_on_garage))

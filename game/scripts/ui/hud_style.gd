@@ -71,8 +71,29 @@ static func load_settings() -> void:
     settings_loaded = true
 
 static func ensure_settings() -> void:
+    ensure_fonts()
     if not settings_loaded:
         load_settings()
+
+## v0.1.37: the shipped Exo 2 subset has no Polish letters except "ó" (a nickname
+## like "Łukasz" or the Park lessons would fall back to a system font on the
+## phone and to nothing on other platforms). The official Exo 2 variable font
+## (same family, SIL OFL, game/assets/fonts/OFL-Exo2.txt) is registered as the
+## fallback of both weights, so missing glyphs are drawn in the same typeface.
+const FONT_FALLBACK = preload("res://assets/fonts/Exo2-ItalicVF.ttf")
+static var _fonts_ready: bool = false
+
+static func ensure_fonts() -> void:
+    if _fonts_ready:
+        return
+    _fonts_ready = true
+    for pair in [[BOLD,800.0],[SEMI,600.0]]:
+        var variation := FontVariation.new()
+        variation.base_font = FONT_FALLBACK
+        var server: TextServer = TextServerManager.get_primary_interface()
+        var tag: int = server.name_to_tag("weight") if server != null else 2003265652   # 'wght'
+        variation.variation_opentype = {tag:pair[1]}
+        (pair[0] as FontFile).fallbacks = [variation]
 
 static func save_settings() -> void:
     var cfg := ConfigFile.new()

@@ -10,6 +10,9 @@ const PHYS_DEV = preload("res://scripts/world/terrain/physics_dev.gd")
 const TERRAIN_TRACK = preload("res://scripts/world/terrain/terrain_track.gd")
 const PROFILE = preload("res://scripts/player/driver_profile.gd")
 const PROGRESS = preload("res://scripts/player/player_progress.gd")
+const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
+const PARK_PROGRESS = preload("res://scripts/park/park_progress.gd")
+const PARK_TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const AVATAR = preload("res://scripts/ui/avatar.gd")
 ## v0.1.35 flow (owner: "garage: no track, track: no car" was confusing): ONE
 ## RACE SETUP page (track + car + DRIVE) joins the track list and the garage.
@@ -99,6 +102,7 @@ func show_page(which: String) -> void:
     match which:
         "drive": _drive_page()
         "setup": _setup_page()
+        "park": _park_page()
         "profile": _profile_page()
         "welcome": _welcome_page()
         "build": _build_page()
@@ -115,6 +119,7 @@ func _main_page() -> void:
     _profile_chip()
     var drive: Button = _big("DRIVE",func(): show_page("setup"),true)
     drive.name = "DRIVE"
+    _big("NITRO WHEELZ PARK",func(): show_page("park")).name = "PARK"
     _big("GARAGE",func(): _open_garage("main")).name = "GARAGE"
     _big("TRACK BUILDER",func(): show_page("build")).name = "TRACK BUILDER"
     _big("SETTINGS",func(): show_page("settings")).name = "SETTINGS"
@@ -401,7 +406,10 @@ static func current_track() -> String:
     var chosen: String = str(ProjectSettings.get_setting("nitro/selected_track",""))
     if chosen == "":
         chosen = PROFILE.last_track()
-    if chosen == "" or not FileAccess.file_exists(chosen):
+    if chosen == PARK_LAYOUT.TRACK_PATH:
+        # the Park is a place of its own, never "the track you last raced"
+        chosen = PROFILE.last_track()
+    if chosen == "" or not FileAccess.file_exists(chosen) or chosen == PARK_LAYOUT.TRACK_PATH:
         chosen = "res://tracks/shin_kawa_v2.json"
     return chosen
 
@@ -486,6 +494,36 @@ func _setup_page() -> void:
     var go: Button = _big("DRIVE",_race.bind(path),true)
     go.name = "Setup drive"
     _small("◀  BACK",func(): show_page("main")).name = "Back"
+
+## NITRO WHEELZ PARK (issue #27): ONE open pavement, two ways in. START TUTORIAL = the
+## guided lessons (resumes where you stopped); FREE DRIVE = the same pavement with no
+## lessons, no gates, no scoring - skip the tutorial any time, also later in the pause menu.
+func _park_page() -> void:
+    _title("NITRO WHEELZ PARK")
+    var lead := Label.new()
+    lead.text = "ONE BIG OPEN PAVEMENT\nDonuts • figure-eights • a long eight • orange cones that never stop you"
+    lead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    lead.add_theme_font_size_override("font_size",int(17*ui_unit))
+    lead.add_theme_color_override("font_color",STYLE.MUTED)
+    page.add_child(lead)
+    var total: int = PARK_TUTORIAL.LESSONS.size()
+    var done: int = PARK_PROGRESS.completed().size()
+    var label: String = "START TUTORIAL" if done == 0 else ("CONTINUE TUTORIAL  %d / %d" % [mini(done,total),total])
+    var tut: Button = _big(label,_start_park.bind("tutorial"),true)
+    tut.name = "Park tutorial"
+    if done > 0:
+        _big("RESTART TUTORIAL",func(): ProjectSettings.set_setting("nitro/park_reset",true); _start_park("tutorial")).name = "Park tutorial restart"
+    _big("FREE DRIVE  •  SKIP TUTORIAL",_start_park.bind("free")).name = "Park free drive"
+    var car: String = CARS.selected()
+    var cinfo: Dictionary = CARS.info(car)
+    _big("CAR  ▸  %s\n%s • TAP TO CHANGE" % [str(cinfo["short"]),str(cinfo["paint"])],func(): _open_garage("park")).name = "Park car"
+    _small("◀  BACK",func(): show_page("main")).name = "Back"
+
+## Start the Park in "tutorial" or "free" mode (the same race scene, same pavement).
+func _start_park(mode: String) -> void:
+    ProjectSettings.set_setting("nitro/park_mode",mode)
+    _race(PARK_LAYOUT.TRACK_PATH)
 
 ## PLAYER CARD: avatar, name, stars, tracks driven (tap = load it, then pick a car).
 func _profile_page() -> void:
