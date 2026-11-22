@@ -14,6 +14,10 @@ const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 ## The session that is in use by the app (set by the lobby, cleared by leave()); null in solo play.
 static var current: NitroNetSession = null
 
+## True while a race scene is running on top of a multiplayer session: such a run is never saved (no records, no stars).
+static func race_active() -> bool:
+    return current != null and is_instance_valid(current) and current.in_race
+
 enum State { IDLE, HOSTING, CONNECTING, LOBBY, STARTING, COUNTDOWN, RACING, LOST, CLOSED, FAILED }
 
 signal state_changed(state: int)
@@ -42,6 +46,7 @@ var track_fp: String = ""
 var host_address: String = ""
 var rtt_ms: float = 0.0
 var local_index: int = 0                   # 0 = host, 1 = joiner (decides the start slot)
+var in_race: bool = false                  # set by the race scene (NitroNetRace) for as long as it exists
 var last_error: String = ""
 var dropped_packets: int = 0
 var stale_snapshots: int = 0
@@ -86,6 +91,7 @@ func host(port: int, p_name: String, car: String, track: String) -> int:
     is_host = true
     local_index = 0
     host_address = ""
+    current = self
     _set_state(State.HOSTING)
     return OK
 
@@ -105,6 +111,7 @@ func join(ip: String, port: int, p_name: String, car: String) -> int:
     local_index = 1
     host_address = "%s:%d" % [ep["ip"],ep["port"]]
     _phase_started_msec = now_ms()
+    current = self
     _set_state(State.CONNECTING)
     return OK
 

@@ -68,7 +68,9 @@ func _run() -> void:
         _fail("garbage control packet accepted")
         return
     var objectish: PackedByteArray = PackedByteArray([P.KIND_CONTROL])
-    objectish.append_array(var_to_bytes_with_objects(Node.new()))
+    var leak_probe := Node.new()
+    objectish.append_array(var_to_bytes_with_objects(leak_probe))
+    leak_probe.free()
     if not P.unpack_control(objectish).is_empty():
         _fail("an object-carrying packet was decoded")
         return

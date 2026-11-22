@@ -6,6 +6,7 @@ const TRACK = preload("res://scripts/world/drift_track.gd")
 const PARK_TRACK = preload("res://scripts/park/park_track.gd")
 const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
 const PARK = preload("res://scripts/park/park_controller.gd")
+const NET_RACE = preload("res://scripts/net/net_race.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
@@ -27,6 +28,8 @@ var sfx: NitroDriveAudio
 var track: NitroDriftTrack
 ## NITRO WHEELZ PARK (issue #27): the controller exists only on the Park pad.
 var park: Node = null
+## LOCAL MULTIPLAYER (issue #31): exists only while a multiplayer session starts a race; solo play never creates it.
+var net: Node = null
 var car_root: Node3D
 var front_wheels: Array[Node3D] = []
 var overhead: Camera3D
@@ -151,6 +154,10 @@ func _ready() -> void:
         park = PARK.new()
         add_child(park)
         park.setup(self)
+    if NET_RACE.should_attach():
+        net = NET_RACE.new()
+        add_child(net)
+        net.setup(self)
     _make_telemetry()
     var info0: Dictionary = track.sample_info(model.position)
     last_progress = float(info0["progress"])
@@ -444,6 +451,8 @@ func _physics_process(delta: float) -> void:
         return
     if park != null and park.freezes():
         return        # a Park lesson schematic is up: the car stands still
+    if net != null and net.freezes():
+        return        # LOCAL MULTIPLAYER countdown: the car stands still until GO
     collision_cooldown = maxf(0.0,collision_cooldown-delta)
 
     var steer: float = Input.get_axis("steer_left","steer_right")
@@ -928,6 +937,8 @@ func _restart() -> void:
     car_y_vel = 0.0
     if park != null:
         park.restart()
+    if net != null:
+        net.on_restart()
     if sfx != null:
         sfx.reset()
     time_elapsed = 0.0

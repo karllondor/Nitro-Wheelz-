@@ -14,6 +14,7 @@ class_name NitroRaceResults
 const STORAGE: String = "user://nitro_local_runs.json"
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
+const NET_SESSION = preload("res://scripts/net/net_session.gd")
 const DRIVER = preload("res://scripts/player/driver_profile.gd")
 ## Column order of the TOP RUNS table (owner decision 2026-11-22, issue #23).
 const TOP_RUN_COLUMNS: Array[String] = ["#","DRIVER","CAR","STARS","TIME","POINTS"]
@@ -65,9 +66,10 @@ static func star_count(score: int, length_m: float) -> int:
             count += 1
     return count
 
-## False while the diagnostic physics mode is active: such runs are not comparable with the records.
+## False while the diagnostic physics mode is active (such runs are not comparable with the records) and
+## during LOCAL MULTIPLAYER (#31: no stars, no records, no leaderboard entry; remote data is untrusted).
 static func record_allowed() -> bool:
-    return not CARS.real_power_active()
+    return not CARS.real_power_active() and not NET_SESSION.race_active()
 
 static func read_runs() -> Array:
     if not FileAccess.file_exists(STORAGE):
@@ -220,6 +222,7 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
         run["stars"] = star_count(int(run["score"]),length_m)
     data["stored"] = stored
     data["diagnostic"] = not record_allowed()
+    data["multiplayer"] = NET_SESSION.race_active()
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/720.0,0.85,1.85)
     theme = STYLE.screen_theme(sc)
@@ -314,7 +317,9 @@ func _draw_board() -> void:
     var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS = DRIFT POINTS  •  v"+str(
         ProjectSettings.get_setting("application/config/version","?"))
     var diagnostic: bool = bool(data.get("diagnostic",false))
-    if diagnostic:
+    if bool(data.get("multiplayer",false)):
+        foot = "LOCAL MULTIPLAYER  •  THIS RUN IS NOT SAVED  •  NO STARS, NO RECORDS"
+    elif diagnostic:
         foot = "DIAGNOSTIC PHYSICS (REAL_POWER_TEST)  •  THIS RUN IS NOT SAVED"
     elif not bool(data.get("stored",true)):
         foot = "WARNING: THIS RUN COULD NOT BE SAVED ON THIS DEVICE"
