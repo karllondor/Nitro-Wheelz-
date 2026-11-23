@@ -1,0 +1,102 @@
+name: PC-Web HUD visual evidence
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pc-web-hud-v0145
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Godot 4.7.2 and matching templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/nw-godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          curl -fL --retry 3 -o /tmp/nw-godot.tpz https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          unzip -q /tmp/nw-godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable" /tmp/nw-templates
+          unzip -q /tmp/nw-godot.tpz -d /tmp/nw-templates
+          cp -a /tmp/nw-templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+          echo "GODOT_BIN=$GITHUB_WORKSPACE/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Checkout v0.1.44 integration baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/nw-base" 0b878498a05d9aac950ed56d11fc136b05c9a9f5
+          for f in desktop_hud_preview.gd desktop_hud_preview.tscn capture_desktop_hud.gd; do
+            cp "game/tests/$f" "$RUNNER_TEMP/nw-base/game/tests/$f"
+          done
+          mkdir -p evidence
+          "$GODOT_BIN" --headless --editor --path "$RUNNER_TEMP/nw-base/game" --import
+          "$GODOT_BIN" --headless --editor --path "$GITHUB_WORKSPACE/game" --import
+      - name: Capture real Linux HUD before and after
+        shell: bash
+        run: |
+          set -euo pipefail
+          for size in 1280x720 800x600; do
+            OUT_FILE="$GITHUB_WORKSPACE/evidence/linux_before_$size.png" xvfb-run -a -s "-screen 0 1920x1080x24" \
+              "$GODOT_BIN" --path "$RUNNER_TEMP/nw-base/game" --rendering-driver opengl3 --resolution "$size" --script res://tests/capture_desktop_hud.gd
+            OUT_FILE="$GITHUB_WORKSPACE/evidence/linux_after_$size.png" xvfb-run -a -s "-screen 0 1920x1080x24" \
+              "$GODOT_BIN" --path "$GITHUB_WORKSPACE/game" --rendering-driver opengl3 --resolution "$size" --script res://tests/capture_desktop_hud.gd
+          done
+          file evidence/linux_*.png
+      - name: Export before and after browser review scenes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in before after; do
+            if [ "$mode" = before ]; then dir="$RUNNER_TEMP/nw-base"; else dir="$GITHUB_WORKSPACE"; fi
+            mkdir -p "$GITHUB_WORKSPACE/evidence/web-$mode"
+            sed -i 's@run/main_scene="res://scenes/boot.tscn"@run/main_scene="res://tests/desktop_hud_preview.tscn"@' "$dir/game/project.godot"
+            "$GODOT_BIN" --headless --editor --path "$dir/game" --import
+            "$GODOT_BIN" --headless --path "$dir/game" --export-release Web "$GITHUB_WORKSPACE/evidence/web-$mode/index.html"
+            test -s "$GITHUB_WORKSPACE/evidence/web-$mode/index.wasm"
+          done
+      - name: Capture WebGL canvases in Chromium
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/nw-playwright" --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/nw-playwright/node_modules/.bin/playwright" install --with-deps chromium
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory evidence/web-before >/tmp/nw-before.log 2>&1 &
+          python3 -m http.server 8766 --bind 127.0.0.1 --directory evidence/web-after >/tmp/nw-after.log 2>&1 &
+          NODE_PATH="$RUNNER_TEMP/nw-playwright/node_modules" node <<'JS'
+          const {chromium} = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({headless:true,args:[
+              '--enable-webgl','--use-gl=angle','--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader','--disable-dev-shm-usage','--no-sandbox'
+            ]});
+            for (const mode of ['before','after']) {
+              for (const dims of [[1280,720],[800,600]]) {
+                const page = await browser.newPage({viewport:{width:dims[0],height:dims[1]}});
+                await page.goto('http://127.0.0.1:'+(mode==='before'?8765:8766)+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+                await page.waitForTimeout(14000);
+                await page.screenshot({path:'evidence/web_'+mode+'_'+dims.join('x')+'.png'});
+                await page.close();
+              }
+            }
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nitro-HUD-real-before-after-Linux-Web
+          path: |
+            evidence/*.png
+            evidence/web-before/*
+            evidence/web-after/*
+          retention-days: 30
+          if-no-files-found: warn
