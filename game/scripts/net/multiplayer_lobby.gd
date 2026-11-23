@@ -335,7 +335,7 @@ func _host_waiting_page() -> void:
     _title("HOSTING")
     var lines: Array[String] = address_lines()
     if lines.is_empty():
-        _label("NO WI-FI / HOTSPOT ADDRESS FOUND.\nTURN ON YOUR PHONE'S HOTSPOT (OR JOIN THE SAME WI-FI) AND PRESS LEAVE, THEN HOST AGAIN.",19,Color(1.0,0.78,0.4))
+        _label("NO WI-FI / HOTSPOT ADDRESS FOUND.\nTURN ON YOUR PHONE'S HOTSPOT (OR JOIN THE SAME WI-FI) AND PRESS LEAVE, THEN HOST AGAIN.\nIF IT IS ON: READ THIS PHONE'S IP IN THE WI-FI / HOTSPOT SETTINGS (OFTEN 192.168.43.1) AND TYPE IT ON THE OTHER PHONE.",18,Color(1.0,0.78,0.4))
     else:
         _label("THE OTHER PHONE TYPES THIS ADDRESS:",17,STYLE.MUTED)
         for l in lines:

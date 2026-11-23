@@ -102,7 +102,7 @@ behaviour of routers, phone sleep / app in background / lock screen, thumb contr
 * Some routers and "guest" Wi-Fi networks isolate clients (they cannot reach each other): use one phone's hotspot instead.
 * Positions are client-reported (untrusted); no collisions between cars; no shared finish or standings; each player's own 3-lap finish ends their own run.
 * Restart (pause → restart) puts the car back in its own start slot without a new countdown.
-* The Android app lifecycle (phone sleep, background) is untested; a backgrounded phone is reported to the other phone as lost after 6 s of silence.
+* While a session exists the game asks Android to keep the screen on (a locked phone would drop off the network); it is released when the session ends. Whether this holds on every phone, and what happens when the app is sent to the background anyway, is untested: a backgrounded phone is reported to the other phone as lost after 6 s of silence.
 * The remote car uses the car model the other player selected, but no engine sound for it.
 
 ## For the future (NOT implemented)

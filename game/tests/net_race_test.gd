@@ -139,6 +139,9 @@ func _run() -> void:
     var race: Node3D = RACE.instantiate()
     root.add_child(race)
     await process_frame
+    if not host.holds_screen or not client.holds_screen:
+        _fail("the screen must stay on while a multiplayer session exists (a locked phone drops the connection)")
+        return
     var net: Node = race.get("net")
     if net == null:
         _fail("the race scene did not attach the multiplayer controller")
@@ -297,6 +300,9 @@ func _run() -> void:
     var host_id: int = host.get_instance_id()
     race.queue_free()
     ok = await _until(func(): return SESSION.current == null and not is_instance_id_valid(host_id))
+    if client.holds_screen:
+        _fail("leaving the session must release the keep-screen-on request")
+        return
     if not ok or not RESULTS.record_allowed() or NET_RACE.should_attach():
         _fail("leaving the race left multiplayer state behind (current=%s)" % str(SESSION.current))
         return

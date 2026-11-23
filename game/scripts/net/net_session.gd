@@ -46,6 +46,7 @@ var track_fp: String = ""
 var host_address: String = ""
 var rtt_ms: float = 0.0
 var local_index: int = 0                   # 0 = host, 1 = joiner (decides the start slot)
+var holds_screen: bool = false             # this session asked the OS to keep the screen on (released in _teardown)
 var in_race: bool = false                  # set by the race scene (NitroNetRace) for as long as it exists
 var last_error: String = ""
 var dropped_packets: int = 0
@@ -116,6 +117,10 @@ func join(ip: String, port: int, p_name: String, car: String) -> int:
     return OK
 
 func _make_api() -> void:
+    # A phone that locks its screen while waiting in the lobby or driving drops off the network: keep the screen on for as long
+    # as the session exists (released again in _teardown, so nothing stays changed after leaving).
+    DisplayServer.screen_set_keep_on(true)
+    holds_screen = true
     api = SceneMultiplayer.new()
     # A custom SceneMultiplayer needs a root path before it processes packets (we use no RPC / spawner,
     # only send_bytes, so any existing node will do).
@@ -239,6 +244,8 @@ func leave() -> void:
         current = null
 
 func _teardown() -> void:
+    DisplayServer.screen_set_keep_on(false)
+    holds_screen = false
     if api != null:
         api.multiplayer_peer = null
     if peer != null:
