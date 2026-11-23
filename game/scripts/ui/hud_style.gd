@@ -129,6 +129,8 @@ static func desktop_metrics(s: Vector2, profile: String = "pc") -> Dictionary:
     var w: float = s.x
     var h: float = s.y
     var edge: float = clampf(minf(w,h)*0.018,9.0,19.0)
+    if profile == "web":
+        edge = maxf(edge,14.0)  # extra browser-canvas inset
     var gap: float = clampf(w*0.009,7.0,14.0)
     var button_w: float = clampf(w*0.059,61.0,86.0)
     var button_h: float = clampf(h*0.062,35.0,43.0)
