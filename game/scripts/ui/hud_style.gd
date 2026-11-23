@@ -113,7 +113,71 @@ static func save_settings() -> void:
 ## top band beside a centred keep-out for front-camera punch holes, and a
 ## thin three-lap progress line. Live chain centred under the header (only
 ## while scoring); round speedometer with the drift angle on the left.
-static func metrics(s: Vector2) -> Dictionary:
+## Native platform profiles keep the approved mobile HUD untouched. Web gets a
+## separate profile even when its viewport is portrait (resizable browser).
+static func platform_profile() -> String:
+    if OS.has_feature("mobile"):
+        return "mobile"
+    if OS.has_feature("web"):
+        return "web"
+    return "pc"
+
+## Compact desktop geometry uses bounded pixel dimensions instead of percentages
+## of the entire display: ultrawide and small browser windows stay readable.
+## The rects are shared with the separate mouse-action control layer.
+static func desktop_metrics(s: Vector2, profile: String = "pc") -> Dictionary:
+    var w: float = s.x
+    var h: float = s.y
+    var edge: float = clampf(minf(w,h)*0.018,9.0,19.0)
+    if profile == "web":
+        edge = maxf(edge,14.0)  # extra browser-canvas inset
+    var gap: float = clampf(w*0.009,7.0,14.0)
+    var button_w: float = clampf(w*0.059,61.0,86.0)
+    var button_h: float = clampf(h*0.062,35.0,43.0)
+    var pause_r := Rect2(w-edge-button_w,edge,button_w,button_h)
+    var camera_r := Rect2(pause_r.position.x-gap-button_w,edge,button_w,button_h)
+    var header_w: float = clampf(w*0.30,170.0,320.0)
+    var header_h: float = clampf(h*0.13,72.0,100.0)
+    var header := Rect2(edge,edge,header_w,header_h)
+    var map_w: float = header_w*0.335
+    var map_r := Rect2(header.position.x+8.0,header.position.y+9.0,map_w,header_h*0.66)
+    var info_x: float = map_r.end.x+8.0
+    var info_w: float = maxf(42.0,header.end.x-info_x-8.0)
+    var name_r := Rect2(info_x,header.position.y+7.0,info_w,header_h*0.29)
+    var lap_r := Rect2(info_x,header.position.y+header_h*0.34,info_w,header_h*0.25)
+    var chase_r := Rect2(info_x,header.position.y+header_h*0.64,info_w,header_h*0.22)
+    var bank_w: float = clampf(w*0.20,145.0,224.0)
+    var bank_h: float = clampf(h*0.13,74.0,95.0)
+    var bank_r := Rect2(camera_r.position.x-gap-bank_w,edge,bank_w,bank_h)
+    # Tiny Web viewports: move the banked card to a second row, keeping the
+    # camera/pause pair fixed at the top-right.
+    if bank_r.position.x < header.end.x+gap:
+        bank_r.position = Vector2(w-edge-bank_w,edge+button_h+gap)
+    var total_label_r := Rect2(bank_r.position.x+10.0,bank_r.position.y+6.0,bank_w-20.0,bank_h*0.24)
+    var total_r := Rect2(bank_r.position.x+10.0,bank_r.position.y+bank_h*0.28,bank_w-20.0,bank_h*0.62)
+    var chain_w: float = clampf(w*0.24,178.0,260.0)
+    var chain_h: float = clampf(h*0.085,43.0,61.0)
+    var chain_r := Rect2(w*0.5-chain_w*0.5,maxf(header.end.y,bank_r.end.y)+gap,chain_w,chain_h)
+    var speed_w: float = clampf(w*0.16,135.0,180.0)
+    var speed_h: float = clampf(h*0.105,68.0,78.0)
+    var speed_r := Rect2(edge,h-edge-speed_h,speed_w,speed_h)
+    return {
+        "profile":profile,"desktop":true,"portrait":h > w,"header":header,
+        "dead":Rect2(),"map":map_r,"lap":lap_r,"name":name_r,"chase":chase_r,
+        "total_label":total_label_r,"total":total_r,"bank_panel":bank_r,
+        "score":chain_r,"callout":Vector2(w*0.5,h*0.47),
+        "pause":pause_r,"camera":camera_r,"speed":speed_r,
+        "gauge_centre":speed_r.get_center(),"gauge_radius":0.0,
+        "angle":Rect2(speed_r.end.x-62.0,speed_r.position.y+30.0,56.0,30.0),
+        "unit":clampf(h/800.0,0.72,1.08)
+    }
+
+## Callers that do not request a profile keep the original mobile layout.
+## In particular, the touch hit-test and v0.1.21 phone layout tests still
+## receive the exact same rectangles as before.
+static func metrics(s: Vector2, profile: String = "mobile") -> Dictionary:
+    if profile != "mobile":
+        return desktop_metrics(s,profile)
     var portrait: bool = s.y > s.x
     if portrait:
         var w: float = s.x

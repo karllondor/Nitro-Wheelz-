@@ -130,8 +130,12 @@ static func text_sizes(m: Dictionary, track_title: String = "SHIN-KAWA DRIFT PAR
 
 func _draw() -> void:
     var s: Vector2 = get_viewport_rect().size
-    var m: Dictionary = STYLE.metrics(s)
+    var profile: String = STYLE.platform_profile()
+    var m: Dictionary = STYLE.metrics(s,profile)
     var u: float = float(m["unit"])
+    if profile != "mobile":
+        _draw_desktop(m,s,u)
+        return
     if park_mode:
         _draw_gauge(Vector2(m["gauge_centre"]),float(m["gauge_radius"]),u)
         _draw_angle(Rect2(m["angle"]),u)
@@ -142,6 +146,75 @@ func _draw() -> void:
     _draw_angle(Rect2(m["angle"]),u)
     _draw_callouts(callout_anchor(m,s),s,u)
     _draw_flights(m,u)
+
+## Desktop/Web: three restrained, translucent instruments, no full-width
+## mobile strip and no big circular dial. Scoring, route and banked data still
+## come from the unmodified HUD state and scoring pipeline.
+func _draw_desktop(m: Dictionary, s: Vector2, u: float) -> void:
+    if not park_mode:
+        var h: Rect2 = m["header"]
+        var map_r: Rect2 = m["map"]
+        var nm: Rect2 = m["name"]
+        var lp: Rect2 = m["lap"]
+        var chase_r: Rect2 = m["chase"]
+        _desktop_glass(h,u)
+        _minimap(map_r,u*0.80)
+        var track_txt: String = track_name.to_upper()
+        STYLE.text(self,Vector2(nm.position.x,nm.end.y-2.0),track_txt,
+            STYLE.fit_size(track_txt,15.0*u,nm.size.x),STYLE.WHITE,
+            HORIZONTAL_ALIGNMENT_LEFT,nm.size.x)
+        var lap_txt: String = "LAP %d/%d" % [lap,lap_limit]
+        STYLE.text(self,Vector2(lp.position.x,lp.end.y-1.0),lap_txt,
+            STYLE.fit_size(lap_txt,17.0*u,lp.size.x),STYLE.WHITE,
+            HORIZONTAL_ALIGNMENT_LEFT,lp.size.x)
+        var chase_txt: String = str(chase_label()["text"])
+        STYLE.text(self,Vector2(chase_r.position.x,chase_r.end.y-1.0),chase_txt,
+            STYLE.fit_size(chase_txt,11.5*u,chase_r.size.x),STYLE.GOLD,
+            HORIZONTAL_ALIGNMENT_LEFT,chase_r.size.x,false)
+        _draw_lap_line(h,u*0.55)
+        var bank_r: Rect2 = m["bank_panel"]
+        var lab: Rect2 = m["total_label"]
+        var val: Rect2 = m["total"]
+        _desktop_glass(bank_r,u)
+        STYLE.text(self,Vector2(lab.position.x,lab.end.y-1.0),"BANKED SCORE",
+            12.5*u,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,lab.size.x,false)
+        var bank_txt: String = _score_string(score)
+        STYLE.text(self,Vector2(val.position.x,val.position.y+val.size.y*0.56),bank_txt,
+            STYLE.fit_size(bank_txt,31.0*u,val.size.x),STYLE.WHITE.lerp(STYLE.GOLD,_score_pulse),
+            HORIZONTAL_ALIGNMENT_LEFT,val.size.x)
+        STYLE.text(self,Vector2(val.position.x,val.end.y-2.0),STYLE.time_string(race_time),
+            11.5*u,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,val.size.x,false)
+        _draw_chain(Rect2(m["score"]),u)
+        _draw_callouts(callout_anchor(m,s),s,u)
+        _draw_flights(m,u)
+    _draw_desktop_telemetry(Rect2(m["speed"]),u)
+
+## Keep the approved Exo 2 / dark-glass / accent design, with reduced desktop
+## opacity and a hairline edge instead of mobile-sized chrome and glow.
+func _desktop_glass(r: Rect2, u: float) -> void:
+    var pts: PackedVector2Array = STYLE.shape(r,9.0*u,STYLE.SKEW*0.45)
+    draw_colored_polygon(pts,Color(0.018,0.020,0.032,0.61))
+    var edge: PackedVector2Array = pts.duplicate()
+    edge.append(pts[0])
+    draw_polyline(edge,Color(0.88,0.89,0.95,0.27),maxf(1.0,u),true)
+    draw_line(Vector2(r.position.x+10.0,r.end.y-2.0),
+        Vector2(r.end.x-10.0,r.end.y-2.0),
+        Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.55),maxf(1.0,1.3*u),true)
+
+func _draw_desktop_telemetry(r: Rect2, u: float) -> void:
+    _desktop_glass(r,u)
+    var inset: float = 11.0
+    var number: String = ("R " if reversing else "")+str(int(speed))
+    STYLE.text(self,Vector2(r.position.x+inset,r.position.y+r.size.y*0.62),number,
+        STYLE.fit_size(number,30.0*u,r.size.x*0.60),STYLE.WHITE)
+    STYLE.text(self,Vector2(r.position.x+inset,r.end.y-9.0),"KM/H",
+        11.0*u,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
+    var angle_txt: String = "%d°" % roundi(absf(drift_degrees))
+    STYLE.text(self,Vector2(r.position.x+r.size.x*0.62,r.position.y+r.size.y*0.63),
+        angle_txt,STYLE.fit_size(angle_txt,20.0*u,r.size.x*0.33),
+        STYLE.PINK_SOFT,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.35)
+    STYLE.text(self,Vector2(r.position.x+r.size.x*0.62,r.end.y-9.0),"DRIFT",
+        9.5*u,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,-1.0,false)
 
 # ------------------------------------------------------------------ header
 
@@ -413,6 +486,8 @@ func callout_anchor(m: Dictionary, s: Vector2) -> Vector2:
 
 func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
     var size: float = minf(s.x,s.y)*0.062
+    if STYLE.platform_profile() != "mobile":
+        size = clampf(size,19.0,30.0)
     var y: float = anchor.y
     # Newest nearest the car, at most three stacked upwards.
     for k in range(score_events.size()-1,maxi(-1,score_events.size()-4),-1):
