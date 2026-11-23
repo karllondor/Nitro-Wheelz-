@@ -123,7 +123,9 @@ jobs:
           name: Nitro-Wheelz_v0.1.40_Android-debug
           path: builds/android
       - name: Enable emulator acceleration
-        run: sudo chmod 666 /dev/kvm
+        run: |
+          sudo chmod 666 /dev/kvm
+          sudo apt-get install -y python3-pil
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35

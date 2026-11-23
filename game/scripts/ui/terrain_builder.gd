@@ -505,6 +505,7 @@ func _build_ui() -> void:
     _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
         ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
     _button(build_box,"Practice","_cycle_event",Rect2(left,y3-gap-row_h*0.95,width*0.32,row_h*0.85),"EVENT")
+    _button(build_box,"ROAD","_toggle_surface",Rect2(left+width*0.35,y3-gap-row_h*0.95,width*0.32,row_h*0.85),"SURFACE")
     var mw: float = width*0.30
     _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y3-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
     var top: float = header_rect.end.y+s.y*0.006
@@ -601,6 +602,7 @@ func _refresh_titles() -> void:
         gen.text = "NEW LANDSCAPE ↻" if generated_key == "%s/%d" % [archetype,terrain_seed] else "GENERATE TERRAIN"
         STYLE.style_button(gen,ui_unit,is_pending())
     if buttons.has("DRAW"):
+        buttons["SURFACE"].text="ROAD" if road_style=="road" else "RACE TRACK"
         buttons["EVENT"].text=TRACK.EVENT_LAYOUT.MODES.get(event_mode,"Practice")
         STYLE.style_button(buttons["DRAW"],ui_unit,mode == "draw" and not pan_mode)
         if buttons.has("MOVE"):
@@ -1256,6 +1258,12 @@ func _after_edit() -> void:
     _adapt_now()
     _save_draft()
 
+func _toggle_surface() -> void:
+    _push_undo()
+    redo_stack.clear()
+    road_style = "circuit" if road_style=="road" else "road"
+    _after_edit()
+
 func _toggle_topology() -> void:
     _push_undo()
     topology = "route" if topology == "loop" else "loop"
@@ -1296,7 +1304,6 @@ func _close_loop() -> void:
         prev = c2
     grid.link(prev,b)
     topology = "loop"
-    road_style="circuit"
     _after_edit()
     _status("LOOP CLOSED WITH %d NEW TILES" % path.size(),true)
 

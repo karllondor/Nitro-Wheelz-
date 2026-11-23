@@ -57,11 +57,18 @@ static func generate(track, mode: String) -> Dictionary:
             start = s
             radians = 0
         radians += curvature*(s-float(track.arc_lengths[i-1]))
+    if zones.is_empty():
+        return layout
     var accepted: Array[Dictionary]=[]
+    var probe = preload("res://scripts/events/event_probe.gd")
+    var speeds := {"e30":probe.launch_speeds("e30"),"blue":probe.launch_speeds("blue")}
+    var grade_force := int(NitroPhysicsDev.load_settings().grade_force)
     for z in zones:
+        if not track.closed_loop and (z.a<track.arc_lengths[track.start_index] or z.b>track.arc_lengths[track.finish_index]):
+            continue
         var ok:=true
         for car in ["e30","blue"]:
-            if not preload("res://scripts/events/event_probe.gd").verify(track,z,mode,car):
+            if not probe.verify(track,z,mode,car,speeds[car],grade_force):
                 warnings.append("%d m: ease bend or widen road (%s)" % [int(z.a),car])
                 ok=false
                 break

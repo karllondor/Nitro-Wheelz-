@@ -1088,12 +1088,7 @@ func _road_at_arc(arc: float) -> Dictionary:
     var a: float = arc
     if closed_loop:
         a = fposmod(arc,length_metres)
-    var i: int = 0
-    for k in range(segs):
-        if arc_lengths[k] <= a:
-            i = k
-        else:
-            break
+    var i := clampi(arc_lengths.bsearch(a,false)-1,0,segs-1)
     var j: int = (i+1)%n
     var seg_len: float = maxf(centerline[i].distance_to(centerline[j]),0.001)
     var t: float = clampf((a-arc_lengths[i])/seg_len,0.0,1.0)

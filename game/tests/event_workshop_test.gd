@@ -31,6 +31,38 @@ func run() -> void:
     var club: Array=b.last_eval.event_layout.zones.duplicate(true)
     check(club.size()>=3,"fixture Club sectors")
     await shot("builder-club")
+    b._toggle_surface()
+    check(b.topology=="route" and b.last_data.width_m==24,"wide race track on same route")
+    b._toggle_surface()
+    check(b.last_data.width_m==12,"narrow Touge on same route")
+    var original_grid: Dictionary=b._snapshot()
+    b.grid=b.TT.new_grid()
+    b.mode="draw"
+    b.begin_stroke(Vector2i(7,2))
+    b.move_stroke(Vector2i(7,5))
+    b.end_stroke()
+    check(b.last_eval.event_layout.zones.is_empty(),"drawn straight")
+    b.begin_stroke(Vector2i(7,5))
+    b.move_stroke(Vector2i(9,5))
+    b.end_stroke()
+    var corner: Array=b.last_eval.event_layout.zones.duplicate(true)
+    check(not corner.is_empty(),"drawn corner")
+    b.begin_stroke(Vector2i(9,5))
+    b.move_stroke(Vector2i(9,7))
+    b.end_stroke()
+    var bends: Array=b.last_eval.event_layout.zones
+    check(bends.size()>corner.size(),"extended S-bend gains sectors")
+    var directions: Array=[]
+    for z in bends:
+        if z.kind=="OUTSIDE":
+            check(z.d*z.turn<0,"outside footprint side")
+            directions.append(z.turn)
+        elif z.kind=="CLIP":
+            check(z.d*z.turn>0,"front clip side")
+    check(directions.has(-1) and directions.has(1),"S reverses outside edge")
+    b._restore(original_grid)
+    b._after_edit()
+    check(b.last_eval.event_layout.zones==club,"restored Club road")
     b._pick_event("practice")
     check(b.last_eval.event_layout.zones.is_empty(),"Practice paint")
     b._pick_event("pro")

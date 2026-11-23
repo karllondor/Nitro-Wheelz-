@@ -6,7 +6,13 @@ func _ready() -> void:
 
 func snapshot(label_: String) -> void:
     await RenderingServer.frame_post_draw
-    get_viewport().get_texture().get_image().save_png("user://workshop-"+label_+".png")
+    # Android may render straight into the system framebuffer. The host
+    # captures the visible compositor surface before advancing the test.
+    var marker := FileAccess.open("user://ready-"+label_,FileAccess.WRITE)
+    marker.store_line(label_)
+    marker.close()
+    while not FileAccess.file_exists("user://captured-"+label_):
+        await get_tree().create_timer(0.15).timeout
 
 func run() -> void:
     var tree=get_tree()

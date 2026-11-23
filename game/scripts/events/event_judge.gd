@@ -5,12 +5,16 @@ var frontier := -1.0
 var cursor := 0
 var covered := {}
 var claimed := {}
+var quality_metres := {}
+var faulted := {}
 var complete := 0
 var missed := 0
 var potential := 0
 var technical := 0.0
 var last_slip := 0
 var flip_at := -1000.0
+var initiation_at := -1000.0
+var sector_results: Array[Dictionary] = []
 var age_since_drift := 10.0
 var last_lap := 1
 var cue := ""
@@ -24,6 +28,12 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
         cursor = 0
         covered.clear()
         claimed.clear()
+        quality_metres.clear()
+        faulted.clear()
+        flip_at = -1000.0
+        initiation_at = -1000.0
+        age_since_drift = 10.0
+        last_slip = 0
     last_lap = lap
     var from := s if frontier<0 else frontier
     var advance := clampf(s-from,0.0,model.speed_mps()*dt*1.6)
@@ -35,6 +45,8 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
     valid_base = eligible and model.is_drifting()
     age_since_drift += dt
     if valid_base and absf(angle)>=10:
+        if last_slip == 0 or age_since_drift >= 0.25:
+            initiation_at = s
         if last_slip == -signi(int(angle)) and age_since_drift<0.65:
             flip_at=s
         last_slip=signi(int(angle))
@@ -42,7 +54,11 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
     while cursor<zones.size() and s>float(zones[cursor].b):
         var done: Dictionary=zones[cursor]
         potential+=1
-        if float(covered.get(done.id,0)) >= (done.b-done.a)*(0.55 if track.event_mode=="pro" else 0.33):
+        var fraction := clampf(float(covered.get(done.id,0))/(done.b-done.a),0,1)
+        var filled := fraction >= (0.55 if track.event_mode=="pro" else 0.33)
+        var quality := clampf(float(quality_metres.get(done.id,0))/(done.b-done.a),0,1)
+        sector_results.append({"id":done.id,"lap":lap,"coverage":fraction,"quality":quality,"complete":filled})
+        if filled:
             complete+=1
         else:
             missed+=1
@@ -54,7 +70,11 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
     var z: Dictionary=zones[cursor]
     var kind: String=z.kind
     cue=("%s  %d m" % [kind,maxi(0,roundi(z.a-s))]) if s<z.a else kind
-    if not valid_base or signf(angle)!=-float(z.turn) or absf(angle)<(14 if track.event_mode=="pro" else 10) or absf(angle)>83:
+    if track.event_mode=="pro" and s>=z.a and (impact>=scorer.WALL_LOSS_SPEED or absf(angle)>=scorer.SPIN_ANGLE):
+        faulted[z.id]=true
+        covered[z.id]=0.0
+        quality_metres[z.id]=0.0
+    if faulted.has(z.id) or not valid_base or signf(angle)!=-float(z.turn) or absf(angle)<(14 if track.event_mode=="pro" else 10) or absf(angle)>83:
         return 0
     var normal:=Vector2(-tangent.y,tangent.x)
     var side:=signf(z.d)
@@ -68,7 +88,10 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
         accuracy=0
     var along:=clampf(1.0-maxf(0,z.a-s)/5.0,0,1)
     if kind in ["FLICK","INIT"]:
-        accuracy=1.0 if kind=="INIT" or (flip_at>=z.a-6 and flip_at<=s) else 0.0
+        var change_at := initiation_at if kind=="INIT" else flip_at
+        if change_at<z.a-6 or change_at>s:
+            return 0
+        accuracy=clampf(1.0-gap/reach,0,1)
     if along*accuracy<=0:
         return 0
     var pace:=clampf(1.0-absf(model.speed_mps()-z.pace)/(z.pace*1.4),0.15,1.0)
@@ -76,6 +99,7 @@ func tick(dt: float, track, model, info: Dictionary, contact: Dictionary, lap: i
     if s>=z.a and gap==0:
         var metres:=minf(advance,s-z.a)
         covered[z.id]=float(covered.get(z.id,0))+metres
+        quality_metres[z.id]=float(quality_metres.get(z.id,0))+metres*accuracy*pace*minf(absf(angle)/35,1.0)
         award+=metres*accuracy*(6+minf(absf(angle)/35,1.0)*5)
         if not claimed.has(z.id):
             claimed[z.id]=true
