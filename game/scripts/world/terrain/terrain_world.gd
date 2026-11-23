@@ -93,6 +93,8 @@ func _build_begin() -> void:
     for child in get_children():
         remove_child(child)
         child.queue_free()
+    stream_node=null
+    _stream_limits.clear()
     chunk_nodes.clear()
     chunk_hash.clear()
     ground_mat = ShaderMaterial.new()
@@ -168,6 +170,8 @@ func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, he
             "class":cls,"summary":c}
         if not closed:
             road["end_pads"] = end_pads(samples,halfwidths,heights)
+    if field.relief == "canyon":
+        _refresh_stream_limits()
     _deform()
     var dirty: Array = []
     var cc: Vector2i = chunk_counts()
@@ -358,6 +362,8 @@ func _deform() -> void:
                 var tgt2: float = py+signf(dz)*minf(absf(dz),out_d*slope)
                 if absf(tgt2-orig) > 0.01:
                     h[k2] = tgt2
+    if canyon:
+        _clear_lowered_stream_bed(h)
     field.height = h
 
 func _chunk_hash(id: Vector2i) -> int:
@@ -569,79 +575,122 @@ func _build_water() -> void:
     if field.relief == "canyon":
         _build_stream()
 
-## Issue #19 (owner: "rzeka na drodze", Ojców, v0.1.33). The stream ribbon was
-## built once at the channel ground + 1.0 m, before - and independent of - the
-## road. The road solver puts the deck where the terrain is, and the terrain
-## under a bridge is cut to 2.65 m BELOW the deck, so on the Ojców valley floor
-## the water surface was 0.3 .. 1.9 m ABOVE the asphalt over 30 .. 230 road
-## samples of a loop (measured on seed 621727 and others; coplanar flicker where
-## it was within centimetres). The ribbon now follows the road: wherever any
-## part of the asphalt (+ the bridge sides) lies over it, the water surface is
-## held STREAM_DECK_CLEAR_M below the road surface (the slab underside is 1.6 m
-## below it), kept there STREAM_PLATEAU_M further along the stream (more than the
-## road sample spacing, so it holds between samples) and rises back to its natural
-## level at STREAM_RAMP_SLOPE (a short run of rapids, never a cliff). Rebuilt on every road change (edit / undo /
-## clear / load), so the builder, the race and a reload agree.
+## Water is a continuous strip in the canyon's local frame. Each crossing
+## constrains BOTH ends of every intersecting strip cell. Linear interpolation
+## then keeps the entire cell below the lowest deck vertex of that span.
 const STREAM_HALF_M: float = 4.6
 const STREAM_STEP_M: float = 3.0
 const STREAM_DECK_CLEAR_M: float = 2.2
 const STREAM_ROAD_MARGIN_M: float = 2.0
-const STREAM_PLATEAU_M: float = 4.0     # the lowered level is held this far along the stream of a crossing (> the road sample spacing)
 const STREAM_RAMP_SLOPE: float = 0.5
 var stream_node: MeshInstance3D
-var _stream_caps: Array = []       # [local z, max water level] per road sample over the ribbon
+var _stream_limits := PackedFloat32Array()
 
-## Natural water level of the stream at local z: the channel ground + 1.0 m.
 func stream_natural_level(lz: float) -> float:
     var wc: Vector2 = field.to_world(field.stream_x(lz),lz)
     return field.base_at(wc.x,wc.y)+1.0
 
-## Water level at local z with the current road (see above).
 func stream_level(lz: float) -> float:
-    var y: float = stream_natural_level(lz)
-    for cap in _stream_caps:
-        y = minf(y,float(cap[1])+STREAM_RAMP_SLOPE*maxf(absf(lz-float(cap[0]))-STREAM_PLATEAU_M,0.0))
-    return y
+    var u := clampf((lz+FIELD.HALF_Z)/STREAM_STEP_M,0,_stream_limits.size()-1)
+    var i := floori(u)
+    var j := mini(i+1,_stream_limits.size()-1)
+    var za := i*STREAM_STEP_M-FIELD.HALF_Z
+    var zb := j*STREAM_STEP_M-FIELD.HALF_Z
+    return lerpf(minf(stream_natural_level(za),_stream_limits[i]),
+        minf(stream_natural_level(zb),_stream_limits[j]),u-i)
 
-func _refresh_stream_caps() -> void:
-    _stream_caps = []
-    if field.relief != "canyon" or road.is_empty():
+func _refresh_stream_limits() -> void:
+    var count := roundi(2*FIELD.HALF_Z/STREAM_STEP_M)+1
+    _stream_limits.resize(count)
+    _stream_limits.fill(INF)
+    if road.is_empty():
         return
-    var samples: Array[Vector2] = road["samples"]
-    var hw: PackedFloat32Array = road["halfwidths"]
-    var rh: PackedFloat32Array = road["heights"]
-    for i in range(samples.size()):
-        var l: Vector2 = field.to_local(samples[i].x,samples[i].y)
-        if absf(l.x-field.stream_x(l.y)) < STREAM_HALF_M+hw[i]+STREAM_ROAD_MARGIN_M:
-            _stream_caps.append([l.y,rh[i]-STREAM_DECK_CLEAR_M])
+    var samples: Array[Vector2] = road.samples
+    var left := PackedVector2Array()
+    var right := PackedVector2Array()
+    var n := samples.size()
+    for i in range(n):
+        var prev := (i-1+n)%n if road.closed else maxi(i-1,0)
+        var next := (i+1)%n if road.closed else mini(i+1,n-1)
+        var t := (samples[next]-samples[prev]).normalized()
+        var side := Vector2(-t.y,t.x)*(float(road.halfwidths[i])+STREAM_ROAD_MARGIN_M)
+        var l := samples[i]-side
+        var r := samples[i]+side
+        # Keep the original longitudinal clearance through the bridge approach
+        # and sides, even where the pavement only grazes one bank.
+        var centre: Vector2 = field.to_local(samples[i].x,samples[i].y)
+        if absf(centre.x-field.stream_x(centre.y))<STREAM_HALF_M+road.halfwidths[i]+STREAM_ROAD_MARGIN_M:
+            var lo := maxi(0,floori((centre.y-4.0+FIELD.HALF_Z)/STREAM_STEP_M))
+            var hi := mini(count-1,ceili((centre.y+4.0+FIELD.HALF_Z)/STREAM_STEP_M))
+            for k in range(lo,hi+1):
+                _stream_limits[k]=minf(_stream_limits[k],road.heights[i]-STREAM_DECK_CLEAR_M)
+        left.append(field.to_local(l.x,l.y))
+        right.append(field.to_local(r.x,r.y))
+    for i in range(n if road.closed else n-1):
+        var j := (i+1)%n
+        var deck := PackedVector2Array([left[i],right[i],right[j],left[j]])
+        var bounds := Rect2(deck[0],Vector2.ZERO)
+        for p in deck:
+            bounds=bounds.expand(p)
+        var first := maxi(0,floori((bounds.position.y+FIELD.HALF_Z)/STREAM_STEP_M))
+        var last := mini(count-2,floori((bounds.end.y+FIELD.HALF_Z)/STREAM_STEP_M))
+        var limit := minf(road.heights[i],road.heights[j])-STREAM_DECK_CLEAR_M
+        for k in range(first,last+1):
+            var za := k*STREAM_STEP_M-FIELD.HALF_Z
+            var zb := za+STREAM_STEP_M
+            var xa := field.stream_x(za)
+            var xb := field.stream_x(zb)
+            if bounds.end.x<minf(xa,xb)-STREAM_HALF_M or bounds.position.x>maxf(xa,xb)+STREAM_HALF_M:
+                continue
+            var water := PackedVector2Array([Vector2(xa-STREAM_HALF_M,za),Vector2(xa+STREAM_HALF_M,za),
+                Vector2(xb+STREAM_HALF_M,zb),Vector2(xb-STREAM_HALF_M,zb)])
+            if Geometry2D.intersect_polygons(deck,water).is_empty():
+                continue
+            _stream_limits[k]=minf(_stream_limits[k],limit)
+            _stream_limits[k+1]=minf(_stream_limits[k+1],limit)
+    # Propagate the tightest cap in both directions until natural water is lower.
+    var rise := STREAM_STEP_M*STREAM_RAMP_SLOPE
+    for i in range(1,count):
+        _stream_limits[i]=minf(_stream_limits[i],_stream_limits[i-1]+rise)
+    for i in range(count-2,-1,-1):
+        _stream_limits[i]=minf(_stream_limits[i],_stream_limits[i+1]+rise)
 
-## Local z of every ribbon vertex: a regular grid plus every road sample that
-## lowers the water, so the lowest point sits exactly on the crossing.
-func _stream_zs() -> PackedFloat32Array:
-    var zs: Array[float] = []
-    var z: float = -FIELD.HALF_Z
-    while z <= FIELD.HALF_Z:
-        zs.append(z)
-        z += STREAM_STEP_M
-    for cap in _stream_caps:
-        zs.append(clampf(float(cap[0]),-FIELD.HALF_Z,FIELD.HALF_Z))
-    zs.sort()
-    var out := PackedFloat32Array()
-    for v in zs:
-        if out.is_empty() or v-out[out.size()-1] > 0.25:
-            out.append(v)
-    return out
+## The lowered surface would otherwise disappear into the original stream bed.
+## Touch only terrain cells under a lowered strip, leaving the natural channel
+## and every road vertex intact. Each surrounding cell corner is below both
+## water endpoints, so the two ground triangles cannot protrude through it.
+func _clear_lowered_stream_bed(h: PackedFloat32Array) -> void:
+    var origin := Vector2(FIELD.HALF_X,FIELD.HALF_Z)
+    for k in range(_stream_limits.size()-1):
+        var za := k*STREAM_STEP_M-FIELD.HALF_Z
+        var zb := za+STREAM_STEP_M
+        var ya := stream_natural_level(za)
+        var yb := stream_natural_level(zb)
+        if _stream_limits[k]>=ya and _stream_limits[k+1]>=yb:
+            continue
+        var a := field.to_world(field.stream_x(za),za)
+        var b := field.to_world(field.stream_x(zb),zb)
+        var side := Vector2(STREAM_HALF_M,0)
+        var lo := Vector2i(((a.min(b)-side+origin)/FIELD.STEP).floor())
+        var hi := Vector2i(((a.max(b)+side+origin)/FIELD.STEP).ceil())
+        var bed := minf(minf(ya,_stream_limits[k]),minf(yb,_stream_limits[k+1]))-0.30
+        for j in range(maxi(0,lo.y),mini(field.nz-1,hi.y)+1):
+            for i in range(maxi(0,lo.x),mini(field.nx-1,hi.x)+1):
+                var idx := j*field.nx+i
+                h[idx]=minf(h[idx],bed)
 
 func _build_stream() -> void:
-    _refresh_stream_caps()
+    if _stream_limits.is_empty():
+        _refresh_stream_limits()
     var st := SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
     var prev_l := Vector3.ZERO
     var prev_r := Vector3.ZERO
     var first: bool = true
-    for z in _stream_zs():
+    for i in range(_stream_limits.size()):
+        var z := i*STREAM_STEP_M-FIELD.HALF_Z
         var cx: float = field.stream_x(z)
-        var y: float = stream_level(z)
+        var y := minf(stream_natural_level(z),_stream_limits[i])
         var wl: Vector2 = field.to_world(cx-STREAM_HALF_M,z)
         var wr: Vector2 = field.to_world(cx+STREAM_HALF_M,z)
         var l := Vector3(wl.x,y,wl.y)
