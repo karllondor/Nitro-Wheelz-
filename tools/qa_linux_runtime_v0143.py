@@ -12,7 +12,7 @@ assert EXE.is_file() and EXE.stat().st_size > 1000000
 env=os.environ.copy()
 env["LIBGL_ALWAYS_SOFTWARE"]="1"
 log=open(OUT/"linux_runtime.log","w",encoding="utf-8")
-proc=subprocess.Popen([str(EXE),"--rendering-driver","opengl3"],stdout=log,stderr=subprocess.STDOUT,env=env)
+proc=subprocess.Popen([str(EXE),"--rendering-driver","opengl3","--audio-driver","Dummy"],stdout=log,stderr=subprocess.STDOUT,env=env)
 def shot(name):
     p=OUT/name
     with mss.mss() as capture:
@@ -56,5 +56,6 @@ finally:
 errors=[x for x in (OUT/"linux_runtime.log").read_text(encoding="utf-8",errors="replace").splitlines() if "SCRIPT ERROR" in x or "ERROR:" in x]
 (OUT/"qa_summary.json").write_text(json.dumps({"exited":proc.returncode,"start_stddev":sd,"end_stddev":sd3 if "sd3" in globals() else None,"input_changed_ui":changed if "changed" in globals() else None,"runtime_errors":errors[:20]},indent=2),encoding="utf-8")
 if errors:
+    print("NATIVE_RUNTIME_ERRORS:", "\\n".join(errors[:20]), flush=True)
     raise RuntimeError("Native runtime logged errors: "+" | ".join(errors[:4]))
 print("PASS: exported Linux x86_64 executable booted in Xvfb, rendered nonblank GUI, accepted keyboard injection and stayed alive. Screenshots are attached. Manual real-desktop drive still requires owner QA.")
