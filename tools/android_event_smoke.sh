@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 apk=$(find builds/android -name '*.apk' -print -quit)
-pkg=com.karllondor.nitrowheelz
+pkg=com.karllondor.nitrowheelz.workshop
 adb install -r "$apk"
 adb shell wm size 720x1280
 adb shell wm density 240

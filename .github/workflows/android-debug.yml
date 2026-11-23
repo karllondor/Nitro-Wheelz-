@@ -79,6 +79,10 @@ jobs:
           export/android/android_sdk_path = "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
+      - name: Isolate the event workshop from the main phone installation
+        if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
+        run: |
+          sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.workshop"/; s/^package\/name=.*/package\/name="Nitro Wheelz Workshop"/' game/export_presets.cfg
       - name: Export unsigned-source-safe debug build
         shell: bash
         run: |
