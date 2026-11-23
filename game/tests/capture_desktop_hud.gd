@@ -6,6 +6,8 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _run() -> void:
+    if OS.get_environment("HUD_FULLSCREEN") == "1":
+        root.mode = Window.MODE_FULLSCREEN
     root.add_child(PREVIEW.instantiate())
     for i in range(24):
         await process_frame
