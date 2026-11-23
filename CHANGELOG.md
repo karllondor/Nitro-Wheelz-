@@ -1,3 +1,11 @@
+## [0.1.43] — FIRST UNIFIED DEVELOPMENT PREVIEW: Claude + Astra in one game (DEV package, TEST BUILD)
+Issue #33, canonical branch `integration/nitro-dev`; manifest: docs/dev/INTEGRATION_MANIFEST.md. Installs as **com.karllondor.nitrowheelz.dev / "Nitro Wheelz DEV"** next to the normal app (production package and saves untouched).
+- Contains everything of v0.1.39 + Claude v0.1.41 offline local multiplayer + Claude v0.1.42 node editor (OPEN / SET START / REVERSE / terrain circuits) + Astra #29 (Practice / Club / Pro judged events, procedural zones, ROAD / TOUGE 12 m surface, Event Workshop) + Astra #19 water fix (stream below the full bridge-deck width on 12 m and 24 m roads). Real merge of both histories (no cherry-pick, no squash).
+- Integration fix: the node editor no longer widens a #29 ROAD circuit (12 m) to 18 m when it is opened; event + surface are shown in the editor status and the OPEN list.
+- Multiplayer stays on the four unjudged built-in circuits (judged events in multiplayer are not designed yet — gated, the menu entry stays). Judged event runs, multiplayer runs and diagnostic-physics runs never write records or stars.
+- New tests: terrain_integration_matrix_test (cross-feature, Ojców 621727) and an on-device check inside the APK on the Android emulator (multiplayer over the device network stack + node editor on a terrain circuit + drive), next to Astra's workshop smoke. Godot regression and Foundation checks also run on integration/** branches.
+- Android versionCode 43 / versionName 0.1.43, arm64 + x86_64. NOT RUN: everything on a real phone (owner QA).
+
 ## [0.1.42] — NODE EDITOR: open builder circuits, shape them, set the START (TEST BUILD)
 Owner request 2026-11-23, branch `agent/claude/node-editor-open-start` = v0.1.41 (local multiplayer) + this. Doc: docs/NODE_EDITOR.md; handoff: docs/dev/handoffs/node-editor-open-start-20261123-claude.md.
 - A circuit from the Terrain Builder now opens in the node editor WITH its landscape (before it was bounced back to the Terrain Builder): terrain picture on the map, nodes over water / sea cliff / impossible cuts turn red and block SAVE / DRIVE, SAVE AS re-solves the road heights on the saved terrain and keeps the world.

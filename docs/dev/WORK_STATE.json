@@ -1,14 +1,15 @@
 {
   "schema_version": 1,
-  "snapshot_date_utc": "2026-11-21",
+  "snapshot_date_utc": "2026-11-23",
   "repo": "karllondor/Nitro-Wheelz-",
-  "integration_branch": "ccr-91dad981-53kkbi",
-  "observed_version": "0.1.33",
+  "integration_branch": "integration/nitro-dev",
+  "observed_version": "0.1.43",
   "snapshot_kind": "read_only_status_index_not_lock",
   "read_first": [
     "AGENTS.md",
     "CLAUDE.md",
     "docs/dev/COORDINATION_PROTOCOL.md",
+    "docs/dev/INTEGRATION_MANIFEST.md",
     "docs/dev/REVIEW_2026-11-21.md",
     "HANDOFF.md",
     "CHANGELOG.md"
@@ -90,5 +91,7 @@
     "no_force_push": true,
     "no_blind_reset": true,
     "do_not_close_on_headless_only": true
-  }
+  },
+  "integration_manifest": "docs/dev/INTEGRATION_MANIFEST.md",
+  "integration_note": "#33: integration/nitro-dev is the ONE canonical development lineage (Claude multiplayer + node editor + Astra #29 events + #19 water). Feature branches build LAB APKs only; every combined build is recorded in docs/dev/INTEGRATION_MANIFEST.md. Not merged to main."
 }
