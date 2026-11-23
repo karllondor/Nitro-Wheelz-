@@ -40,6 +40,7 @@ var finish_progress: float = 1.0
 var car_world_position: Vector2 = Vector2.ZERO
 var track_progress: float = 0.0
 var target_time: float = 0.0
+var event_cue: String=""
 var best_score: int = -1        # local best on this track, -1 = none yet
 ## v0.1.32: this track's star thresholds (points); the pill shows the next
 ## star to earn, then the personal best once every star is reached.
@@ -88,6 +89,8 @@ func overall_progress() -> float:
 
 ## Text of the centred chase pill: who/what the player is chasing.
 func chase_label() -> Dictionary:
+    if event_cue!="":
+        return {"text":event_cue,"beating":false}
     var running: int = score+int(round(float(drift_score)*combo))
     if not star_tiers.is_empty():
         for i in range(star_tiers.size()):
@@ -321,7 +324,8 @@ func _draw_chase(r: Rect2, u: float) -> void:
     var size: float = STYLE.fit_size(txt,r.size.y*0.50,r.size.x-star_r*3.0)
     var tw: float = STYLE.text_width(txt,size)
     var x0: float = r.get_center().x-(tw+star_r*2.6)*0.5
-    STYLE.star(self,Vector2(x0+star_r,r.get_center().y),star_r,beating or best_score > 0,u)
+    if event_cue=="":
+        STYLE.star(self,Vector2(x0+star_r,r.get_center().y),star_r,beating or best_score > 0,u)
     STYLE.text(self,Vector2(x0+star_r*2.6,r.position.y+r.size.y*0.70),txt,size,col,HORIZONTAL_ALIGNMENT_LEFT,-1.0,true)
 
 ## COMBO box: the running chain (raw points x multiplier) and what it will

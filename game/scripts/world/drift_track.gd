@@ -6,6 +6,11 @@ class_name NitroDriftTrack
 ## the identical triangles are also exposed to the Godot physics engine.
 
 const TRACK_DATA: String = "res://tracks/shin_kawa_v2.json"
+const EVENT_LAYOUT = preload("res://scripts/events/event_layout.gd")
+const EVENT_PAINT = preload("res://scripts/events/event_paint.gd")
+var road_style := "circuit"
+var event_mode := ""
+var event_layout := {"zones":[],"warnings":[]}
 var track_data_path: String = TRACK_DATA
 var display_name: String = "Shin-Kawa Drift Park"
 const DNA = preload("res://scripts/world/track_dna.gd")
@@ -122,6 +127,9 @@ func build() -> void:
         with_props = false
         with_environment = false
         apply_region_style(tdesc)
+        if raw.get("event_version",0)==1:
+            event_mode=str(tdesc.get("event_mode","practice"))
+            road_style=str(raw.get("road_style","circuit"))
     _apply_compiled(compiled)
     if not tdesc.is_empty() and track_valid:
         if defer_terrain:
@@ -331,18 +339,22 @@ func _build_visuals() -> void:
         CONCRETE_SLABS if shoulder_concrete else DIRT,6.0)
     _add_corridor("Single continuous driving surface",left_edge,right_edge,
         0.05,ASPHALT_TINT,ASPHALT,7.0)
-    _build_kerbs()
-    _add_corridor("White edge left",_shift_edge(left_edge,LINE_INSET),
-        _shift_edge(left_edge,LINE_INSET+LINE_WIDTH),0.066,LINE_COLOUR)
-    _add_corridor("White edge right",_shift_edge(right_edge,-LINE_INSET-LINE_WIDTH),
-        _shift_edge(right_edge,-LINE_INSET),0.066,LINE_COLOUR)
+    var inset:=0.32 if road_style=="road" else LINE_INSET
+    if road_style!="road":
+        _build_kerbs()
+    event_layout=EVENT_LAYOUT.generate(self,event_mode)
+    EVENT_PAINT.build(self)
+    _add_corridor("White edge left",_shift_edge(left_edge,inset),
+        _shift_edge(left_edge,inset+LINE_WIDTH),0.066,LINE_COLOUR)
+    _add_corridor("White edge right",_shift_edge(right_edge,-inset-LINE_WIDTH),
+        _shift_edge(right_edge,-inset),0.066,LINE_COLOUR)
     if closed_loop:
         _build_start_line()
     elif centerline.size() >= 4:
         _build_start_line(start_index,false)
         _build_start_line(finish_index,true)
     _build_barriers()
-    if with_decor:
+    if with_decor and road_style!="road":
         _build_barrier_ads()
         _build_road_logos()
     if with_props:
@@ -1076,12 +1088,7 @@ func _road_at_arc(arc: float) -> Dictionary:
     var a: float = arc
     if closed_loop:
         a = fposmod(arc,length_metres)
-    var i: int = 0
-    for k in range(segs):
-        if arc_lengths[k] <= a:
-            i = k
-        else:
-            break
+    var i := clampi(arc_lengths.bsearch(a,false)-1,0,segs-1)
     var j: int = (i+1)%n
     var seg_len: float = maxf(centerline[i].distance_to(centerline[j]),0.001)
     var t: float = clampf((a-arc_lengths[i])/seg_len,0.0,1.0)

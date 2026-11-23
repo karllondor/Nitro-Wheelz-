@@ -444,3 +444,6 @@ First v0.1.21 push:
 - Validated Godot import, scene startup, input map, numerical physics and Web export in CI. Real phone/pad and visual handling tests remain NOT RUN.
 
 Public physics sources: https://driftit.app/blog/building-a-drift-game-in-threejs and https://driftit.app/guides/drifting-explained
+
+## 0.1.40 • judged event workshop (test branch)
+Terrain Builder roads support Practice, Club Event and Pro Event. ROUTE defaults to 12 m road, LOOP retains the 24 m circuit. MY TRACKS includes an editable Ojców workshop example. Judged runs add earned technical points to the active chain. Prototype results are session-only.

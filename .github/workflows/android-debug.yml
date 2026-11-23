@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - agent/codex/issue-29-procedural-events
       - agent/nitro-v0.1-android-debug-apk
       - agent/nitro-v0.1.1-mobile-lada
       - agent/nitro-v0.1.2-grip-reverse
@@ -78,6 +79,10 @@ jobs:
           export/android/android_sdk_path = "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
+      - name: Isolate the event workshop from the main phone installation
+        if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
+        run: |
+          sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.workshop"/; s/^package\/name=.*/package\/name="Nitro Wheelz Workshop"/' game/export_presets.cfg
       - name: Export unsigned-source-safe debug build
         shell: bash
         run: |
@@ -85,15 +90,55 @@ jobs:
           python3 tools/check_project.py
           mkdir -p builds/android
           "$GODOT_BIN" --headless --editor --path game --import
-          "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk"
-          test -s builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk
-          unzip -t builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk | tail -n 2
-          unzip -Z1 builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk | grep -E '^(AndroidManifest.xml|lib/arm64-v8a/.*\.so)$'
-          sha256sum builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk > builds/android/Nitro-Wheelz_v0.1.39_Android-debug.apk.sha256
+          "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk"
+          test -s builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk
+          unzip -t builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk | tail -n 2
+          unzip -Z1 builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk | grep -E '^(AndroidManifest.xml|lib/arm64-v8a/.*\.so)$'
+          sha256sum builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk > builds/android/Nitro-Wheelz_v0.1.40_Android-debug.apk.sha256
           echo "BUILT: APK not yet tested on a real Android device."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.39_Android-debug
+          name: Nitro-Wheelz_v0.1.40_Android-debug
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30
+
+      - name: Capture workshop in Godot
+        if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
+        run: |
+          mkdir -p "$RUNNER_TEMP/workshop"
+          NITRO_EVENT_CAPTURES="$RUNNER_TEMP/workshop" xvfb-run -a -s "-screen 0 720x1280x24" "$GODOT_BIN" --path game --audio-driver Dummy --rendering-method gl_compatibility --resolution 720x1280 --script res://tests/event_workshop_test.gd
+      - uses: actions/upload-artifact@v4
+        if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
+        with:
+          name: Workshop-gameplay
+          path: ${{ runner.temp }}/workshop/*.png
+          if-no-files-found: error
+
+  workshop-device:
+    if: github.head_ref == 'agent/codex/issue-29-procedural-events'
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Nitro-Wheelz_v0.1.40_Android-debug
+          path: builds/android
+      - name: Enable emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+          sudo apt-get install -y python3-pil
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
+          script: bash tools/android_event_smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Workshop-Android-evidence
+          path: builds/event-android/
