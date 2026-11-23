@@ -52,8 +52,39 @@ func scene_is(path: String) -> bool:
     var cs: Node = get_tree().current_scene
     return cs != null and cs.scene_file_path == path
 
+## Feature inventory INSIDE the exported APK (#33): every integrated feature's code / data is packed, the menu offers its entry.
+func inventory() -> void:
+    var packed: Array = ["res://scripts/net/net_session.gd","res://scripts/net/net_race.gd","res://scripts/net/multiplayer_lobby.gd",
+        "res://scripts/events/event_judge.gd","res://scripts/events/event_layout.gd","res://scripts/events/event_paint.gd",
+        "res://scripts/world/track_edit_tools.gd","res://scripts/park/park_controller.gd","res://scripts/world/terrain/terrain_world.gd",
+        "res://tracks/event_workshop_29.json","res://tracks/shin_kawa_v2.json","res://tracks/benchmark_oval.json"]
+    var missing: Array = []
+    for path in packed:
+        if not ResourceLoader.exists(path):
+            missing.append(path)
+    note(missing.is_empty(),"packed in the APK: %d feature files%s" % [packed.size()-missing.size()," (MISSING: %s)" % str(missing) if not missing.is_empty() else ""])
+    var layout = load("res://scripts/events/event_layout.gd")
+    note((layout.MODES as Dictionary).keys() == ["practice","club","pro"] and absf(float(layout.ROAD_WIDTH)-12.0) < 0.01,"Practice / Club Event / Pro Event modes + 12 m ROAD (Touge) width")
+    note(load("res://scripts/world/terrain/terrain_world.gd").get_script_constant_map().has("STREAM_HALF_M"),"water: stream footprint code present (#19)")
+    var menu: Node = get_tree().current_scene
+    var names: Array = []
+    if menu != null and menu.has_method("show_page"):
+        menu.call("show_page","main")      # a fresh install opens the WELCOME page (name question) first
+    if menu != null and menu.get("page") != null:
+        for c in (menu.get("page") as Node).get_children():
+            names.append(str(c.name))
+    var want: Array = ["DRIVE","PARK","LOCAL MULTIPLAYER","GARAGE","TRACK BUILDER","SETTINGS"]
+    var absent: Array = []
+    for n in want:
+        if not names.has(n):
+            absent.append(n)
+    note(absent.is_empty(),"main menu entries %s%s" % [str(want)," (MISSING: %s)" % str(absent) if not absent.is_empty() else ""])
+
 func run() -> void:
     var tree := get_tree()
+    await tree.process_frame
+    await tree.process_frame
+    inventory()
     # ------------------------------------------------------------- 1. multiplayer on the device network stack
     var host: NitroNetSession = SESSION.new()
     tree.root.add_child(host)
@@ -115,6 +146,17 @@ func run() -> void:
     client.queue_free()
     var clean: bool = await until(func(): return SESSION.current == null and RESULTS.record_allowed(),10.0)
     note(clean,"leaving cleans the session up, records allowed again")
+    # --------------------------------------------- solo race on a built-in circuit: no multiplayer object, records allowed
+    ProjectSettings.set_setting("nitro/selected_track","res://tracks/shin_kawa_v2.json")
+    tree.change_scene_to_file("res://scenes/race.tscn")
+    await until(func(): return scene_is("res://scenes/race.tscn"),30.0)
+    var solo: Node = tree.current_scene
+    note(solo.get("net") == null and RESULTS.record_allowed(),"solo race: no multiplayer object, records allowed")
+    Input.action_press("throttle",1.0)
+    var solo_moved: bool = await until(func(): return solo.model.speed_kmh() > 3.0,25.0)
+    var solo_kmh: float = solo.model.speed_kmh()
+    Input.action_release("throttle")
+    note(solo_moved,"solo car drives (%.1f km/h; emulator physics runs slower than real time)" % solo_kmh)
     # ----------------------------------------------- 2. Terrain Builder circuit (#29 Club) in the node editor
     var desc: Dictionary = CAT.descriptor("jp_sakura",7,-1,"club")
     var field = FIELD.new("jp_sakura",7)
