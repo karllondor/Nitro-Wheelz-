@@ -3,6 +3,9 @@ set -euo pipefail
 apk=$(find builds/android -name '*.apk' -print -quit)
 pkg=com.karllondor.nitrowheelz.workshop
 adb install -r "$apk"
+adb shell settings put secure immersive_mode_confirmations confirmed
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard
 adb shell wm size 720x1280
 adb shell wm density 240
 adb shell run-as "$pkg" mkdir -p files
@@ -18,7 +21,7 @@ await_file() {
   echo "Timed out waiting for $1" >&2
   return 1
 }
-for view in practice pro club drive; do
+for view in straight corner s-bend circuit practice pro club drive; do
   await_file "ready-$view"
   adb exec-out screencap -p > "builds/event-android/$view.png"
   adb shell run-as "$pkg" touch "files/captured-$view"

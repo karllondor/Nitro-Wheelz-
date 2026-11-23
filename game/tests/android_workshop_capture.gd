@@ -28,6 +28,30 @@ func run() -> void:
     builder._open_saved("res://tracks/event_workshop_29.json")
     while builder.busy_running:
         await tree.process_frame
+    var original: Dictionary=builder._snapshot()
+    builder.grid=builder.TT.new_grid()
+    builder.mode="draw"
+    var cells: Array[Vector2i]=[Vector2i(7,2),Vector2i(7,5),Vector2i(9,5),Vector2i(9,7)]
+    var views:=["straight","corner","s-bend"]
+    for i in range(3):
+        builder.begin_stroke(cells[i])
+        builder.move_stroke(cells[i+1])
+        builder.end_stroke()
+        while builder.busy_running:
+            await tree.process_frame
+        await snapshot(views[i])
+    builder._restore(original)
+    builder._toggle_surface()
+    while builder.busy_running:
+        await tree.process_frame
+    await snapshot("circuit")
+    builder._toggle_surface()
+    while builder.busy_running:
+        await tree.process_frame
+    builder._write("user://workshop-reload.json","Event workshop","event_workshop_29")
+    builder._open_saved("user://workshop-reload.json")
+    while builder.busy_running:
+        await tree.process_frame
     for mode in ["practice","pro","club"]:
         builder._pick_event(mode)
         while builder.busy_running:
