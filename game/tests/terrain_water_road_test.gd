@@ -134,17 +134,13 @@ func _checks() -> String:
                             return "Ojców seed %d: the water is %.2f m below the road surface between samples %d / %d" % [world_seed,cm,i,j]
             # Far (along the stream) from every crossing the level is the natural one: the
             # stream is not hidden or flattened globally.
-            var far_checked: int = 0
             for pr in pairs:
-                var near: float = INF
-                for cap in w._stream_caps:
-                    near = minf(near,absf(float(pr[0])-float(cap[0])))
-                if near > 40.0:
-                    far_checked += 1
-                    if absf(float(pr[1])-w.stream_natural_level(float(pr[0]))) > 0.01:
-                        return "Ojców seed %d: the ribbon %.0f m from any crossing left its natural level" % [world_seed,near]
-            if far_checked == 0 and not w._stream_caps.is_empty():
-                far_checked = 0   # a loop crossing the stream all along: nothing is far, that is fine
+                var near := INF
+                var at: Vector2 = w.field.to_world(w.field.stream_x(pr[0]),pr[0])
+                for i in range(smp.size()):
+                    near=minf(near,at.distance_to(smp[i])-hw[i])
+                if near>40.0 and absf(float(pr[1])-w.stream_natural_level(float(pr[0])))>0.01:
+                    return "Far water changed on Ojców seed %d" % world_seed
             # No cliffs in the ribbon.
             for k in range(1,pairs.size()):
                 var dz: float = float(pairs[k][0])-float(pairs[k-1][0])

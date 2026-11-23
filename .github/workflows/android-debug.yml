@@ -83,6 +83,10 @@ jobs:
         if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
         run: |
           sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.workshop"/; s/^package\/name=.*/package\/name="Nitro Wheelz Workshop"/' game/export_presets.cfg
+      - name: Isolate the water review app
+        if: github.head_ref == 'agent/codex/issue-19-water-integration'
+        run: |
+          sed -i 's/com.karllondor.nitrowheelz"/com.karllondor.nitrowheelz.water19"/; s/^package.name="Nitro Wheelz"/package\/name="Nitro Wheelz Water QA"/' game/export_presets.cfg
       - name: Export unsigned-source-safe debug build
         shell: bash
         run: |
@@ -102,6 +106,33 @@ jobs:
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30
+
+      - name: Compare the same Builder and driving scenes before and after
+        if: github.head_ref == 'agent/codex/issue-19-water-integration'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_path=game/scripts/world/terrain/terrain_world.gd
+          baseline=19f507a43df3953e23fb6845648add530aeb0690
+          git fetch --no-tags --depth=1 origin "$baseline"
+          cp "$source_path" "$RUNNER_TEMP/terrain-fixed.gd"
+          for revision in before after; do
+            if [[ "$revision" == before ]]; then
+              git show "$baseline:$source_path" > "$source_path"
+            else
+              cp "$RUNNER_TEMP/terrain-fixed.gd" "$source_path"
+            fi
+            export OUT_DIR="$RUNNER_TEMP/water/$revision"
+            mkdir -p "$OUT_DIR"
+            xvfb-run -a -s "-screen 0 720x1280x24" "$GODOT_BIN" --path game --audio-driver Dummy --resolution 720x1280 --script res://tests/capture_water_footprint.gd
+            test -s "$OUT_DIR/chase.png"
+          done
+      - uses: actions/upload-artifact@v4
+        if: github.head_ref == 'agent/codex/issue-19-water-integration'
+        with:
+          name: Water-19-before-after
+          path: ${{ runner.temp }}/water/
+          if-no-files-found: error
 
       - name: Capture workshop in Godot
         if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.ref_name == 'agent/codex/issue-29-procedural-events'
