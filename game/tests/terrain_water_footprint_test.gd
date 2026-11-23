@@ -79,6 +79,16 @@ func run() -> void:
     for item: Dictionary in [data,changed,loop]:
         var c:=DNA.compile(item)
         w.set_road(c.centerline,c.halfwidths,c.heights,c.closed)
+        var lowered := 0
+        var depth_min := INF
+        for row in range(-440,441):
+            var wp: Vector2 = w.field.to_world(w.field.stream_x(row),row)
+            var water: float=w.stream_level(row)
+            if water<w.stream_natural_level(row)-0.05:
+                lowered+=1
+                depth_min=minf(depth_min,water-w.height_at(wp.x,wp.y))
+        print("Lowered channel ",lowered," sampled metres; minimum wet depth ",depth_min)
+        if lowered==0 or depth_min<0.29: failed=true
         var r:=measure(w,c)
         print("WATER footprint ",item.id," width ",item.width_m," closed ",c.closed," intersections ",r.sections," minimum ",r.min," at ",r.point," segment ",r.index)
         if r.sections==0 or r.min<2.19: failed=true

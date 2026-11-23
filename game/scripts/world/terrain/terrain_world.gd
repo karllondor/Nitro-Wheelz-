@@ -93,6 +93,8 @@ func _build_begin() -> void:
     for child in get_children():
         remove_child(child)
         child.queue_free()
+    stream_node=null
+    _stream_limits.clear()
     chunk_nodes.clear()
     chunk_hash.clear()
     ground_mat = ShaderMaterial.new()
@@ -168,6 +170,8 @@ func _set_road_begin(samples: Array[Vector2], halfwidths: PackedFloat32Array, he
             "class":cls,"summary":c}
         if not closed:
             road["end_pads"] = end_pads(samples,halfwidths,heights)
+    if field.relief == "canyon":
+        _refresh_stream_limits()
     _deform()
     var dirty: Array = []
     var cc: Vector2i = chunk_counts()
@@ -358,6 +362,8 @@ func _deform() -> void:
                 var tgt2: float = py+signf(dz)*minf(absf(dz),out_d*slope)
                 if absf(tgt2-orig) > 0.01:
                     h[k2] = tgt2
+    if canyon:
+        _clear_lowered_stream_bed(h)
     field.height = h
 
 func _chunk_hash(id: Vector2i) -> int:
@@ -649,8 +655,33 @@ func _refresh_stream_limits() -> void:
     for i in range(count-2,-1,-1):
         _stream_limits[i]=minf(_stream_limits[i],_stream_limits[i+1]+rise)
 
+## The lowered surface would otherwise disappear into the original stream bed.
+## Touch only terrain cells under a lowered strip, leaving the natural channel
+## and every road vertex intact. Each surrounding cell corner is below both
+## water endpoints, so the two ground triangles cannot protrude through it.
+func _clear_lowered_stream_bed(h: PackedFloat32Array) -> void:
+    var origin := Vector2(FIELD.HALF_X,FIELD.HALF_Z)
+    for k in range(_stream_limits.size()-1):
+        var za := k*STREAM_STEP_M-FIELD.HALF_Z
+        var zb := za+STREAM_STEP_M
+        var ya := stream_natural_level(za)
+        var yb := stream_natural_level(zb)
+        if _stream_limits[k]>=ya and _stream_limits[k+1]>=yb:
+            continue
+        var a := field.to_world(field.stream_x(za),za)
+        var b := field.to_world(field.stream_x(zb),zb)
+        var side := Vector2(STREAM_HALF_M,0)
+        var lo := Vector2i(((a.min(b)-side+origin)/FIELD.STEP).floor())
+        var hi := Vector2i(((a.max(b)+side+origin)/FIELD.STEP).ceil())
+        var bed := minf(minf(ya,_stream_limits[k]),minf(yb,_stream_limits[k+1]))-0.30
+        for j in range(maxi(0,lo.y),mini(field.nz-1,hi.y)+1):
+            for i in range(maxi(0,lo.x),mini(field.nx-1,hi.x)+1):
+                var idx := j*field.nx+i
+                h[idx]=minf(h[idx],bed)
+
 func _build_stream() -> void:
-    _refresh_stream_limits()
+    if _stream_limits.is_empty():
+        _refresh_stream_limits()
     var st := SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_TRIANGLES)
     var prev_l := Vector3.ZERO
