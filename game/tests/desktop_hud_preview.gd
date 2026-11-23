@@ -13,16 +13,17 @@ func _ready() -> void:
     add_child(race)
     await get_tree().process_frame
     race.set_physics_process(false)
-    if race.hud != null:
-        race.hud.race_time = 57.24
-        race.hud.lap = 2
-        race.hud.lap_limit = 3
-        race.hud.track_progress = 0.43
-        race.hud.speed = 86.0
-        race.hud.drift_degrees = 26.0
-        race.hud.score = 12850
-        race.hud.best_score = 22500
-        race.hud.drift_score = 720
-        race.hud.combo = 2.3
-        race.hud.track_name = "SHIN-KAWA"
-        race.hud.queue_redraw()
+    var view: NitroRaceHUD = race.get("hud")
+    if view != null:
+        view.race_time = 57.24
+        view.lap = 2
+        view.lap_limit = 3
+        view.track_progress = 0.43
+        view.speed = 86.0
+        view.drift_degrees = 26.0
+        view.score = 12850
+        view.best_score = 22500
+        view.drift_score = 720
+        view.combo = 2.3
+        view.track_name = "SHIN-KAWA"
+        view.queue_redraw()
