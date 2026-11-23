@@ -1753,6 +1753,14 @@ func _open_tracks() -> void:
     _dialog_button(box,"CLOSE",_close_dialog)
 
 func _open_saved(path: String) -> void:
+    var shaped: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+    if shaped is Dictionary and bool((shaped.get("builder",{}) as Dictionary).get("nodes_edited",false)):
+        var marker := FileAccess.open("user://nitro_editor_last_path.txt",FileAccess.WRITE)
+        if marker != null:
+            marker.store_string(path)
+            marker.close()
+        get_tree().change_scene_to_file("res://scenes/track_editor.tscn")
+        return
     grid = TT.new_grid()
     if not load_track_file(path):
         _status("COULD NOT OPEN THAT TRACK",false)
@@ -1820,8 +1828,8 @@ func load_track_file(path: String) -> bool:
     if not (raw is Dictionary):
         return false
     var w: Dictionary = TT.world_of(raw)
-    if w.is_empty():
-        return false
+    if w.is_empty() or bool((raw.get("builder",{}) as Dictionary).get("nodes_edited",false)):
+        return false      # a circuit shaped in the node editor: its tiles describe an older road
     archetype = str(w["archetype"])
     country = str(CAT.info(archetype)["country"])
     terrain_seed = int(w.get("terrain_seed",1))

@@ -14,6 +14,7 @@ const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
 const PARK_PROGRESS = preload("res://scripts/park/park_progress.gd")
 const PARK_TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const AVATAR = preload("res://scripts/ui/avatar.gd")
+const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 ## v0.1.35 flow (owner: "garage: no track, track: no car" was confusing): ONE
 ## RACE SETUP page (track + car + DRIVE) joins the track list and the garage.
 ##   main DRIVE -> setup;  setup TRACK -> track list (pick -> back to setup);
@@ -197,8 +198,9 @@ static func saved_tracks() -> Array[Dictionary]:
 
 func _edit_track(path: String) -> void:
     var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
-    if raw is Dictionary and not TERRAIN_TRACK.world_of(raw).is_empty():
-        # Terrain-first tracks reopen in the terrain builder (same world).
+    if raw is Dictionary and not TERRAIN_TRACK.world_of(raw).is_empty() and not EDIT_TOOLS.node_shaped(raw):
+        # Terrain-first tracks reopen in the terrain builder (same world); a circuit shaped in the node editor
+        # (v0.1.42, keeps its landscape) reopens in the node editor.
         ProjectSettings.set_setting("nitro/terrain_edit_track",path)
         _go("res://scenes/terrain_builder.tscn")
         return
@@ -238,7 +240,9 @@ func _build_page() -> void:
     _title("TRACK BUILDER")
     _big("TERRAIN BUILDER\nCOUNTRY • LANDSCAPE • ROAD",func(): _go("res://scenes/terrain_builder.tscn"),true).name = "Terrain builder"
     _big("BUILD • 3D TILES\nTAP TO LAY ROAD",func(): _go("res://scenes/track_builder.tscn")).name = "Builder 3D"
-    _big("EDIT NODES\nSHAPE ANY CIRCUIT",func(): _go("res://scenes/track_editor.tscn")).name = "Editor nodes"
+    _big("EDIT NODES\nSHAPE ANY CIRCUIT",func():
+        ProjectSettings.set_setting("nitro/editor_open_latest",true)
+        _go("res://scenes/track_editor.tscn")).name = "Editor nodes"
     _big("GENERATE & DRIVE\nRANDOM VALID LOOP",_random_track).name = "Generate"
     _small("◀  BACK",func(): show_page("main"))
 

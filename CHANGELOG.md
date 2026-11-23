@@ -1,3 +1,12 @@
+## [0.1.42] — NODE EDITOR: open builder circuits, shape them, set the START (TEST BUILD)
+Owner request 2026-11-23, branch `agent/claude/node-editor-open-start` = v0.1.41 (local multiplayer) + this. Doc: docs/NODE_EDITOR.md; handoff: docs/dev/handoffs/node-editor-open-start-20261123-claude.md.
+- A circuit from the Terrain Builder now opens in the node editor WITH its landscape (before it was bounced back to the Terrain Builder): terrain picture on the map, nodes over water / sea cliff / impossible cuts turn red and block SAVE / DRIVE, SAVE AS re-solves the road heights on the saved terrain and keeps the world.
+- New OPEN… button: every saved circuit (TERRAIN / 3D TILES / NODES) and copies of the four built-in circuits; TRACK BUILDER > EDIT NODES opens the circuit touched last (also one just built in a builder).
+- New SET START (the selected node becomes the start line, the car drives towards the next node; "START" label + green arrow on the map) and REVERSE (other way round). Road, length and heights are unchanged; UNDO works.
+- Circuits saved from the node editor are marked node-shaped: the Terrain Builder refuses to reload old tiles over them; the menu, the results EDIT TRACK and the Terrain Builder's MY TRACKS send them to the node editor.
+- Open point-to-point routes are still edited in the Terrain Builder (the node editor shapes closed loops). Four button rows in the editor.
+- New test node_editor_open_test; evidence tool tests/capture_node_editor_v0142.gd. Android versionCode 42 / versionName 0.1.42. NOT RUN: all of it on a phone.
+
 ## [0.1.41] — LOCAL MULTIPLAYER prototype: two Android phones, same Wi-Fi or hotspot, no Internet (TEST BUILD)
 Issue #31 (owner dispatch 2026-11-22), coordination #26, branch `agent/claude/issue-31-local-multiplayer` = v0.1.39 + this. Doc: docs/LOCAL_MULTIPLAYER.md; handoff: docs/dev/handoffs/issue-31-local-multiplayer-20261123-claude.md. Version 0.1.41 (not 0.1.40) because Astra's #29 branch already uses 0.1.40 for a different APK.
 - New main-menu entry LOCAL MULTIPLAYER: HOST GAME / JOIN GAME (type the host's local address) / READY / START / LEAVE, with status and readable errors. 2 players, manual address (no discovery yet), only private LAN addresses accepted (never an Internet address).

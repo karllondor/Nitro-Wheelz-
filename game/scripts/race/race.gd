@@ -7,6 +7,7 @@ const PARK_TRACK = preload("res://scripts/park/park_track.gd")
 const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
 const PARK = preload("res://scripts/park/park_controller.gd")
 const NET_RACE = preload("res://scripts/net/net_race.gd")
+const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
@@ -548,7 +549,8 @@ func _player_track_path() -> String:
 
 ## Results of a player track -> straight back into the editor with it.
 func _edit_this_track() -> void:
-    if track.terrain != null:
+    var shaped: Variant = JSON.parse_string(FileAccess.get_file_as_string(_player_track_path()))
+    if track.terrain != null and not (shaped is Dictionary and EDIT_TOOLS.node_shaped(shaped)):
         # Terrain tracks open in the terrain-first builder (same world).
         ProjectSettings.set_setting("nitro/terrain_edit_track",_player_track_path())
         get_tree().change_scene_to_file("res://scenes/terrain_builder.tscn")

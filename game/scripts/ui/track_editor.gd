@@ -3,6 +3,8 @@ extends Control
 ## insert/delete, validate, save to user://, and play. Not a random generator.
 const DNA = preload("res://scripts/world/track_dna.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const TOOLS = preload("res://scripts/world/track_edit_tools.gd")
+const BUSY = preload("res://scripts/ui/busy_overlay.gd")
 const SOURCE: String = "res://tracks/shin_kawa_full_circuit.json"
 const CUSTOM: String = "user://nitro_custom_track.json"
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
@@ -53,6 +55,15 @@ var problems: Array[Dictionary] = []     # DNA.diagnose(): every problem, exact 
 var preview: Dictionary = {}             # DNA.sample_curve() of the current knots
 var grab_offset: Vector2 = Vector2.ZERO  # finger -> node offset while dragging
 var smooth_button: Button
+## v0.1.42: circuits of the Terrain Builder keep their landscape here. The field is rebuilt from the saved world
+## descriptor, the road heights are re-solved on it when saving, and stretches that cannot be built are red.
+var terrain_key: String = ""
+var terrain_field: NitroTerrainField = null
+var terrain_tex: ImageTexture = null
+var terrain_ok: bool = true
+var terrain_flagged: Dictionary = {}
+var terrain_reasons: Array = []
+var open_kind: String = "nodes"
 const HELP_LINES: Array[String] = [
     "DRAG a node to reshape the road",
     "DRAG empty map to move  •  2 FINGERS pinch to zoom",
@@ -60,46 +71,59 @@ const HELP_LINES: Array[String] = [
     "ORANGE = selected node  •  RED = problem section",
     "GREEN frame = drivable  •  RED frame = fix the track",
     "AUTO-SMOOTH widens a too-tight red corner for you",
+    "OPEN loads any saved circuit (terrain, 3D tiles, nodes)",
+    "SET START: tap a node, then SET START (it drives to the next node)",
+    "REVERSE turns the driving direction round",
     "SAVE AS names your track  •  DRIVE tests it"]
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_PASS
-    var chosen: String = SOURCE
-    if FileAccess.file_exists(LAST_SAVED):
-        var candidate: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
-        if candidate.begins_with("user://nitro_track_") and FileAccess.file_exists(candidate):
-            var checked: Dictionary = DNA.read_track(candidate)
-            if bool(checked.get("ok",false)):
-                chosen = candidate
-    elif FileAccess.file_exists(CUSTOM):
+    # TRACK BUILDER > EDIT NODES asks for the circuit touched last (also one just built in a builder); every other way
+    # in (MY TRACKS > EDIT, results > EDIT TRACK, tests) names its circuit through the last-path marker.
+    var latest: bool = bool(ProjectSettings.get_setting("nitro/editor_open_latest",false))
+    ProjectSettings.set_setting("nitro/editor_open_latest",false)
+    var chosen: String = TOOLS.default_track_path() if latest else TOOLS.marker_track_path()
+    if chosen == "" and FileAccess.file_exists(CUSTOM):
         chosen = CUSTOM
-    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(chosen))
-    if not (raw is Dictionary):
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(chosen)) if chosen != "" else null
+    if not (raw is Dictionary) or not bool(DNA.compile(raw).get("ok",false)):
         raw = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
         chosen = SOURCE
-    # v0.1.27: terrain tracks are edited in the Terrain Builder (the node
-    # editor has no landscape); open it there instead of losing the world.
-    if raw is Dictionary and chosen != SOURCE and \
-            not load("res://scripts/world/terrain/terrain_track.gd").world_of(raw).is_empty():
+    # Point-to-point routes (terrain) are edited in the Terrain Builder; this editor shapes closed circuits.
+    if chosen != SOURCE and TOOLS.is_open_route(raw) and TOOLS.kind_of(raw) == "terrain":
         ProjectSettings.set_setting("nitro/terrain_edit_track",chosen)
         get_tree().call_deferred("change_scene_to_file","res://scenes/terrain_builder.tscn")
         return
-    data = raw
-    if chosen == SOURCE:
-        data["id"] = "player_custom_track"
-        data["name"] = "MY CUSTOM CIRCUIT"
-    else:
-        last_saved_path = chosen
-        last_saved_name = str(data.get("name","MY CUSTOM CIRCUIT"))
-    data["closed"] = true
-    data.erase("widths_m")
-    data["width_m"] = clampf(float(data.get("width_m",25.0)),18.0,28.0)
+    _adopt(raw,"" if chosen == SOURCE else chosen,"MY CUSTOM CIRCUIT" if chosen == SOURCE else "")
     _fit_view()
     _make_ui()
+    _sync_terrain()
     _validate()
     _update_header()
     if not help_hidden():
         _show_dialog("help")
+
+## Take a circuit (a parsed track file) as the one being edited. `path` = the file it came from ("" = a copy that
+## is not saved yet), `copy_name` = a name for such a copy.
+func _adopt(raw: Dictionary, path: String, copy_name: String) -> void:
+    data = raw.duplicate(true)
+    if path == "":
+        data["id"] = "player_custom_track"
+        data["name"] = copy_name if copy_name != "" else str(data.get("name","MY CUSTOM CIRCUIT"))
+        last_saved_path = ""
+        last_saved_name = ""
+    else:
+        last_saved_path = path
+        last_saved_name = str(data.get("name","MY CUSTOM CIRCUIT"))
+    data["closed"] = true
+    data.erase("widths_m")
+    data["width_m"] = clampf(float(data.get("width_m",25.0)),18.0,28.0)
+    selected = -1
+    pointer = -999
+    add_mode = false
+    zoom_level = 1.0
+    pan_offset = Vector2.ZERO
+    open_kind = TOOLS.kind_of(data)
 
 func _redraw() -> void:
     queue_redraw()
@@ -148,7 +172,7 @@ func _fit_view() -> void:
     var s: Vector2 = get_viewport_rect().size
     # The edit window fills everything between the header and the
     # validation line; the map is clipped to it and never reaches the buttons.
-    canvas = Rect2(s.x*0.03,s.y*0.066,s.x*0.94,s.y*0.676)
+    canvas = Rect2(s.x*0.03,s.y*0.066,s.x*0.94,s.y*0.628)
     if map_view != null:
         map_view.position = canvas.position
         map_view.size = canvas.size
@@ -238,7 +262,7 @@ func _make_ui() -> void:
     add_child(map_view)
     message_label = Label.new()
     message_label.name = "Validation line"
-    message_label.position = Vector2(s.x*0.03,s.y*0.746)
+    message_label.position = Vector2(s.x*0.03,s.y*0.698)
     message_label.size = Vector2(s.x*0.94,s.y*0.036)
     message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -263,16 +287,20 @@ func _make_ui() -> void:
         var r := Rect2(zb.position,zb.size)
         zoom_strip = r if zoom_strip.size == Vector2.ZERO else zoom_strip.merge(r)
     zoom_strip = zoom_strip.grow(6.0)
-    _button("ADD NODE",0.03,0.788,0.30,0.056,Callable(self,"_add_point"))
-    _button("DELETE NODE",0.35,0.788,0.30,0.056,Callable(self,"_delete_point"))
-    _button("↶ UNDO",0.67,0.788,0.30,0.056,Callable(self,"_undo"))
-    # Validation runs after every edit; this slot now FIXES problems.
-    smooth_button = _button("AUTO-SMOOTH",0.03,0.852,0.46,0.056,Callable(self,"_auto_smooth"))
+    # Four rows (v0.1.42): nodes | start + fix | file | leave + drive.
+    _button("ADD NODE",0.03,0.742,0.30,0.054,Callable(self,"_add_point"))
+    _button("DELETE NODE",0.35,0.742,0.30,0.054,Callable(self,"_delete_point"))
+    _button("↶ UNDO",0.67,0.742,0.30,0.054,Callable(self,"_undo"))
+    # Validation runs after every edit; this slot FIXES problems.
+    _button("SET START",0.03,0.801,0.30,0.054,Callable(self,"_set_start")).name = "Set start"
+    _button("REVERSE",0.35,0.801,0.30,0.054,Callable(self,"_reverse")).name = "Reverse"
+    smooth_button = _button("AUTO-SMOOTH",0.67,0.801,0.30,0.054,Callable(self,"_auto_smooth"))
     smooth_button.name = "Auto smooth"
-    _button("SAVE AS...",0.51,0.852,0.46,0.056,Callable(self,"_request_save"))
-    _button("START NEW",0.03,0.916,0.30,0.056,Callable(self,"_request_new"))
-    _button("BACK",0.35,0.916,0.30,0.056,Callable(self,"_back"))
-    _button("DRIVE",0.67,0.916,0.30,0.056,Callable(self,"_drive"))
+    _button("OPEN...",0.03,0.860,0.30,0.054,Callable(self,"_request_open")).name = "Open"
+    _button("SAVE AS...",0.35,0.860,0.30,0.054,Callable(self,"_request_save"))
+    _button("START NEW",0.67,0.860,0.30,0.054,Callable(self,"_request_new"))
+    _button("BACK",0.03,0.919,0.30,0.054,Callable(self,"_back"))
+    _button("DRIVE",0.35,0.919,0.62,0.054,Callable(self,"_drive")).name = "Drive"
 
 func _save_undo_snapshot() -> void:
     undo_stack.append({
@@ -301,6 +329,7 @@ func _undo() -> void:
     pointer = -999
     drag_recorded = false
     _fit_view()
+    _sync_terrain()
     _validate()
 
 func _close_dialog() -> void:
@@ -443,6 +472,8 @@ func _replace_new_track(points: Array,adding: bool) -> void:
     invalid_nodes.clear()
     last_saved_path = ""
     last_saved_name = ""
+    open_kind = "nodes"
+    _sync_terrain()
     _update_header()
     _fit_view()
     _redraw()
@@ -488,6 +519,15 @@ func _persist_track(title: String) -> bool:
     _validate()
     if not ready_to_play:
         return false
+    if terrain_field != null:
+        # A terrain circuit is saved with the road heights solved on ITS landscape (what the Terrain Builder does).
+        var fit: Dictionary = TOOLS.fit_terrain(data,terrain_field)
+        if not bool(fit["ok"]):
+            _status("TERRAIN • "+str((fit["reasons"] as Array)[0] if not (fit["reasons"] as Array).is_empty() else "NOT BUILDABLE"),false)
+            return false
+        data = fit["data"]
+    # The tiles of a builder circuit describe the road as it was before the nodes were shaped.
+    TOOLS.mark_node_shaped(data)
     var slug: String = _safe_slug(title)
     var path: String = "user://nitro_track_"+slug+".json"
     data["name"] = title
@@ -574,11 +614,29 @@ func _validate() -> void:
     invalid_nodes.clear()
     problem_ranges.clear()
     problems.clear()
+    terrain_flagged.clear()
+    terrain_reasons = []
+    terrain_ok = true
     compiled_samples = result.get("centerline",[])
     _refresh_preview()
     if ready_to_play:
         last_length = float(result["length_metres"])
-        _status("VALID • %.0f m / %.1f m width • closed loop" % [last_length,float(data["width_m"])],true)
+        var tail: String = ""
+        if terrain_field != null:
+            var fit: Dictionary = TOOLS.fit_terrain(data,terrain_field)
+            terrain_ok = bool(fit["ok"])
+            terrain_reasons = fit["reasons"]
+            for k in fit["flagged"]:
+                terrain_flagged[int(k)] = true
+            tail = " • TERRAIN OK"
+        if terrain_ok:
+            _status("VALID • %.0f m / %.1f m width • closed loop%s" % [last_length,float(data["width_m"]),tail],true)
+        else:
+            # Geometry is fine but the road would be built over water / a cliff: not drivable yet.
+            ready_to_play = false
+            for k in terrain_flagged:
+                invalid_nodes[int(k)] = true
+            _status("TERRAIN • %s • MOVE THE RED NODES" % str(terrain_reasons[0] if not terrain_reasons.is_empty() else "NOT BUILDABLE"),false)
     else:
         var errors: PackedStringArray = result.get("errors",PackedStringArray())
         if result.has("centerline"):
@@ -608,7 +666,7 @@ func _validate() -> void:
             head = "%d PROBLEMS • %s" % [problems.size(),head]
         _status(head+("  •  TAP AUTO-SMOOTH" if fixable else ""),false)
     if smooth_button != null:
-        STYLE.style_button(smooth_button,clampf(get_viewport_rect().size.x/700.0,0.85,1.8),not ready_to_play)
+        STYLE.style_button(smooth_button,clampf(get_viewport_rect().size.x/700.0,0.85,1.8),not ready_to_play and terrain_ok)
     _redraw()
 
 ## Player-facing wording for one diagnosed problem.
@@ -661,6 +719,9 @@ func _auto_smooth() -> void:
     _validate()
     if ready_to_play:
         _status("ALREADY VALID • nothing to smooth",true)
+        return
+    if not terrain_ok:
+        _status("TERRAIN • AUTO-SMOOTH only fixes corners • drag the red nodes off the water / cliff",false)
         return
     if _point_count() < 8:
         _status("PLACE AT LEAST 8 NODES FIRST",false)
@@ -748,6 +809,150 @@ func _reset_shape() -> void:
 
 func _back() -> void:
     get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+## --- terrain context -------------------------------------------------------------------------------------------
+
+## Keep the landscape of a terrain circuit in step with `data` (rebuilt from the saved world descriptor; cached by
+## archetype + seed). Other circuits have none.
+func _sync_terrain() -> void:
+    var key: String = TOOLS.field_key(data)
+    if key == "":
+        terrain_key = ""
+        terrain_field = null
+        terrain_tex = null
+        return
+    if key == terrain_key and terrain_field != null:
+        return
+    var busy: NitroBusy = null
+    if get_tree().get_script() == null:
+        busy = BUSY.open(self,"LOADING TERRAIN",true)
+        await get_tree().process_frame
+        await get_tree().process_frame
+    terrain_field = TOOLS.field_for(data)
+    terrain_key = key
+    terrain_tex = ImageTexture.create_from_image(TOOLS.terrain_image(terrain_field))
+    if busy != null:
+        busy.close()
+        _validate()
+    _redraw()
+
+## --- OPEN ------------------------------------------------------------------------------------------------------
+
+func _request_open() -> void:
+    _close_dialog()
+    var s: Vector2 = get_viewport_rect().size
+    var sc: float = clampf(s.x/700.0,0.90,1.65)
+    dialog_overlay = ColorRect.new()
+    dialog_overlay.name = "Open circuit modal"
+    dialog_overlay.color = Color(0.005,0.004,0.011,0.78)
+    dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    dialog_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    add_child(dialog_overlay)
+    var panel := PanelContainer.new()
+    panel.position = Vector2(s.x*0.045,s.y*0.07)
+    panel.size = Vector2(s.x*0.91,s.y*0.86)
+    panel.custom_minimum_size = panel.size
+    panel.add_theme_stylebox_override("panel",STYLE.modal_box(sc))
+    dialog_overlay.add_child(panel)
+    var margin := MarginContainer.new()
+    for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
+        margin.add_theme_constant_override(side,int(14.0*sc))
+    panel.add_child(margin)
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation",int(9.0*sc))
+    margin.add_child(stack)
+    var title := Label.new()
+    title.text = "OPEN A CIRCUIT"
+    title.add_theme_font_size_override("font_size",int(28.0*sc))
+    title.add_theme_font_override("font",STYLE.BOLD)
+    title.add_theme_color_override("font_color",Color(1.0,0.82,0.25))
+    stack.add_child(title)
+    var hint := Label.new()
+    hint.text = "Circuits from the Terrain Builder keep their landscape. Built-in circuits open as a copy."
+    hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hint.add_theme_font_size_override("font_size",int(17.0*sc))
+    hint.add_theme_color_override("font_color",Color(0.86,0.84,0.92))
+    stack.add_child(hint)
+    var scroll := ScrollContainer.new()
+    scroll.name = "Open list"
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    stack.add_child(scroll)
+    var list := VBoxContainer.new()
+    list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    list.add_theme_constant_override("separation",int(8.0*sc))
+    scroll.add_child(list)
+    for t in TOOLS.list_tracks():
+        var entry: Dictionary = t
+        var b := Button.new()
+        var sub: String = "%s • %.0f m" % [str(entry["label"]),float(entry["length"])]
+        if bool(entry["open"]):
+            sub = "POINT-TO-POINT ROUTE • EDITED IN THE TERRAIN BUILDER"
+        b.text = "%s\n%s" % [str(entry["name"]).to_upper(),sub]
+        b.name = "Open "+str(entry["path"]).get_file().get_basename()
+        b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        b.clip_text = true
+        b.custom_minimum_size.y = 76.0*sc
+        b.add_theme_font_size_override("font_size",int(19.0*sc))
+        STYLE.style_button(b,sc)
+        var path: String = str(entry["path"])
+        var builtin_name: String = str(entry["name"]) if bool(entry["builtin"]) else ""
+        b.pressed.connect(func(): _load_path(path,builtin_name))
+        list.add_child(b)
+    _modal_button(stack,"CANCEL",Callable(self,"_close_dialog"),sc)
+
+## Load a saved circuit into the editor. `builtin_name` != "" = a built-in circuit, opened as an unsaved copy.
+func _load_path(path: String,builtin_name: String = "") -> void:
+    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+    if not (raw is Dictionary) or not bool(DNA.compile(raw).get("ok",false)):
+        _close_dialog()
+        _status("COULD NOT OPEN • that file is not a valid circuit",false)
+        return
+    if TOOLS.is_open_route(raw):
+        _close_dialog()
+        if TOOLS.kind_of(raw) == "terrain":
+            ProjectSettings.set_setting("nitro/terrain_edit_track",path)
+            get_tree().change_scene_to_file("res://scenes/terrain_builder.tscn")
+        else:
+            _status("POINT-TO-POINT ROUTES CAN'T BE SHAPED HERE",false)
+        return
+    _save_undo_snapshot()
+    _close_dialog()
+    _adopt(raw,"" if builtin_name != "" else path,("COPY OF "+builtin_name) if builtin_name != "" else "")
+    _fit_view()
+    _sync_terrain()
+    _validate()
+    _update_header()
+
+## --- START point + direction ------------------------------------------------------------------------------------
+
+## The selected node becomes the start line (knot 0); the car drives from it towards the next node.
+func _set_start() -> void:
+    if selected < 0 or selected >= _point_count():
+        _status("TAP A NODE FIRST • it becomes the START and the car drives towards the next node",false)
+        return
+    if selected == 0:
+        _status("THAT NODE IS ALREADY THE START • green arrow = driving direction",true)
+        return
+    _save_undo_snapshot()
+    data = TOOLS.rotate_start(data,selected)
+    selected = 0
+    _validate()
+    if ready_to_play:
+        _status("START SET • drives towards the next node • %.0f m" % last_length,true)
+
+## Drive the same road the other way round (the start stays on the same node).
+func _reverse() -> void:
+    var n: int = _point_count()
+    if n < 3:
+        return
+    _save_undo_snapshot()
+    data = TOOLS.reverse_direction(data)
+    if selected > 0:
+        selected = (n-selected)%n
+    _validate()
+    if ready_to_play:
+        _status("DIRECTION REVERSED • green arrow shows the way • %.0f m" % last_length,true)
 
 func _add_point() -> void:
     var pts: Array = data["control_points"]
@@ -946,6 +1151,14 @@ func _draw_map() -> void:
     var v: Control = map_view
     var o: Vector2 = -canvas.position
     v.draw_rect(Rect2(Vector2.ZERO,canvas.size),Color(0.062,0.049,0.093,0.92),true)
+    if terrain_tex != null:
+        # The landscape of a terrain circuit (blue = water, shaded land); the frame is where the builder puts road.
+        var tr: Rect2 = TOOLS.terrain_rect()
+        var tl: Vector2 = _screen_point(tr.position)+o
+        v.draw_texture_rect(terrain_tex,Rect2(tl,_screen_point(tr.end)+o-tl),false,Color(1,1,1,0.92))
+        var pr: Rect2 = TOOLS.play_rect()
+        var ptl: Vector2 = _screen_point(pr.position)+o
+        v.draw_rect(Rect2(ptl,_screen_point(pr.end)+o-ptl),Color(1,1,1,0.30),false,2.0)
     # Faint 50 m grid for scale.
     var step: float = 50.0*pixels_per_metre
     if step > 14.0:
@@ -1026,9 +1239,8 @@ func _draw_map() -> void:
                 v.draw_line(c-Vector2(9,9),c+Vector2(9,9),Color(1.0,0.3,0.3),4.0)
                 v.draw_line(c-Vector2(9,-9),c+Vector2(9,-9),Color(1.0,0.3,0.3),4.0)
         var r: float = node_radius()
-        if preview.is_empty():
-            # Still placing the first nodes: start marker on node 0.
-            v.draw_arc(line[0],r*1.5,0.0,TAU,32,Color(0.19,0.85,0.44,0.8),2.5,true)
+        # Start marker on node 0 (the car starts here and drives towards node 1), always visible.
+        v.draw_arc(line[0],r*1.6,0.0,TAU,32,Color(0.19,0.85,0.44,0.9),3.0,true)
         for idx in range(n):
             var point: Vector2 = line[idx]
             # Selection wins orange; invalid knots otherwise red; neutral white.
@@ -1039,6 +1251,14 @@ func _draw_map() -> void:
                 v.draw_arc(point,r*2.4,0.0,TAU,40,Color(1.0,0.56,0.09,0.9),3.0,true)
             v.draw_circle(point,r,tint)
             v.draw_circle(point,r*0.4,Color(0.035,0.041,0.050))
+        if n >= 2:
+            # "START" beside node 0, on the left of the driving direction, above the road and the nodes.
+            var sdir: Vector2 = (line[1]-line[0]).normalized()
+            var fs: int = int(clampf(r*1.25,13.0,24.0))
+            var label_w: float = STYLE.text_width("START",float(fs))
+            var label_at: Vector2 = line[0]+Vector2(-sdir.y,sdir.x)*(r*2.4+label_w*0.5)
+            label_at.x = clampf(label_at.x,label_w*0.5+4.0,canvas.size.x-label_w*0.5-4.0)
+            v.draw_string(STYLE.BOLD,label_at+Vector2(-label_w*0.5,fs*0.35),"START",HORIZONTAL_ALIGNMENT_LEFT,-1.0,fs,Color(0.55,1.0,0.70))
     # Validation frame: green = drivable, red = needs fixing.
     # Calm thin green when drivable; red with a soft glow when it needs work.
     var inset := Rect2(Vector2(2,2),canvas.size-Vector2(4,4))
