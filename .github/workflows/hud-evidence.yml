@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   evidence:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +49,8 @@ jobs:
             OUT_FILE="$GITHUB_WORKSPACE/evidence/linux_after_$size.png" xvfb-run -a -s "-screen 0 1920x1080x24" \
               "$GODOT_BIN" --path "$GITHUB_WORKSPACE/game" --rendering-driver opengl3 --resolution "$size" --script res://tests/capture_desktop_hud.gd
           done
+          HUD_FULLSCREEN=1 OUT_FILE="$GITHUB_WORKSPACE/evidence/linux_after_fullscreen_1920x1080.png" xvfb-run -a -s "-screen 0 1920x1080x24" \
+            "$GODOT_BIN" --path "$GITHUB_WORKSPACE/game" --rendering-driver opengl3 --resolution 1920x1080 --script res://tests/capture_desktop_hud.gd
           file evidence/linux_*.png
       - name: Export before and after browser review scenes
         shell: bash
