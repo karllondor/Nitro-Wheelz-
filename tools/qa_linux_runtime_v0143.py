@@ -35,15 +35,19 @@ try:
     img2,sd2=shot("02_linux_after_welcome.png")
     changed=ImageChops.difference(img,img2).getbbox() is not None
     print("UI_CHANGED_AFTER_INPUT:",changed,flush=True)
-    key("key","Return")
+    key("key","Return")       # first focused main-menu DRIVE -> race setup
     time.sleep(2)
-    key("key","Return")
-    time.sleep(7)
+    shot("03_linux_race_setup.png")
+    key("key","Tab")           # setup TRACK -> CAR
+    key("key","Tab")           # setup CAR -> DRIVE
+    key("key","Return")        # load actual driving scene
+    time.sleep(13)
+    img_race,rd=shot("04_linux_race_before_throttle.png")
     key("keydown","w")
-    time.sleep(2)
+    time.sleep(3)
     key("keyup","w")
-    img3,sd3=shot("03_linux_after_drive_attempt.png")
-    print("UI_CHANGED_AFTER_DRIVE_ATTEMPT:",ImageChops.difference(img,img3).getbbox() is not None,flush=True)
+    img3,sd3=shot("05_linux_race_after_throttle.png")
+    print("UI_CHANGED_AFTER_THROTTLE:",ImageChops.difference(img_race,img3).getbbox() is not None,flush=True)
     if proc.poll() is not None:
         raise RuntimeError("Native game exited unexpectedly while navigating")
     assert sd3>=4,"Native executable turned blank after input"
