@@ -117,7 +117,9 @@ func _adopt(raw: Dictionary, path: String, copy_name: String) -> void:
         last_saved_name = str(data.get("name","MY CUSTOM CIRCUIT"))
     data["closed"] = true
     data.erase("widths_m")
-    data["width_m"] = clampf(float(data.get("width_m",25.0)),18.0,28.0)
+    # #33 integration: a ROAD / TOUGE circuit (#29, 12 m) keeps its narrow width; other circuits keep the 18-28 m range.
+    var min_width: float = TOOLS.MIN_ROAD_WIDTH_M if TOOLS.is_narrow_road(data) else 18.0
+    data["width_m"] = clampf(float(data.get("width_m",25.0)),min_width,28.0)
     selected = -1
     pointer = -999
     add_mode = false
@@ -621,16 +623,18 @@ func _validate() -> void:
     _refresh_preview()
     if ready_to_play:
         last_length = float(result["length_metres"])
-        var tail: String = ""
+        var valid_text: String = "VALID • %.0f m / %.1f m width • closed loop" % [last_length,float(data["width_m"])]
         if terrain_field != null:
             var fit: Dictionary = TOOLS.fit_terrain(data,terrain_field)
             terrain_ok = bool(fit["ok"])
             terrain_reasons = fit["reasons"]
             for k in fit["flagged"]:
                 terrain_flagged[int(k)] = true
-            tail = " • TERRAIN OK"
+            # Short enough for a phone line: length, the #29 event + surface (or the width), terrain verdict.
+            var ev: String = TOOLS.event_label(data)
+            valid_text = "VALID • %.0f m • %s • TERRAIN OK" % [last_length,ev if ev != "" else "%.0f m WIDE" % float(data["width_m"])]
         if terrain_ok:
-            _status("VALID • %.0f m / %.1f m width • closed loop%s" % [last_length,float(data["width_m"]),tail],true)
+            _status(valid_text,true)
         else:
             # Geometry is fine but the road would be built over water / a cliff: not drivable yet.
             ready_to_play = false

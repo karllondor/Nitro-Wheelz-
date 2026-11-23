@@ -16,6 +16,8 @@ const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
+const MIN_ROAD_WIDTH_M: float = 12.0          # #29 ROAD / TOUGE surface width
+const EVENT_NAMES: Dictionary = {"practice":"PRACTICE","club":"CLUB EVENT","pro":"PRO EVENT"}
 const BUILTIN: Array = [
     ["SHIN-KAWA","res://tracks/shin_kawa_v2.json"],
     ["SHIN-KAWA • FULL CIRCUIT","res://tracks/shin_kawa_full_circuit.json"],
@@ -48,11 +50,23 @@ static func mark_node_shaped(data: Dictionary) -> void:
         b["nodes_edited"] = true
         data["builder"] = b
 
+## #29 judged-event circuits (event_version 1): "CLUB EVENT • ROAD" etc.; "" for every other circuit.
+static func event_label(data: Dictionary) -> String:
+    if int(data.get("event_version",0)) != 1:
+        return ""
+    var mode: String = str(TT.world_of(data).get("event_mode","practice"))
+    return "%s • %s" % [str(EVENT_NAMES.get(mode,"PRACTICE")),"ROAD" if is_narrow_road(data) else "CIRCUIT"]
+
+## The narrow ROAD / TOUGE surface of #29 (12 m, no kerbs).
+static func is_narrow_road(data: Dictionary) -> bool:
+    return str(data.get("road_style","")) == "road"
+
 static func kind_label(data: Dictionary) -> String:
     match kind_of(data):
         "terrain":
             var w: Dictionary = TT.world_of(data)
-            return "TERRAIN • "+str(CAT.info(str(w["archetype"]))["short"])
+            var ev: String = event_label(data)
+            return "TERRAIN • "+str(CAT.info(str(w["archetype"]))["short"])+(" • "+ev if ev != "" else "")
         "tiles":
             return "3D TILES"
     return "NODES"
