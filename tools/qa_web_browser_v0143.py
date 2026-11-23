@@ -71,14 +71,18 @@ with sync_playwright() as p:
     im2 = Image.open(shot2).convert("RGB")
     bbox=ImageChops.difference(im1,im2).getbbox()
     report("UI_CHANGED_AFTER_INPUT: " + str(bbox is not None))
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(1300)
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(6500)
-    page.keyboard.down("w")
+    page.keyboard.press("Enter") # main focus DRIVE -> setup
     page.wait_for_timeout(1400)
+    page.screenshot(path=str(OUT / "03_web_race_setup.png"))
+    page.keyboard.press("Tab")   # setup TRACK -> CAR
+    page.keyboard.press("Tab")   # setup CAR -> DRIVE
+    page.keyboard.press("Enter") # actual driving scene
+    page.wait_for_timeout(12000)
+    page.screenshot(path=str(OUT / "04_web_race_before_throttle.png"))
+    page.keyboard.down("w")
+    page.wait_for_timeout(2000)
     page.keyboard.up("w")
-    shot3 = OUT / "03_web_after_drive_attempt.png"
+    shot3 = OUT / "05_web_race_after_throttle.png"
     page.screenshot(path=str(shot3))
     im3 = Image.open(shot3).convert("RGB")
     report("SCREEN_FINAL_STDDEV: " + ",".join("%.2f" % n for n in ImageStat.Stat(im3).stddev))
