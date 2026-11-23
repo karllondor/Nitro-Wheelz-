@@ -210,4 +210,7 @@ static func parse_endpoint(text: String) -> Dictionary:
             return {}
     if port < 1024 or port > 65535 or t == "0.0.0.0":
         return {}
+    # LOCAL network only (RFC 1918: 10.x, 172.16-31.x, 192.168.x) plus loopback for tests: never a public Internet address.
+    if not is_private_ipv4(t) and not t.begins_with("127."):
+        return {}
     return {"ip":t,"port":port}

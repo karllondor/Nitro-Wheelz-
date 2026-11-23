@@ -84,7 +84,7 @@ func _run() -> void:
         if P.validate_control(m) == "":
             _fail("an invalid control message passed validation: "+str(m))
             return
-    if P.validate_control({"t":P.Msg.HELLO,"proto":1,"ver":"0.1.40","name":"ANNA","car":"red"}) != "":
+    if P.validate_control({"t":P.Msg.HELLO,"proto":1,"ver":"0.1.41","name":"ANNA","car":"red"}) != "":
         _fail("a valid HELLO was refused")
         return
     for ip in ["192.168.43.1","10.0.0.5","172.20.1.9"]:
@@ -97,7 +97,8 @@ func _run() -> void:
             return
     if P.parse_endpoint("192.168.43.1").get("port",0) != P.DEFAULT_PORT or P.parse_endpoint("192.168.43.1:50000").get("port",0) != 50000 \
             or not P.parse_endpoint("192.168.43").is_empty() or not P.parse_endpoint("0.0.0.0").is_empty() or not P.parse_endpoint("1.2.3.4:80").is_empty() \
-            or not P.parse_endpoint("hello").is_empty():
+            or not P.parse_endpoint("hello").is_empty() or not P.parse_endpoint("8.8.8.8").is_empty() or not P.parse_endpoint("169.254.1.1").is_empty() \
+            or P.parse_endpoint("127.0.0.1").is_empty() or P.parse_endpoint("172.20.10.1:47821").is_empty():
         _fail("endpoint parsing")
         return
     for a in P.lan_addresses():

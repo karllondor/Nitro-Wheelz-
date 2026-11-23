@@ -20,8 +20,8 @@ func _run() -> void:
     root.add_child(menu)
     await process_frame
     var main: Array[String] = _names(menu)
-    if main != ["DRIVE","PARK","GARAGE","TRACK BUILDER","SETTINGS"]:
-        _fail("Main page must be DRIVE / PARK / GARAGE / TRACK BUILDER / SETTINGS, got "+str(main))
+    if main != ["DRIVE","PARK","LOCAL MULTIPLAYER","GARAGE","TRACK BUILDER","SETTINGS"]:
+        _fail("Main page must be DRIVE / PARK / LOCAL MULTIPLAYER / GARAGE / TRACK BUILDER / SETTINGS, got "+str(main))
         return
     if menu.find_child("Diagnostics",true,false) != null:
         _fail("Developer tools must not be on the main page")

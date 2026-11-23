@@ -120,6 +120,7 @@ func _main_page() -> void:
     var drive: Button = _big("DRIVE",func(): show_page("setup"),true)
     drive.name = "DRIVE"
     _big("NITRO WHEELZ PARK",func(): show_page("park")).name = "PARK"
+    _big("LOCAL MULTIPLAYER",func(): _go("res://scenes/multiplayer_lobby.tscn")).name = "LOCAL MULTIPLAYER"
     _big("GARAGE",func(): _open_garage("main")).name = "GARAGE"
     _big("TRACK BUILDER",func(): show_page("build")).name = "TRACK BUILDER"
     _big("SETTINGS",func(): show_page("settings")).name = "SETTINGS"
