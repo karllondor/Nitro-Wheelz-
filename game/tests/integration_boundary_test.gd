@@ -7,7 +7,7 @@ const TT = preload("res://scripts/world/terrain/terrain_track.gd")
 const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const SOURCE = "res://tracks/shin_kawa_v2.json"
-const TRACK = "user://qa33_seam.json"
+var temp_tag := "qa33_%d_%d" % [OS.get_process_id(),Time.get_ticks_usec()]
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -34,7 +34,7 @@ func _run() -> void:
     var reordered: Array = []
     for i in range(expected.size()):
         reordered.append(expected[posmod(4-i,expected.size())])
-    var saved := bool(editor._persist_track("QA33 preserved width profile"))
+    var saved := bool(editor._persist_track(temp_tag+"_widths"))
     check(saved,"SAVE AS failed")
     if saved:
         var path: String = editor.last_saved_path
@@ -64,10 +64,11 @@ func _run() -> void:
         printerr("FAIL: Ojców fixture did not generate")
         quit(1)
         return
-    var track_file := FileAccess.open(TRACK,FileAccess.WRITE)
+    var track_path := "user://"+temp_tag+"_seam.json"
+    var track_file := FileAccess.open(track_path,FileAccess.WRITE)
     track_file.store_string(JSON.stringify(gen.data,"",false,true))
     track_file.close()
-    ProjectSettings.set_setting("nitro/selected_track",TRACK)
+    ProjectSettings.set_setting("nitro/selected_track",track_path)
     var race = RACE.instantiate()
     root.add_child(race)
     race.set_physics_process(false)
@@ -94,7 +95,7 @@ func _run() -> void:
     check(race.last_progress<0.05,"forward control did not recross the start")
     check(race.lap==1 and race.lap_splits.is_empty(),"start-line shuffle credited a lap")
     race.free()
-    DirAccess.remove_absolute(TRACK)
+    DirAccess.remove_absolute(track_path)
     if failures.is_empty():
         print("PASS: editor preserves variable road edges and a start-line shuffle consumes no laps or Club sectors")
     else:
