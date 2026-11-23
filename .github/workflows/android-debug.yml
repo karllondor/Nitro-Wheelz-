@@ -165,7 +165,7 @@ jobs:
     if: github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
     needs: android
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -182,9 +182,11 @@ jobs:
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
-          script: NITRO_PKG=${{ (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }} bash tools/android_event_smoke.sh
+          script: ${{ (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'NITRO_PKG=com.karllondor.nitrowheelz.dev bash tools/android_event_smoke.sh && NITRO_PKG=com.karllondor.nitrowheelz.dev bash tools/android_integration_smoke.sh' || 'bash tools/android_event_smoke.sh' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Workshop-Android-evidence
-          path: builds/event-android/
+          path: |
+            builds/event-android/
+            builds/integration-android/

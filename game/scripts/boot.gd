@@ -93,6 +93,10 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-workshop.once"):
         DirAccess.remove_absolute("user://qa-workshop.once")
         get_tree().root.add_child.call_deferred(preload("res://tests/android_workshop_capture.gd").new())
+    # #33 on-device integration check (multiplayer + node editor + terrain drive), same explicit adb marker mechanism.
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-integration.once"):
+        DirAccess.remove_absolute("user://qa-integration.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/android_integration_capture.gd").new())
 
 func _clear_page() -> void:
     for child in page.get_children():
