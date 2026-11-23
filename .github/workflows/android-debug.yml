@@ -106,7 +106,7 @@ jobs:
           python3 tools/check_project.py
           mkdir -p builds/android
           "$GODOT_BIN" --headless --editor --path game --import
-          APK=builds/android/Nitro-Wheelz_v0.1.43_Android-debug.apk
+          APK=builds/android/Nitro-Wheelz_v0.1.44_Android-debug.apk
           if [[ "$GITHUB_BASE_REF" == integration/nitro-dev ]]; then
             APK="builds/android/Nitro-Wheelz-LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA:0:8}.apk"
           fi
@@ -126,7 +126,7 @@ jobs:
           echo "BUILT: APK not yet tested on a real Android device."
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.43_Android-debug' }}
+          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.44_Android-debug' }}
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30
@@ -181,7 +181,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.43_Android-debug' }}
+          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.44_Android-debug' }}
           path: builds/android
       - name: Enable emulator acceleration
         run: |
