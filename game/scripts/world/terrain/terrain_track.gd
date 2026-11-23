@@ -65,7 +65,8 @@ static func track_data(grid: NitroTrackGrid, order: Array[Vector2i], closed: boo
     var arch: String = str(desc.get("archetype","jp_sakura"))
     var data: Dictionary = {"schema_version":1,"id":track_id,"name":track_name,"generator_version":4,
         "seed":int(desc.get("terrain_seed",0)),"closed":closed,"topology":"closed" if closed else "open",
-        "width_m":GRID.WIDTH_M,"start_index":0,"theme":"terrain_"+arch,
+        "event_version":1,"road_style":desc.get("road_style","circuit"),
+        "width_m":12.0 if desc.get("road_style","circuit")=="road" else GRID.WIDTH_M,"start_index":0,"theme":"terrain_"+arch,
         "description":"Built on generated terrain with the Nitro Wheelz terrain-first builder.",
         "builder":{"cols":grid.cols,"rows":grid.rows,"cell_m":GRID.CELL_M,"tiles":tiles,"closed":closed,
             "kind":"terrain"},

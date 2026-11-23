@@ -90,6 +90,9 @@ func _ready() -> void:
     if get_tree().get_script() == null and not PROFILE.has_profile():
         start = "welcome"
     show_page(start)
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-workshop.once"):
+        DirAccess.remove_absolute("user://qa-workshop.once")
+        get_tree().root.add_child.call_deferred(preload("res://tests/android_workshop_capture.gd").new())
 
 func _clear_page() -> void:
     for child in page.get_children():

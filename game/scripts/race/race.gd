@@ -50,6 +50,8 @@ var lap_started_at: float = 0.0
 var lap_splits: Array[Dictionary] = []
 var lap_score_at_start: int = 0
 var lap_score: int = 0
+const JUDGE=preload("res://scripts/events/event_judge.gd")
+var judge=JUDGE.new()
 var scorer: NitroDriftScorer = SCORER.new()
 var active_drift_points: int = 0
 var combo: float = 1.0
@@ -509,7 +511,18 @@ func _physics_process(delta: float) -> void:
     _elevation_tick(info,delta)
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
-    _drift_scoring(delta,float(info["width"])-float(info["distance"]))
+    if track.event_mode in ["club","pro"]:
+        var bonus: float=judge.tick(delta,track,model,info,collision,lap,scorer)
+        if absf(model.drift_angle)>=SCORER.SPIN_ANGLE:
+            scorer.lose_chain("SPIN")
+        scorer.update(delta,judge.valid_base,model.drift_angle,model.speed_mps(),INF)
+        if scorer.in_chain:
+            scorer.chain_points+=bonus
+        lap_score=scorer.total
+        active_drift_points=scorer.chain_score()
+        combo=scorer.multiplier
+    else:
+        _drift_scoring(delta,float(info["width"])-float(info["distance"]))
     _record_marks(delta)
     _update_visuals()
     if finished and not results_open:
@@ -531,6 +544,9 @@ func _show_results() -> void:
     results_layer.layer = 24
     results_layer.name = "Finish results and local leaderboard"
     add_child(results_layer)
+    if track.event_mode!="":
+        _event_results()
+        return
     var view: NitroRaceResults = RESULTS.new()
     results_layer.add_child(view)
     var target: float = float(hud.target_time) if hud != null else 0.0
@@ -543,6 +559,30 @@ func _show_results() -> void:
         "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
         "laps":lap_splits.duplicate(true),"length_m":track.length_metres/(3.0 if route_mode else 1.0),
         "on_edit":_edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable()})
+
+func _event_results() -> void:
+    var panel:=PanelContainer.new()
+    results_layer.add_child(panel)
+    panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+    var box:=VBoxContainer.new()
+    panel.add_child(box)
+    box.theme=preload("res://scripts/ui/hud_style.gd").screen_theme(1.1)
+    var title:=Label.new()
+    title.text="%s    •    %s NITRO POINTS" % [track.EVENT_LAYOUT.MODES[track.event_mode],scorer.total]
+    box.add_child(title)
+    if track.event_mode!="practice":
+        var stats:=Label.new()
+        stats.text="%d sectors filled   •   %d missed\n%d technical points before banking" % [judge.complete,judge.missed,roundi(judge.technical)]
+        box.add_child(stats)
+    for action in ["DRIVE AGAIN","EDIT ROAD","MENU"]:
+        var button:=Button.new()
+        button.text=action
+        button.custom_minimum_size.y=62
+        box.add_child(button)
+        match action:
+            "DRIVE AGAIN": button.pressed.connect(_restart)
+            "EDIT ROAD": button.pressed.connect(_edit_this_track)
+            "MENU": button.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
 
 func _player_track_path() -> String:
     return str(ProjectSettings.get_setting("nitro/selected_track",""))
@@ -698,6 +738,8 @@ func _update_visuals() -> void:
         hud.speed = model.speed_kmh()
         hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
+        if track.event_mode!="":
+            hud.event_cue="Practice" if track.event_mode=="practice" else "%s   %s   TECH +%d" % [track.EVENT_LAYOUT.MODES[track.event_mode],judge.cue,roundi(judge.technical)]
         hud.score = lap_score
         hud.drift_score = active_drift_points
         hud.combo = combo
@@ -952,6 +994,7 @@ func _restart() -> void:
     lap_score_at_start = 0
     lap_score = 0
     scorer.reset()
+    judge=JUDGE.new()
     active_drift_points = 0
     combo = 1.0
     combo_timer = 0.0
