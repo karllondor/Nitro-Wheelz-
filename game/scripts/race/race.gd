@@ -450,7 +450,8 @@ func _make_ui() -> void:
     touch_layer.add_child(touch)
     touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     touch.visible = HUD_STYLE.platform_profile() == "mobile"
-    touch.set_process_input(touch.visible)
+    # Keep input processing active for synthetic touch / Park tutorials even
+    # on desktop. Visibility controls drawing, not touchscreen event routing.
     touch.camera_requested.connect(_toggle_camera)
     touch.pause_requested.connect(_toggle_pause)
     touch.restart_requested.connect(_restart)
@@ -985,7 +986,7 @@ func _toggle_pause() -> void:
             pause_layer = null
         if touch != null:
             touch.visible = HUD_STYLE.platform_profile() == "mobile"
-            touch.set_process_input(touch.visible)
+            touch.set_process_input(true)
         if desktop_actions != null:
             desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
     _update_visuals()
@@ -1009,7 +1010,7 @@ func _restart() -> void:
         hud.visible = true
     if touch != null:
         touch.visible = HUD_STYLE.platform_profile() == "mobile"
-        touch.set_process_input(touch.visible)
+        touch.set_process_input(true)
     if desktop_actions != null:
         desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
     model.reset(track.start_position(),track.start_heading())
