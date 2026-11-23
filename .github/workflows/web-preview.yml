@@ -38,6 +38,21 @@ jobs:
           test -s builds/web/index.html
           test -s builds/web/index.wasm
           echo "Web export generated; manual Android browser test remains NOT RUN."
+      - name: Browser-playability smoke in real Chromium (WebGL2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet playwright pillow
+          if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
+            python3 -m playwright install --with-deps chromium
+          fi
+          python3 tools/qa_web_browser_v0143.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nitro-Wheelz_v0.1.43_Web_QA_Screenshots
+          path: builds/qa-web/*
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Nitro-Wheelz_v0.1.43_Web
