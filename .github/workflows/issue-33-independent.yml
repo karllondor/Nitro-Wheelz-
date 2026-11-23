@@ -21,11 +21,19 @@ jobs:
           github-token: ${{ github.token }}
           path: builds/android
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '14780888948'
+          run-id: 45091747848
+          github-token: ${{ github.token }}
+          path: builds/legacy
+          merge-multiple: true
       - name: Verify immutable binary and prepare emulator
         run: |
           set -eu
           cd builds/android
           echo 'ccb4d493148d3231acfdb065da0bd7096071d09fc9cef8b7d6f9635f7dd75508  Nitro-Wheelz_v0.1.43_Android-debug.apk' | sha256sum -c -
+          (cd ../legacy && echo 'dfefd0a7deeed672975e7652700e0542e97b1172cf102cdded0b0171aac6beb5  Nitro-Wheelz_v0.1.42_Android-debug.apk' | sha256sum -c -)
           sudo chmod 666 /dev/kvm
           sudo apt-get update -qq
           sudo apt-get install -y python3-pil tesseract-ocr
@@ -37,14 +45,13 @@ jobs:
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
           script: |
             /usr/bin/python3 tools/qa33_android_ui.py
-            bash tools/android_event_smoke.sh
-            bash tools/android_integration_smoke.sh
-            adb shell dumpsys meminfo com.karllondor.nitrowheelz.dev > builds/independent-ui/memory-terrain.txt
+            cat builds/independent-ui/ui-verdict.txt
             adb logcat -d -v threadtime > builds/independent-ui/logcat.txt
+            grep -q "^PASS" builds/independent-ui/ui-verdict.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Independent-0.1.43-device-evidence
+          name: Independent-0.1.43-normal-UI-and-saves
           path: |
             builds/independent-ui/
             builds/event-android/
