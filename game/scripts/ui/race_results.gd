@@ -313,7 +313,8 @@ func _draw_board() -> void:
     _hero(Rect2(lay["hero"]),k,u)
     _laps(Rect2(lay["laps"]),k,u)
     _chips(Rect2(lay["chips"]),k,u)
-    _top_runs(Rect2(lay["top"]),k,u)
+    if not bool(data.get("multiplayer",false)):
+        _top_runs(Rect2(lay["top"]),k,u)
     var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS = DRIFT POINTS  •  v"+str(
         ProjectSettings.get_setting("application/config/version","?"))
     var diagnostic: bool = bool(data.get("diagnostic",false))
@@ -334,8 +335,12 @@ func _title(r: Rect2, k: float, u: float) -> void:
         str(data["track_name"]).to_upper()+"  •  3 LAPS",30.0*k,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.62,false)
     var headline: String = "NEW BEST!" if bool(data["new_best"]) and not bool(data["first_run"]) else (
         "FIRST RUN" if bool(data["first_run"]) else "FINISHED")
+    if bool(data.get("multiplayer",false)):
+        headline = "FINISHED"
     STYLE.text(c,Vector2(r.position.x,r.position.y+122.0*k),headline,78.0*k,
         STYLE.GOLD if headline == "NEW BEST!" else STYLE.WHITE)
+    if bool(data.get("multiplayer",false)):
+        return
     var stars: int = int(data["stars"])
     var tiers: Array = data.get("tiers",[])
     for i in range(3):
@@ -361,7 +366,11 @@ func _hero(r: Rect2, k: float, u: float) -> void:
         HORIZONTAL_ALIGNMENT_CENTER,r.size.x)
     var delta_txt: String
     var delta_col: Color
-    if bool(data["first_run"]):
+    var multiplayer_run := bool(data.get("multiplayer",false))
+    if multiplayer_run:
+        delta_txt = "LOCAL MULTIPLAYER"
+        delta_col = STYLE.MUTED
+    elif bool(data["first_run"]):
         delta_txt = "FIRST RUN ON THIS TRACK  •  SET THE BENCHMARK"
         delta_col = STYLE.PINK_SOFT
     elif bool(data["new_best"]):
@@ -380,7 +389,7 @@ func _hero(r: Rect2, k: float, u: float) -> void:
     var secs: float = float(data["seconds"])
     var time_sub: String = ""
     var time_col: Color = STYLE.MUTED
-    if not bool(data["first_run"]):
+    if not multiplayer_run and not bool(data["first_run"]):
         var d: float = secs-float(data["prior_best_time"])
         time_sub = ("-%.2f s BEST" % absf(d)) if d < 0.0 else ("+%.2f s" % d)
         time_col = GOOD if d < 0.0 else STYLE.MUTED
@@ -389,6 +398,8 @@ func _hero(r: Rect2, k: float, u: float) -> void:
         ["TIME",clock(secs),time_sub,time_col],
         ["RANK","#%d" % rank if rank > 0 else "-","OF %d RUNS" % int(data["runs"]),STYLE.MUTED],
         ["BEST CHAIN",points(int((data["stats"] as Dictionary).get("best_chain",0))),"PTS",STYLE.MUTED]]
+    if multiplayer_run:
+        facts[1] = ["LAPS",str((data["laps"] as Array).size()),"",STYLE.MUTED]
     for i in range(3):
         var f: Array = facts[i]
         var x: float = r.position.x+cols*float(i)

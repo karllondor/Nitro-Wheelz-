@@ -55,8 +55,8 @@ func _run() -> void:
     for lap_i in range(3):
         race.set("time_elapsed",float(race.get("time_elapsed"))+20.0+lap_i)
         scorer.total += 1000*(lap_i+1)
-        race.set("last_progress",0.97)
-        race.call("_lap_logic",0.01,tangent,1.0/120.0)
+        for station in [0.25,0.5,0.75,0.97,0.01]:
+            race.call("_lap_logic",station,tangent,1.0/120.0)
     var splits: Array = race.get("lap_splits")
     if splits.size() != 3 or not bool(race.get("finished")):
         _fail("Race must record three lap splits and finish (%d)" % splits.size())

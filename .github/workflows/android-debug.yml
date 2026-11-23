@@ -93,6 +93,12 @@ jobs:
         run: |
           sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.dev"/; s/^package\/name=.*/package\/name="Nitro Wheelz DEV"/' game/export_presets.cfg
           grep -n '^package/unique_name\|^package/name' game/export_presets.cfg
+      - name: Isolate PRs targeting the unified preview
+        if: github.base_ref == 'integration/nitro-dev'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          sed -i "s/^package\/unique_name=.*/package\/unique_name=\"com.karllondor.nitrowheelz.review.pr${PR_NUMBER}\"/; s/^package\/name=.*/package\/name=\"Nitro Wheelz Review ${PR_NUMBER}\"/" game/export_presets.cfg
       - name: Export unsigned-source-safe debug build
         shell: bash
         run: |
@@ -101,6 +107,9 @@ jobs:
           mkdir -p builds/android
           "$GODOT_BIN" --headless --editor --path game --import
           APK=builds/android/Nitro-Wheelz_v0.1.43_Android-debug.apk
+          if [[ "$GITHUB_BASE_REF" == integration/nitro-dev ]]; then
+            APK="builds/android/Nitro-Wheelz-LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA:0:8}.apk"
+          fi
           "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/$APK"
           test -s "$APK"
           unzip -t "$APK" | tail -n 2
@@ -117,7 +126,7 @@ jobs:
           echo "BUILT: APK not yet tested on a real Android device."
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.43_Android-debug
+          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.43_Android-debug' }}
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30
@@ -170,7 +179,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.43_Android-debug
+          name: ${{ github.base_ref == 'integration/nitro-dev' && format('LAB-PR-{0}-{1}-Android', github.event.pull_request.number, github.sha) || 'Nitro-Wheelz_v0.1.43_Android-debug' }}
           path: builds/android
       - name: Enable emulator acceleration
         run: |
