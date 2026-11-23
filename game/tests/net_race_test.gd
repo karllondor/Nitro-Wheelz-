@@ -271,6 +271,11 @@ func _run() -> void:
     if not ok:
         _fail("a reset (flag 4) must snap the remote car to the new place")
         return
+    # A social run has no star target in the driving HUD.
+    race._update_visuals()
+    if str(race.hud.chase_label().text).contains("★"):
+        _fail("multiplayer HUD advertised a solo star: "+str(race.hud.chase_label().text))
+        return
     # nothing of this is a record
     var rs: Control = RESULTS.new()
     root.add_child(rs)
@@ -295,6 +300,12 @@ func _run() -> void:
     Input.action_release("throttle")
     if race.model.position.distance_to(before_drive) < 0.5:
         _fail("the local car must keep driving after the other phone left")
+        return
+    race._show_results()
+    var loss_view = race.results_layer.get_child(0)
+    var after_loss: String = FileAccess.get_file_as_string(RUNS) if FileAccess.file_exists(RUNS) else ""
+    if loss_view.data.stored or not loss_view.data.multiplayer or after_loss != runs_before:
+        _fail("finishing after the peer left changed official results")
         return
     # leaving the race scene leaves no network state and re-enables records
     var host_id: int = host.get_instance_id()

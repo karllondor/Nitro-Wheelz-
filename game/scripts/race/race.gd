@@ -45,6 +45,8 @@ var time_elapsed: float = 0.0
 var race_started: bool = false
 var lap: int = 1
 var last_progress: float = 0.0
+# Signed wraps relative to the start of this lap. Backing over the line puts us on the previous turn.
+var lap_winding: int = 0
 var lap_started_at: float = 0.0
 ## Per-lap results for the finish screen: {"time": s, "score": banked pts}.
 var lap_splits: Array[Dictionary] = []
@@ -164,6 +166,7 @@ func _ready() -> void:
     _make_telemetry()
     var info0: Dictionary = track.sample_info(model.position)
     last_progress = float(info0["progress"])
+    lap_winding = -1 if track.closed_loop and last_progress > 0.5 else 0
     road_y = track.height_from_info(info0)
     car_y = road_y
     _update_visuals()
@@ -512,7 +515,12 @@ func _physics_process(delta: float) -> void:
     _update_chase_occlusion()
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     if track.event_mode in ["club","pro"]:
-        var bonus: float=judge.tick(delta,track,model,info,collision,lap,scorer)
+        var bonus: float = 0.0
+        if lap_winding < 0:
+            judge.valid_base = false
+            judge.cue = "RETURN TO START"
+        else:
+            bonus = judge.tick(delta,track,model,info,collision,lap,scorer)
         if absf(model.drift_angle)>=SCORER.SPIN_ANGLE:
             scorer.lose_chain("SPIN")
         scorer.update(delta,judge.valid_base,model.drift_angle,model.speed_mps(),INF)
@@ -630,8 +638,13 @@ func _lap_logic(progress: float, tangent: Vector2, _delta: float) -> void:
         last_progress = progress
         return
     # Count only a forward finish-line crossing after sufficient driving time.
-    if last_progress > 0.94 and progress < 0.06 and time_elapsed-lap_started_at > 7.0:
+    if progress-last_progress > 0.5:
+        lap_winding -= 1
+    elif last_progress-progress > 0.5:
+        lap_winding += 1
+    if lap_winding > 0 and last_progress > 0.94 and progress < 0.06 and time_elapsed-lap_started_at > 7.0:
         if model.velocity.dot(tangent) > 1.5:
+            lap_winding = 0
             if lap >= 3:
                 # Bank the running chain so the final corner still counts.
                 scorer.bank()
@@ -738,7 +751,9 @@ func _update_visuals() -> void:
         hud.speed = model.speed_kmh()
         hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
-        if track.event_mode!="":
+        if net != null:
+            hud.event_cue = "LOCAL MULTIPLAYER"
+        elif track.event_mode!="":
             hud.event_cue="Practice" if track.event_mode=="practice" else "%s   %s   TECH +%d" % [track.EVENT_LAYOUT.MODES[track.event_mode],judge.cue,roundi(judge.technical)]
         hud.score = lap_score
         hud.drift_score = active_drift_points
@@ -988,7 +1003,8 @@ func _restart() -> void:
     time_elapsed = 0.0
     race_started = false
     lap = 1
-    last_progress = 0.0
+    last_progress = float(track.sample_info(model.position).progress)
+    lap_winding = -1 if track.closed_loop and last_progress > 0.5 else 0
     lap_started_at = 0.0
     lap_splits.clear()
     lap_score_at_start = 0

@@ -116,10 +116,8 @@ func _adopt(raw: Dictionary, path: String, copy_name: String) -> void:
         last_saved_path = path
         last_saved_name = str(data.get("name","MY CUSTOM CIRCUIT"))
     data["closed"] = true
-    data.erase("widths_m")
-    # #33 integration: a ROAD / TOUGE circuit (#29, 12 m) keeps its narrow width; other circuits keep the 18-28 m range.
-    var min_width: float = TOOLS.MIN_ROAD_WIDTH_M if TOOLS.is_narrow_road(data) else 18.0
-    data["width_m"] = clampf(float(data.get("width_m",25.0)),min_width,28.0)
+    # OPEN has already validated the DNA. Preserve its physical width, including per-knot profiles.
+    data["width_m"] = float(data.get("width_m",24.0))
     selected = -1
     pointer = -999
     add_mode = false
@@ -590,9 +588,10 @@ func _refresh_preview() -> void:
         return
     var pts: Array[Vector2] = []
     var widths := PackedFloat32Array()
+    var profile: Array = data.get("widths_m",[])
     for i in range(n):
         pts.append(_node_position(i))
-        widths.append(float(data.get("width_m",25.0)))
+        widths.append(float(profile[i]) if profile.size()==n else float(data.get("width_m",24.0)))
     preview = DNA.sample_curve(pts,widths)
 
 ## Node size and finger hit area scale with the screen (phones: ~9 mm).
@@ -978,6 +977,9 @@ func _add_point() -> void:
     var a := Vector2(float(pts[idx][0]),float(pts[idx][1]))
     var b := Vector2(float(pts[(idx+1)%n][0]),float(pts[(idx+1)%n][1]))
     var p: Vector2 = (a+b)*0.5
+    var profile: Array = data.get("widths_m",[])
+    if not profile.is_empty():
+        profile.insert(idx+1,lerpf(float(profile[idx]),float(profile[(idx+1)%n]),0.5))
     pts.insert(idx+1,[snappedf(p.x,0.01),snappedf(p.y,0.01)])
     data["control_points"] = pts
     selected = idx+1
@@ -989,6 +991,9 @@ func _delete_point() -> void:
         _status("SELECT A NODE • Keep at least 8 nodes",false)
         return
     _save_undo_snapshot()
+    var profile: Array = data.get("widths_m",[])
+    if not profile.is_empty():
+        profile.remove_at(selected)
     pts.remove_at(selected)
     data["control_points"] = pts
     selected = -1
@@ -1023,6 +1028,9 @@ func _start_touch(pos: Vector2,pointer_index: int) -> void:
         _save_undo_snapshot()
         var world: Vector2 = _world_point(pos)
         var points: Array = data["control_points"]
+        var profile: Array = data.get("widths_m",[])
+        if not profile.is_empty():
+            profile.append(lerpf(float(profile.back()),float(profile.front()),0.5))
         points.append([snappedf(world.x,0.01),snappedf(world.y,0.01)])
         data["control_points"] = points
         selected = points.size()-1
