@@ -19,7 +19,7 @@ jobs:
       - name: Install headless OpenGL display
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb libgl1-mesa-dri libgl1-mesa-glx mesa-utils
+          sudo apt-get install -y xvfb libgl1-mesa-dri libgl1 mesa-utils
       - name: Install pinned Godot 4.7.2
         shell: bash
         run: |
