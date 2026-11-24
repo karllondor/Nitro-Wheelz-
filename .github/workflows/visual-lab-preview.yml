@@ -1,0 +1,68 @@
+name: Visual Lab GL preview and 24-camera evidence
+on:
+  pull_request:
+    paths:
+      - "game/scripts/visual_lab/**"
+      - "game/assets/shaders/visual_lab/**"
+      - "game/scenes/visual_lab.tscn"
+      - "game/tests/visual_lab_test.gd"
+      - "game/tests/visual_lab_ui_test.gd"
+      - ".github/workflows/visual-lab-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual-lab-gl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install headless OpenGL display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1-mesa-dri libgl1 mesa-utils
+      - name: Install pinned Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          echo "GODOT_BIN=$PWD/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import project and compile shaders
+        run: |
+          "$GODOT_BIN" --headless --editor --path game --import
+      - name: Exercise the actual Visual Lab scene and capture 24 views
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          OUT_DIR: ${{ github.workspace }}/builds/visual-lab
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR"
+          xvfb-run -a -s "-screen 0 960x540x24" "$GODOT_BIN" --path game --rendering-driver opengl3 --resolution 960x540 --script res://tests/visual_lab_test.gd
+          find "$OUT_DIR" -maxdepth 1 -name '*.png' -size +100c | tee /tmp/visual-lab-files.txt
+          test "$(wc -l < /tmp/visual-lab-files.txt)" -eq 24
+          printf '%s\n' "24 screenshots: SHIN-KAWA PROXY ONLY, not Fuji Speedway Small"
+      - name: Portrait UI screenshot and tab regression test
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          OUT_DIR: ${{ github.workspace }}/builds/visual-lab-portrait-ui
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR"
+          xvfb-run -a -s "-screen 0 900x1700x24" "$GODOT_BIN" --path game --rendering-driver opengl3 --resolution 720x1560 --script res://tests/visual_lab_ui_test.gd
+          test "$(find "$OUT_DIR" -maxdepth 1 -name 'UI-PORTRAIT-*.png' | wc -l)" -eq 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Visual-Lab-PR-${{ github.event.pull_request.number }}-Readable-Mobile-UI
+          path: builds/visual-lab-portrait-ui/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Visual-Lab-PR-${{ github.event.pull_request.number }}-Shin-Kawa-PROXY-24-views
+          path: builds/visual-lab/*.png
+          if-no-files-found: error
+          retention-days: 30
