@@ -41,6 +41,20 @@ jobs:
           file builds/desktop/*
           sha256sum builds/desktop/* > builds/desktop/SHA256SUMS.txt
           echo "BUILT: native desktop executables not interactively playtested."
+      - name: Test exported Linux executable with rendered GUI and input
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xdotool
+          python3 -m pip install --quiet mss pillow
+          xvfb-run -a -s "-screen 0 1280x720x24" python3 tools/qa_linux_runtime_v0143.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nitro-Wheelz_v0.1.43_Linux_QA_Screenshots
+          path: builds/qa-desktop/*
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Nitro-Wheelz_v0.1.45_Desktop_Linux_Windows
