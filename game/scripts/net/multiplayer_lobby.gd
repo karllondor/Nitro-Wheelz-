@@ -306,6 +306,8 @@ func _refresh() -> void:
     if session == null or not is_instance_valid(session):
         if mode == "join":
             _join_page()
+        elif mode == "howto":
+            _howto_page()
         else:
             mode = "menu"
             _menu_page()
@@ -324,18 +326,35 @@ func _title(txt: String) -> void:
 
 func _menu_page() -> void:
     _title("LOCAL MULTIPLAYER")
-    _label("2 PLAYERS  •  SAME WI-FI OR ONE PHONE'S HOTSPOT\nNO INTERNET, NO ACCOUNT, NO MOBILE DATA",17,STYLE.MUTED)
-    _label("YOU DRIVE:  %s\nPLAYER:  %s" % [car_text(CARS.selected()),_my_name()],18,STYLE.GOLD_LIGHT)
+    _label("2 PLAYERS  •  NO INTERNET, NO ACCOUNT, NO MOBILE DATA",17,STYLE.MUTED)
+    _label("NO WI-FI? NO PROBLEM.\nONE PHONE'S HOTSPOT IS ENOUGH.",22,STYLE.GOLD_LIGHT,true).name = "Hotspot hint"
+    _label("YOU DRIVE:  %s\nPLAYER:  %s" % [car_text(CARS.selected()),_my_name()],18,STYLE.WHITE)
     _big("HOST GAME",host_game,true)
     _big("JOIN GAME",join_game)
+    _big("NO WI-FI? HOTSPOT HOW-TO",show_howto)
     _big("BACK",back_to_menu)
     _label("CHANGE YOUR CAR IN THE GARAGE, YOUR NAME IN THE PLAYER CARD.\nSCORES OF A MULTIPLAYER DRIVE ARE NOT SAVED.",14,STYLE.DIM)
+
+## Step by step for two phones without any router: one phone's hotspot is the network.
+func _howto_page() -> void:
+    _title("NO WI-FI? USE A HOTSPOT")
+    _label("ONE PHONE MAKES THE NETWORK, THE OTHER JOINS IT.\nNO ROUTER, NO INTERNET. MOBILE DATA CAN BE OFF.",17,STYLE.MUTED)
+    _label("PHONE A  =  HOST",22,STYLE.GOLD_LIGHT,true)
+    _label("1  PHONE SETTINGS > HOTSPOT / TETHERING > TURN ON THE WI-FI HOTSPOT\n2  IN THE GAME: LOCAL MULTIPLAYER > HOST GAME\n3  IT SHOWS AN ADDRESS (OFTEN 192.168.43.1)",18,STYLE.WHITE).name = "Host steps"
+    _label("PHONE B  =  GUEST",22,STYLE.GOLD_LIGHT,true)
+    _label("4  WI-FI SETTINGS > JOIN PHONE A'S HOTSPOT (IF ANDROID SAYS \"NO INTERNET\": KEEP THE CONNECTION)\n5  IN THE GAME: LOCAL MULTIPLAYER > JOIN GAME > TYPE THE ADDRESS FROM PHONE A > CONNECT",18,STYLE.WHITE).name = "Guest steps"
+    _label("AT HOME YOU CAN USE THE SAME ROUTER WI-FI INSTEAD: BOTH PHONES JOIN IT. INTERNET IS NOT NEEDED.",14,STYLE.DIM)
+    _big("BACK",leave_session)
+
+func show_howto() -> void:
+    mode = "howto"
+    _refresh()
 
 func _host_waiting_page() -> void:
     _title("HOSTING")
     var lines: Array[String] = address_lines()
     if lines.is_empty():
-        _label("NO WI-FI / HOTSPOT ADDRESS FOUND.\nTURN ON YOUR PHONE'S HOTSPOT (OR JOIN THE SAME WI-FI) AND PRESS LEAVE, THEN HOST AGAIN.\nIF IT IS ON: READ THIS PHONE'S IP IN THE WI-FI / HOTSPOT SETTINGS (OFTEN 192.168.43.1) AND TYPE IT ON THE OTHER PHONE.",18,Color(1.0,0.78,0.4))
+        _label("THIS PHONE IS NOT ON ANY LOCAL NETWORK YET.\nNO WI-FI? TURN ON THIS PHONE'S HOTSPOT (SETTINGS > HOTSPOT / TETHERING), THEN PRESS LEAVE AND HOST AGAIN. WITH A ROUTER: JOIN ITS WI-FI FIRST.\nSTILL NOTHING? READ THIS PHONE'S ADDRESS IN THE HOTSPOT SETTINGS (OFTEN 192.168.43.1) AND TYPE IT ON THE OTHER PHONE.",18,Color(1.0,0.78,0.4)).name = "No address"
     else:
         _label("THE OTHER PHONE TYPES THIS ADDRESS:",17,STYLE.MUTED)
         for l in lines:
@@ -350,7 +369,7 @@ func _host_waiting_page() -> void:
 func _join_page() -> void:
     _title("JOIN GAME")
     var prefix: String = _own_prefix()
-    _label(("THIS PHONE: %s*  •  THE HOST SHOWS ITS ADDRESS ON ITS SCREEN" % prefix) if prefix != "" else "NOT ON A LOCAL NETWORK YET: JOIN THE HOST'S WI-FI OR HOTSPOT FIRST",17,STYLE.MUTED)
+    _label(("THIS PHONE: %s*  •  THE HOST SHOWS ITS ADDRESS ON ITS SCREEN" % prefix) if prefix != "" else "THIS PHONE IS NOT ON A WI-FI YET.\nNO ROUTER? JOIN THE HOST PHONE'S HOTSPOT IN THE WI-FI SETTINGS FIRST (MOBILE DATA CAN BE OFF).",17,Color(1.0,0.78,0.4))
     ip_input = LineEdit.new()
     ip_input.name = "IP input"
     ip_input.text = ip_text
@@ -365,7 +384,7 @@ func _join_page() -> void:
     page.add_child(ip_input)
     _big("CONNECT",connect_now,true)
     _big("BACK",leave_session)
-    _label("NO INTERNET NEEDED. IF IT FAILS: SAME NETWORK? HOTSPOT ON? HOST ALREADY PRESSED HOST GAME?",14,STYLE.DIM)
+    _label("NO INTERNET NEEDED. IF IT FAILS: SAME WI-FI OR THE HOST'S HOTSPOT? HOST ALREADY PRESSED HOST GAME?",14,STYLE.DIM)
 
 func _style_input(le: LineEdit) -> void:
     var normal := StyleBoxFlat.new()
@@ -387,7 +406,7 @@ func _style_input(le: LineEdit) -> void:
 func _connecting_page() -> void:
     _title("CONNECTING")
     _label("TO %s ..." % session.host_address,24,STYLE.GOLD_LIGHT,true)
-    _label("IF THIS TAKES LONG: SAME WI-FI / HOTSPOT? HOST ALREADY WAITING?",16,STYLE.MUTED)
+    _label("IF THIS TAKES LONG: ON THE SAME WI-FI OR THE HOST'S HOTSPOT? HOST ALREADY WAITING?",16,STYLE.MUTED)
     _big("CANCEL",leave_session)
 
 func _lobby_page() -> void:

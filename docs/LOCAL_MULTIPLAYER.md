@@ -1,9 +1,26 @@
-# LOCAL MULTIPLAYER (offline, two Android phones) — v0.1.41 prototype
+# LOCAL MULTIPLAYER (offline, two Android phones) — v0.1.41 prototype, v0.1.45 receiver + hotspot guide
 
-Issue #31 (owner dispatch 2026-11-22), coordination #26. Branch `agent/claude/issue-31-local-multiplayer` = v0.1.39 (the active Android line) + this.
-Handoff: `docs/dev/handoffs/issue-31-local-multiplayer-20261123-claude.md`.
+Issue #31 (owner dispatch 2026-11-22), coordination #26. First built on `agent/claude/issue-31-local-multiplayer` (v0.1.41), now part of the one unified DEV line `integration/nitro-dev` (#33).
+Handoffs: `docs/dev/handoffs/issue-31-local-multiplayer-20261123-claude.md` (prototype), `docs/dev/handoffs/issue-31-v0145-remote-car-hotspot-20261124-claude.md` (this update).
 
-**Status: CODE_READY + automated tests on one desktop (loopback). NOT tested on two real phones (OWNER_QA_PENDING).**
+**Status: CODE_READY + automated tests on one desktop (loopback + a simulated Wi-Fi model). First real-phone result (owner, v0.1.44, same Wi-Fi, two phones): the connection worked and stayed up, driving together was fun, but the other car glitched / jumped at the start of the race, and the owner did not know a hotspot works (never tried it). v0.1.45 changes the receiver and the lobby texts for exactly those two points; whether the jump is gone on real phones is OWNER_QA_PENDING.**
+
+## v0.1.45 (owner feedback from the first two-phone test)
+
+| Owner report (v0.1.44) | Change in v0.1.45 | Evidence |
+|---|---|---|
+| "at the start it glitched, the son's car jumped for me" (connection never dropped) | New receiver `NitroNetRemoteView`; snapshots stamped with simulation time | `net_remote_view_test`: a deterministic Wi-Fi / phone-hitch MODEL (same packets through the v0.1.44 receiver and the new one): the old receiver pops up to 4.6 m in one frame after a 0.4–0.6 s link stall and 13x > 0.5 m on 30 fps phones, the new one never more than 0.35 m. A model, NOT a Wi-Fi measurement; the real cause on the owner's phones is UNCONFIRMED |
+| "it said we need Wi-Fi; we did not know a hotspot works" | Menu line "NO WI-FI? NO PROBLEM. ONE PHONE'S HOTSPOT IS ENOUGH." + **NO WI-FI? HOTSPOT HOW-TO** page (steps for both phones) + clearer no-address / join / unreachable texts | `multiplayer_lobby_test` (text + both phones' steps + BACK), container screenshot `docs/dev/handoffs/evidence/issue-31-lobby-hotspot-v0145.jpg` |
+| (so the next report carries data) | `LINK GOOD / FAIR / POOR` word next to the other player's score | derived from the peak age of the newest snapshot |
+
+How the receiver works (all in `game/scripts/net/net_remote_view.gd`, pure data, no nodes):
+1. a **render clock** (sender time) steered towards `now − clock offset − delay` by at most ±15 % speed: a change of the offset or of the delay becomes a gentle speed change, never a jump;
+2. an **adaptive delay** 110–340 ms = the oldest the newest snapshot got in the last ~1.5 s (+ margin), measured per frame so a phone's own frame hitch is not mistaken for network jitter;
+3. a **discontinuity smoother**: when new data changes the path the car was on (a late packet, a wrong extrapolation) the difference is bled off over ~0.1 s instead of shown as a pop; a deliberate reset (restart flag) or an error above 6 m still snaps;
+4. a **clock-step guard**: if every snapshot for half a second is > 0.7 s later than the best of the window (long sender hitch, app in the background) the old window is dropped and the render clock re-syncs;
+5. unchanged: bracketing Hermite interpolation, ≤ 250 ms velocity extrapolation, heading through ±π, refusal of impossible jumps.
+The sender now stamps a snapshot with **simulation time** (tick × tick length), not with the wall clock of the frame the tick ran in (uneven on a phone: 30–60 fps, hitches), which also stops the Hermite tangents from being stretched after a sender hitch.
+
 
 ## What it is
 
@@ -16,16 +33,17 @@ It is **not** Internet multiplayer: the join field refuses any address that is n
 
 ## Two-phone test (owner)
 
-1. Install the same APK `Nitro-Wheelz_v0.1.41_Android-debug.apk` on both phones (same version is required; the game says so otherwise).
-2. Network, pick one:
+1. Install the same APK on both phones (the unified DEV build, the same version is required; the game says so otherwise).
+2. Network, pick one (the game explains the hotspot case itself: LOCAL MULTIPLAYER > **NO WI-FI? HOTSPOT HOW-TO**):
    * both phones on the same Wi-Fi router (internet not needed), or
-   * **hotspot test (the real offline case):** phone A: turn mobile data OFF, then turn the Wi-Fi hotspot ON. Phone B: mobile data OFF, join A's hotspot.
+   * **hotspot (no router, the real offline case):** phone A: turn mobile data OFF, then turn the Wi-Fi hotspot ON (Settings > Hotspot / Tethering). Phone B: mobile data OFF, join A's hotspot in the Wi-Fi settings (if Android says "no internet", keep the connection).
 3. Phone A: **LOCAL MULTIPLAYER → HOST GAME**. It shows its address, e.g. `192.168.43.1`.
 4. Phone B: **LOCAL MULTIPLAYER → JOIN GAME**, type that address, **CONNECT**. (The field is pre-filled with the first three numbers of phone B's own address.)
 5. Both phones: **READY**. Phone A: **START**. 3 – 2 – 1 – GO!, both cars drive. Drift together.
 6. Leave with PAUSE → GARAGE / MENU (or the phone's back button in the lobby). Then play a normal single-player lap: nothing must have changed.
 
-Please report: did the join work on Wi-Fi and on the hotspot, does the other car look smooth, did GO feel simultaneous, what happens when you
+Please report: did the join work on Wi-Fi and on the hotspot, does the other car look smooth **(especially in the first seconds after GO)**, what does the
+`LINK GOOD / FAIR / POOR` word next to the other player's score say (a screenshot helps), did GO feel simultaneous, what happens when you
 lock one screen / switch app / walk out of range, do the scores and stars of single-player stay as before.
 
 ## Architecture
@@ -45,7 +63,7 @@ cleanly, and tests can run a host and a joiner in one process.
 * **Control** (reliable, `var_to_bytes` dictionaries, ≤ 1 KB, header-validated before decoding so no engine error can be provoked by garbage):
   HELLO / WELCOME / REJECT (FULL, PROTOCOL, VERSION, TRACK) / INFO (name, car, ready, track fingerprint) / TRACK / START / LOADED / COUNTDOWN / PING / PONG / LEAVE.
 * **Snapshot** (unreliable-ordered, **40 bytes, 20 Hz** ≈ 0.8 kB/s each way): kind, flags (drifting, paused, reset, handbrake), 16-bit sequence,
-  sender time (ms), x, z, heading, vx, vz, yaw rate, steering angle, drift score. Never the 120 Hz physics state.
+  sender SIMULATION time (ms, since v0.1.45; v0.1.41–44 sent the wall clock), x, z, heading, vx, vz, yaw rate, steering angle, drift score. Never the 120 Hz physics state.
 
 ### Flow
 `IDLE → HOSTING / CONNECTING → LOBBY → STARTING → COUNTDOWN → RACING` (+ `LOST`, `FAILED`, `CLOSED`).
@@ -58,7 +76,7 @@ cleanly, and tests can run a host and a joiner in one process.
 
 ### Remote car
 A **visual only** (no collision body, no drive model, no sound). Pose = Hermite interpolation between the two buffered snapshots that bracket
-*render time = now − clock offset − 120 ms*; after the newest snapshot it extrapolates with the sent velocity for at most 250 ms and then stands;
+the **render clock** (v0.1.45: steered, adaptive 110–340 ms behind the sender, see "v0.1.45" above; v0.1.41–44: fixed 120 ms); after the newest snapshot it extrapolates with the sent velocity for at most 250 ms and then stands;
 a RESET flag (restart) snaps instead of gliding; an impossible jump (> 160 m/s) is dropped; heading interpolates through ±π. The car node
 reuses the existing car models and wheel steering (`set_motion`). The other player's drift score is shown as a small label
 (`NAME  1234 PTS`), informational only.
@@ -90,6 +108,7 @@ with a message ("YOU CAN KEEP DRIVING").
 | Test | Proves |
 |---|---|
 | `net_session_test` | protocol round trips, malformed/NaN/huge/stale/oversized/object packets rejected; host + join + roster + READY + START + LOADED + countdown on a real ENet loopback; snapshots in order; leave / lost host / lost joiner / silence timeout; room stays open after a leave; third player refused; wrong version / track / unreachable host / malformed IP end in messages |
+| `net_remote_view_test` | the v0.1.45 receiver: unit behaviour (nothing before the first snapshot, impossible jump refused, reset forgets the path, a 2 s sender stop re-syncs and the car is never drawn ahead of its data) and a deterministic Wi-Fi / phone-hitch MODEL (7 scenarios x 5 seeds: calm, start hitches, 100 ms beacon bursts, spikes + loss, 30 fps phones, bad mix, link stalls) comparing the v0.1.44 receiver and the new one on the same packets: pops > 0.5 m per frame, off-path error, display lag. The test fails if the model stops reproducing the old jump |
 | `net_race_test` | interpolation maths; start slots on the road of every shareable circuit; car frozen until GO and driving after; solo race has no multiplayer object; remote car has no collider and moves without jumps; impossible jump dropped; reset snaps; paused flag + score arrive; a multiplayer result is never saved; lost peer reported while the local car keeps driving; leaving cleans up (`SESSION.current == null`, records allowed again) |
 | `multiplayer_lobby_test` | menu entry; HOST GAME / JOIN GAME / READY / START / LEAVE through two lobby screens; malformed and public addresses refused; START only when both READY; track choice reaches the guest; START opens the race scene with the agreed track and keeps the session; lost host explained |
 | `main_menu_test` | updated menu list |
@@ -99,7 +118,8 @@ behaviour of routers, phone sleep / app in background / lock screen, thumb contr
 
 ## Known limitations of this prototype
 * 2 players, manual address entry (no automatic discovery yet), one session at a time, port 47821 (UDP) must be free.
-* Some routers and "guest" Wi-Fi networks isolate clients (they cannot reach each other): use one phone's hotspot instead.
+* Some routers and "guest" Wi-Fi networks isolate clients (they cannot reach each other): use one phone's hotspot instead (in-game how-to page since v0.1.45; never tried on real phones yet).
+* The remote car trails the real one by the adaptive delay (110 ms on a clean link, up to 340 ms on a bad one): there are no collisions, so this is invisible in play, but it is not a lag-free replica.
 * Positions are client-reported (untrusted); no collisions between cars; no shared finish or standings; each player's own 3-lap finish ends their own run.
 * Restart (pause → restart) puts the car back in its own start slot without a new countdown.
 * While a session exists the game asks Android to keep the screen on (a locked phone would drop off the network); it is released when the session ends. Whether this holds on every phone, and what happens when the app is sent to the background anyway, is untested: a backgrounded phone is reported to the other phone as lost after 6 s of silence.

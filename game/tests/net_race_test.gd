@@ -252,6 +252,10 @@ func _run() -> void:
     if net.remote_score != 1234:
         _fail("the remote score label must show the other player's points (informational)")
         return
+    var score_label: Label = net.get("_score") as Label
+    if score_label == null or not score_label.text.contains("1234 PTS") or not score_label.text.contains("LINK "):
+        _fail("the other player's label must carry the points and the LINK quality word (got '%s')" % (score_label.text if score_label != null else "null"))
+        return
     if absf(net.remote_car.rotation.y+PI/2.0) > 0.05:
         _fail("the remote car heading does not match (%.3f)" % net.remote_car.rotation.y)
         return

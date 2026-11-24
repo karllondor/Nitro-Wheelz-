@@ -63,12 +63,34 @@ func _run() -> void:
     # menu page
     var host_ui: Control = _make()
     await process_frame
-    for caption in ["HOST GAME","JOIN GAME","BACK"]:
+    for caption in ["HOST GAME","JOIN GAME","NO WI-FI? HOTSPOT HOW-TO","BACK"]:
         if _button(host_ui,caption) == null:
             _fail("lobby menu is missing "+caption)
             return
     if SESSION.current != null:
         _fail("opening the lobby must not start any networking")
+        return
+    # owner report (v0.1.44): "it said we need Wi-Fi, we did not know a hotspot works" -> the menu says it in plain words,
+    # and one button explains both phones' steps
+    var hint: Label = host_ui.find_child("Hotspot hint",true,false) as Label
+    if hint == null or not hint.text.contains("NO WI-FI") or not hint.text.contains("HOTSPOT"):
+        _fail("the lobby menu must say in a visible line that a hotspot is enough (no Wi-Fi needed)")
+        return
+    _press(host_ui,"NO WI-FI? HOTSPOT HOW-TO")
+    await process_frame
+    var host_steps: Label = host_ui.find_child("Host steps",true,false) as Label
+    var guest_steps: Label = host_ui.find_child("Guest steps",true,false) as Label
+    if host_steps == null or guest_steps == null or not host_steps.text.contains("HOTSPOT") or not host_steps.text.contains("HOST GAME") \
+            or not guest_steps.text.contains("JOIN") or not guest_steps.text.contains("CONNECT"):
+        _fail("the hotspot how-to must give the steps for BOTH phones (hotspot on > HOST GAME / join the hotspot > JOIN GAME > CONNECT)")
+        return
+    if SESSION.current != null:
+        _fail("reading the how-to must not start any networking")
+        return
+    _press(host_ui,"BACK")
+    await process_frame
+    if _button(host_ui,"HOST GAME") == null or host_ui.find_child("Host steps",true,false) != null:
+        _fail("BACK on the how-to page must return to the lobby menu (not leave the lobby)")
         return
     # a malformed address is refused before any socket is opened
     var guest_ui: Control = _make()

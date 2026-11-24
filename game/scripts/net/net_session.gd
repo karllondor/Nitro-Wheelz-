@@ -314,7 +314,7 @@ func _on_connected_to_server() -> void:
     _hello_deadline = now_ms()+HANDSHAKE_TIMEOUT_MS
 
 func _on_connection_failed() -> void:
-    _fail("COULD NOT REACH %s. Same Wi-Fi / hotspot? Right IP? Is the host waiting?" % host_address)
+    _fail("COULD NOT REACH %s. On the same Wi-Fi or the host phone's hotspot (no router needed)? Right IP? Is the host waiting?" % host_address)
 
 func _on_server_disconnected() -> void:
     _lose("THE HOST LEFT")
@@ -470,7 +470,7 @@ func _process(_delta: float) -> void:
     match state:
         State.CONNECTING:
             if now-_phase_started_msec > CONNECT_TIMEOUT_MS:
-                _fail("NO ANSWER FROM %s. Same Wi-Fi / hotspot? Right IP? Is the host waiting?" % host_address)
+                _fail("NO ANSWER FROM %s. On the same Wi-Fi or the host phone's hotspot (no router needed)? Right IP? Is the host waiting?" % host_address)
             elif _hello_deadline != 0 and now > _hello_deadline:
                 _fail("THE HOST DID NOT ANSWER THE HELLO (wrong game version?)")
         State.HOSTING:
