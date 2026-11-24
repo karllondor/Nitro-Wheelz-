@@ -266,6 +266,7 @@ func _settings_page() -> void:
 
 func _dev_page() -> void:
     _title("DEVELOPER")
+    _big("VISUAL LAB v0.1\nA / C  •  DAY / SUNSET / NIGHT",func(): _go("res://scenes/visual_lab.tscn")).name = "Visual Lab"
     _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
     # v0.1.38 (owner decision 2026-11-22, #25): the physics mode used by the NEXT race. ARCADE_PLUS
     # (default) = the approved arcade handling with credible top speeds; REAL_POWER_TEST = a power-curve
