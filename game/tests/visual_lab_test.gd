@@ -32,7 +32,7 @@ func _run() -> void:
         return
     var portrait: Rect2 = NitroVisualLab.panel_geometry(Vector2(691,1536))
     var landscape: Rect2 = NitroVisualLab.panel_geometry(Vector2(1280,720))
-    if portrait.size.x < 630 or portrait.size.y < 1100 or portrait.end.x > 691:
+    if portrait.size.x < 630 or portrait.size.y < 900 or portrait.end.x > 691:
         _fail("mobile portrait modal is too small or offscreen")
         return
     if landscape.size.x < 650 or landscape.end.x > 1280:

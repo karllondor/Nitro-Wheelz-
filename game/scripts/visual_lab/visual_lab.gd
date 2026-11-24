@@ -504,7 +504,7 @@ func _make_panel() -> void:
 static func panel_geometry(screen: Vector2) -> Rect2:
     var portrait: bool = screen.y > screen.x
     var w: float = screen.x * (0.94 if portrait else 0.68)
-    var h: float = screen.y * (0.82 if portrait else 0.90)
+    var h: float = screen.y * (0.60 if portrait else 0.90)
     if not portrait:
         w = minf(w, 780.0)
     return Rect2(Vector2((screen.x-w)*0.5, (screen.y-h)*0.5), Vector2(w,h))
