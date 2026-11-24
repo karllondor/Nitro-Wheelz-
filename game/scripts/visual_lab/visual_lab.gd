@@ -31,6 +31,7 @@ var status_label: Label
 var _sun_records: Array[Dictionary] = []
 var _sky_records: Array[Dictionary] = []
 var _headlights: Array[SpotLight3D] = []
+var _original_voxel_sakura: Array[Dictionary] = []
 var _tail: StandardMaterial3D
 var _brake: StandardMaterial3D
 var _reverse: StandardMaterial3D
@@ -65,6 +66,7 @@ func _exit_tree() -> void:
     if materials != null:
         materials.restore()
     _restore_environment()
+    _show_original_voxel_sakura(true)
     # The menu's chosen track never becomes the visual lab preview track.
     if original_track != null:
         ProjectSettings.set_setting("nitro/selected_track", original_track)
@@ -96,6 +98,7 @@ func _make_optional_scenery() -> void:
     lab_props = Node3D.new()
     lab_props.name = "Visual Lab scenery only — no collision"
     race.add_child(lab_props)
+    _make_rounded_sakura()
     var points: Array = track.get("centerline")
     var half: PackedFloat32Array = track.get("halfwidths")
     if points.size() < 8:
@@ -164,6 +167,77 @@ func _add_tree(position_3d: Vector3, leaves: Material, trunk_mat: Material, saku
         crown.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         lab_props.add_child(crown)
 
+func _make_rounded_sakura() -> void:
+    # Old Shin-Kawa uses deliberately square "pixel" blossoms. In this lab
+    # only, hide that MultiMesh and replace its canopy with one cheap
+    # instanced smooth-silhouette canopy. Do not edit production meshes.
+    var old: MultiMeshInstance3D = track.find_child("Cherry blossom voxels", true, false) as MultiMeshInstance3D
+    if old == null or old.multimesh == null:
+        return
+    _original_voxel_sakura.append({"node": old, "visible": old.visible})
+    old.visible = false
+    var source: MultiMesh = old.multimesh
+    var occupied: Dictionary = {}
+    var step: float = 3.5
+    for i in range(source.instance_count):
+        var pos: Vector3 = source.get_instance_transform(i).origin
+        occupied[Vector2i(roundi(pos.x / step), roundi(pos.z / step))] = true
+    var positions: Array = track.get("tree_positions")
+    var transforms: Array[Transform3D] = []
+    var colours: Array[Color] = []
+    for p in positions:
+        var pt: Vector2 = p
+        var cell := Vector2i(roundi(pt.x / step), roundi(pt.y / step))
+        var blossom: bool = false
+        for cx in range(-1, 2):
+            for cz in range(-1, 2):
+                if occupied.has(cell + Vector2i(cx, cz)):
+                    blossom = true
+                    break
+            if blossom:
+                break
+        if not blossom:
+            continue
+        var level: float = track.call("road_height_at", pt)
+        for part in range(3):
+            var shift: Vector3 = Vector3(float(part - 1) * 1.0, 0.25 * float(part % 2), float(part % 2) * 0.55)
+            var centre: Vector3 = Vector3(pt.x, level + 3.7, pt.y) + shift
+            var size: Vector3 = Vector3(1.85, 1.55, 1.85) if part != 1 else Vector3(2.2, 1.65, 2.2)
+            transforms.append(Transform3D(Basis.from_scale(size), centre))
+            colours.append(Color.html("#E5A2B6").lerp(Color.html("#F1CBD5"), float(part) * 0.20))
+    if transforms.is_empty():
+        push_warning("Visual Lab: unable to classify original voxel sakura locations")
+        return
+    var mesh := SphereMesh.new()
+    mesh.radius = 1.0
+    mesh.height = 2.0
+    mesh.radial_segments = 9
+    mesh.rings = 5
+    var batch := MultiMesh.new()
+    batch.transform_format = MultiMesh.TRANSFORM_3D
+    batch.use_colors = true
+    batch.mesh = mesh
+    batch.instance_count = transforms.size()
+    for i in range(transforms.size()):
+        batch.set_instance_transform(i, transforms[i])
+        batch.set_instance_color(i, colours[i])
+    var tree := MultiMeshInstance3D.new()
+    tree.name = "Visual Lab smooth Sakura canopy batch"
+    tree.multimesh = batch
+    var pink := StandardMaterial3D.new()
+    pink.vertex_color_use_as_albedo = true
+    pink.roughness = 0.94
+    pink.metallic = 0.0
+    tree.material_override = pink
+    tree.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    lab_props.add_child(tree)
+
+func _show_original_voxel_sakura(restored: bool) -> void:
+    for item in _original_voxel_sakura:
+        var node: MultiMeshInstance3D = item["node"]
+        if is_instance_valid(node):
+            node.visible = bool(item["visible"]) if restored else false
+
 func _make_vehicle_lights() -> void:
     # Visual-only lamp positions approximate the chosen placeholder GLB.
     # No changes to wheel hubs, handling, steering or contact physics.
@@ -218,6 +292,7 @@ func _apply_presets() -> void:
     _apply_time()
     if lab_props != null:
         lab_props.visible = true
+    _show_original_voxel_sakura(false)
     _update_lamps()
     _refresh_panel_text()
 
@@ -428,6 +503,7 @@ func _restore_production() -> void:
     _is_restored = true
     if lab_props != null:
         lab_props.visible = false
+    _show_original_voxel_sakura(true)
     for light in _headlights:
         light.visible = false
     if _tail != null:
