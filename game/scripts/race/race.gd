@@ -172,7 +172,9 @@ func _ready() -> void:
     _update_visuals()
     _snap_cameras()
     if not track.pending_terrain.is_empty():
-        _load_terrain()
+        await _load_terrain()
+    if net != null:
+        net.report_scene_ready()
 
 ## v0.1.32: both cameras start behind / above the car's start heading (the
 ## top-down view used to begin facing -Z and swing round in the first
@@ -472,11 +474,15 @@ func _physics_process(delta: float) -> void:
         braking = maxf(braking,touch.brake)
         handbrake = maxf(handbrake,touch.handbrake)
 
-    # Race clock starts only on the first throttle input.
-    if not race_started and gas > 0.05:
+    # A LAN time includes local pauses and starts at the shared GO. Solo starts on GAS.
+    if net != null and net.session.round_start_usec > 0:
         race_started = true
-    if race_started:
-        time_elapsed += delta
+        time_elapsed = maxf(0.0,float(Time.get_ticks_usec()-net.session.round_start_usec)/1000000.0)
+    else:
+        if not race_started and gas > 0.05:
+            race_started = true
+        if race_started:
+            time_elapsed += delta
 
     # Terrain grade force (Developer Mode, 0 % default) integrated inside
     # the model substeps; ZERO on flat tracks.
@@ -552,6 +558,13 @@ func _show_results() -> void:
     results_layer.layer = 24
     results_layer.name = "Finish results and local leaderboard"
     add_child(results_layer)
+    if net != null:
+        net.session.finish_local(lap_score,roundi(time_elapsed*1000.0))
+        var board = preload("res://scripts/net/net_results.gd").new()
+        results_layer.add_child(board)
+        board.show_round(net.session,track.display_name,Callable(self,"_restart"),
+            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+        return
     if track.event_mode!="":
         _event_results()
         return
@@ -957,7 +970,8 @@ func _toggle_pause() -> void:
         add_child(pause_layer)
         var panel: NitroPauseMenu = PAUSE_VIEW.new()
         pause_layer.add_child(panel)
-        panel.show_pause(Callable(self,"_toggle_pause"),Callable(self,"_restart"),
+        var restart_action := Callable(self,"_restart") if net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
+        panel.show_pause(Callable(self,"_toggle_pause"),restart_action,
             func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
             _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable(),
             Callable(self,"_park_toggle_tutorial") if park != null else Callable(),
@@ -979,6 +993,12 @@ func _park_toggle_tutorial() -> void:
     _toggle_pause()
 
 func _restart() -> void:
+    if net != null:
+        net.session.restart_race()
+        return
+    _reset_run()
+
+func _reset_run() -> void:
     if pause_layer != null:
         pause_layer.queue_free()
         pause_layer = null
@@ -998,6 +1018,9 @@ func _restart() -> void:
         park.restart()
     if net != null:
         net.on_restart()
+        touch.release_all()
+        road_y = track.road_height_at(model.position)
+        car_y = road_y
     if sfx != null:
         sfx.reset()
     time_elapsed = 0.0

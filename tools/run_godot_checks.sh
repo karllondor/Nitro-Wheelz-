@@ -68,6 +68,7 @@ for spec in import smoke_test input_test driving_test mobile_visual_test track_d
         exit 4
     fi
 done
+GODOT_BIN="$GODOT_BIN" python3 tools/test_net_rounds.py
 echo "PASS: Godot import, real scenes, input and driving regressions"
 echo "NOT RUN: Xbox real controller, Android, Windows export and physical device performance"
 

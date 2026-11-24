@@ -78,7 +78,11 @@ func _build() -> void:
     # for a second tap (the label says so for 2.5 s) instead of a popup.
     var rb: Button = _menu_button(row,"↻  RESTART",Callable(),sc,60.0,21.0)
     rb.name = "RESTART"
-    rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RESTART",_on_restart))
+    if _on_restart.is_valid():
+        rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RESTART",_on_restart))
+    else:
+        rb.text = "RESTART UNAVAILABLE"
+        rb.disabled = true
     if _on_edit.is_valid():
         _menu_button(row,"✎  EDIT TRACK",_on_edit,sc,60.0,21.0).name = "EDIT TRACK"
     if _on_extra.is_valid() and extra_label != "":

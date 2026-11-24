@@ -1,5 +1,9 @@
 # LOCAL MULTIPLAYER (offline, two Android phones) — v0.1.41 prototype, v0.1.45 receiver + hotspot guide
 
+## Protocol 2 review build
+
+The [round lifecycle and owner test checklist](dev/handoffs/issue-31-multiplayer-reliability-v2.md) cover host restarts, peer liveries and comparative results. The prototype history below describes protocol 1.
+
 Issue #31 (owner dispatch 2026-11-22), coordination #26. First built on `agent/claude/issue-31-local-multiplayer` (v0.1.41), now part of the one unified DEV line `integration/nitro-dev` (#33).
 Handoffs: `docs/dev/handoffs/issue-31-local-multiplayer-20261123-claude.md` (prototype), `docs/dev/handoffs/issue-31-v0145-remote-car-hotspot-20261124-claude.md` (this update).
 
