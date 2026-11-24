@@ -6,20 +6,20 @@ class_name NitroNetProtocol
 ## Two packet kinds, the first byte says which:
 ##   KIND_CONTROL  (1) + var_to_bytes(Dictionary): lobby / handshake / countdown, RELIABLE, rare, decoded with
 ##                 bytes_to_var (NO object decoding) and validated field by field (validate_control).
-##   KIND_SNAPSHOT (2) + 39 bytes of fixed binary layout: the sender's own car, UNRELIABLE ORDERED, 20 Hz.
+##   KIND_SNAPSHOT (2) + 43 bytes of fixed binary layout: the sender's own car, UNRELIABLE ORDERED, 20 Hz.
 ## Remote positions are CLIENT-REPORTED: they are for the other player's eyes only. They are never trusted for
 ## ranking, records or stars (prototype, collisionless).
-const PROTOCOL_VERSION: int = 1
+const PROTOCOL_VERSION: int = 2
 const DEFAULT_PORT: int = 47821
 const MAX_PLAYERS: int = 2
 const SNAPSHOT_HZ: float = 20.0
 const KIND_CONTROL: int = 1
 const KIND_SNAPSHOT: int = 2
-const SNAPSHOT_SIZE: int = 40
+const SNAPSHOT_SIZE: int = 44
 const MAX_CONTROL_BYTES: int = 1024
 const MAX_NAME_CHARS: int = 16
 
-enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12 }
+enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12, RESTART = 13, FINISH = 14 }
 
 ## Built-in circuits both phones carry in the same APK. The host's choice travels as one of these paths
 ## (never an arbitrary path, never a user:// file) plus the SHA-256 of the file, so a different build or an
@@ -78,6 +78,9 @@ static func _is_str(d: Dictionary, key: String, max_len: int) -> bool:
 
 ## "" when the message is well-formed, else the reason (the packet is dropped and counted, never executed).
 static func validate_control(m: Dictionary) -> String:
+    if m["t"] in [Msg.START, Msg.RESTART, Msg.LOADED, Msg.COUNTDOWN, Msg.FINISH]:
+        if not (m.get("round") is int) or m.round < 1 or m.round > 0xffffffff:
+            return "round"
     match int(m["t"]):
         Msg.HELLO:
             if not (m.get("proto",null) is int) or not _is_str(m,"ver",24) or not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16):
@@ -91,11 +94,16 @@ static func validate_control(m: Dictionary) -> String:
         Msg.INFO:
             if not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16) or not (m.get("ready",null) is bool) or not _is_str(m,"fp",80):
                 return "INFO fields"
+            if not (m.get("look") is Dictionary) or m.look.size() > 5:
+                return "appearance"
+            for key in m.look:
+                if key not in ["paint_color_hex","paint_finish","wheel_asset_id","wheel_finish","livery_id"] or not _is_str(m.look,key,48):
+                    return "appearance field"
         Msg.TRACK, Msg.START:
             if not _is_str(m,"track",96) or not _is_str(m,"fp",80):
                 return "TRACK fields"
         Msg.COUNTDOWN:
-            if not (m.get("secs",null) is float) or float(m["secs"]) < 0.5 or float(m["secs"]) > 10.0:
+            if not (m.get("secs",null) is float) or m.secs != 3.0 or not (m.get("go_ms") is int):
                 return "COUNTDOWN seconds"
         Msg.PING:
             if not (m.get("c",null) is int):
@@ -103,7 +111,14 @@ static func validate_control(m: Dictionary) -> String:
         Msg.PONG:
             if not (m.get("c",null) is int):
                 return "PONG"
-        Msg.LOADED, Msg.LEAVE:
+            if not (m.get("host_ms") is int):
+                return "host clock"
+        Msg.FINISH:
+            if not (m.get("points") is int) or m.points < 0 or m.points > 100000000:
+                return "finish points"
+            if not (m.get("time_ms") is int) or m.time_ms < 0 or m.time_ms > 0x7fffffff:
+                return "finish time"
+        Msg.RESTART, Msg.LOADED, Msg.LEAVE:
             pass
         _:
             return "unknown type %d" % int(m["t"])
@@ -111,8 +126,8 @@ static func validate_control(m: Dictionary) -> String:
 
 # ---------------------------------------------------------------- snapshot packets
 
-## Layout (little endian, 40 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
-## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score.
+## Layout (little endian, 44 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
+## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score, [40] u32 round.
 ## flags: 1 drifting, 2 paused, 4 reset (a deliberate jump: restart), 8 handbrake.
 static func pack_snapshot(s: Dictionary) -> PackedByteArray:
     var b := PackedByteArray()
@@ -129,13 +144,14 @@ static func pack_snapshot(s: Dictionary) -> PackedByteArray:
     b.encode_float(28,float(s.get("yaw",0.0)))
     b.encode_float(32,float(s.get("steer",0.0)))
     b.encode_s32(36,int(s.get("score",0)))
+    b.encode_u32(40,int(s.get("round",0)))
     return b
 
 ## {} for anything malformed: wrong size / kind, NaN / infinity, absurd position / speed / angle / score.
 static func unpack_snapshot(b: PackedByteArray) -> Dictionary:
     if b.size() != SNAPSHOT_SIZE or b[0] != KIND_SNAPSHOT:
         return {}
-    var s: Dictionary = {"flags":int(b[1]),"seq":b.decode_u16(2),"ms":b.decode_u32(4),"x":b.decode_float(8),"z":b.decode_float(12),
+    var s: Dictionary = {"round":b.decode_u32(40),"flags":int(b[1]),"seq":b.decode_u16(2),"ms":b.decode_u32(4),"x":b.decode_float(8),"z":b.decode_float(12),
         "heading":b.decode_float(16),"vx":b.decode_float(20),"vz":b.decode_float(24),"yaw":b.decode_float(28),
         "steer":b.decode_float(32),"score":b.decode_s32(36)}
     for key in ["x","z","heading","vx","vz","yaw","steer"]:

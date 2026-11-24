@@ -1,3 +1,7 @@
+## LAN reliability and Park multiplayer
+
+The two-game regression, protocol changes, performance measurements and two-phone checklist are in the [multiplayer handoff](docs/dev/handoffs/issue-31-multiplayer-reliability-v2.md).
+
 # Nitro Wheelz — v0.1.33 AI-body test car (RYU-32 FLAME) on top of the mobile QA fixes (v0.1.32) and the Car Factory migration (v0.1.29–31)
 
 ## AI BODY TEST CAR (v0.1.33)

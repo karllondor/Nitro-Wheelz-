@@ -9,7 +9,7 @@ class_name NitroNetRace
 ##   * the REMOTE car: a visual node only (no physics body, no collider, no drive model), moved by a
 ##     NitroNetRemoteView from buffered snapshots (v0.1.45: steered render clock, jitter-adaptive 110..340 ms delay,
 ##     discontinuity smoothing, <= 250 ms extrapolation), a snap on a deliberate reset, a refusal of impossible jumps,
-##   * the other player's score as a small informational label (NOT ranked, NOT saved),
+##   * live opponent points and session-only standings,
 ##   * lost connection / leaving: a readable message, the local drive is never interrupted.
 ## Remote data is client-reported and untrusted: nothing here writes records, stars or scores.
 const P = preload("res://scripts/net/net_protocol.gd")
@@ -46,7 +46,7 @@ var _remote_fade: float = 1.0
 ## True while a session is on its way into a race (solo play: false, nothing is created).
 static func should_attach() -> bool:
     var s: NitroNetSession = SESSION.current
-    return s != null and (s.state == NitroNetSession.State.STARTING or s.state == NitroNetSession.State.COUNTDOWN or s.state == NitroNetSession.State.RACING)
+    return s != null and (s.state == NitroNetSession.State.STARTING or s.state == NitroNetSession.State.COUNTDOWN or s.state == NitroNetSession.State.RACING or (s.state == NitroNetSession.State.LOST and s.round_id > 0))
 
 ## Start position of a slot (0 = host, 1 = joiner): side by side on the start line, 2.6 m left / right of the centre line.
 static func spawn_position(base: Vector2, heading: float, slot: int) -> Vector2:
@@ -64,7 +64,7 @@ func setup(race_node: Node3D) -> void:
     _last_sent_pos = race.model.position
     var other_slot: int = 1-session.local_index
     var rcar: String = str(session.other.get("car","red"))
-    remote_car = CARS.make(rcar)
+    remote_car = CARS.make(rcar,session.other.get("look",{}))
     remote_car.name = "Remote player car"
     remote_car.scale = Vector3.ONE*CAR_SCALE
     race.add_child(remote_car)
@@ -72,24 +72,44 @@ func setup(race_node: Node3D) -> void:
     _place_remote(rp,h,0.0,0.0,0.0)
     remote_label = Label3D.new()
     remote_label.name = "Remote player name"
-    remote_label.text = str(session.other.get("name","PLAYER"))
+    remote_label.text = "▼  "+str(session.other.get("name","PLAYER"))
     remote_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     remote_label.no_depth_test = true
     remote_label.font_size = 56
-    remote_label.pixel_size = 0.016
+    remote_label.pixel_size = 0.024
     remote_label.outline_size = 14
     remote_label.modulate = Color(0.45,0.97,1.0)
     remote_label.position = Vector3(0.0,3.4,0.0)
     remote_car.add_child(remote_label)
     remote_label.scale = Vector3.ONE/CAR_SCALE
+    var ring := MeshInstance3D.new()
+    ring.name = "Opponent marker"
+    var torus := TorusMesh.new()
+    torus.inner_radius = 2.65
+    torus.outer_radius = 2.86
+    torus.rings = 40
+    torus.ring_segments = 6
+    var ink := StandardMaterial3D.new()
+    ink.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    ink.albedo_color = Color(0.10, 0.96, 1.0)
+    torus.material = ink
+    ring.mesh = torus
+    ring.position.y = 0.13
+    ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    remote_car.add_child(ring)
+    session.round_restarted.connect(_on_round_restarted)
     session.remote_snapshot.connect(_on_snapshot)
     session.peer_lost.connect(_on_lost)
     session.state_changed.connect(_on_state)
     _build_ui()
-    call_deferred("_report_loaded")
+    if session.state == SESSION.State.LOST:
+        _on_lost(session.last_error)
 
-func _report_loaded() -> void:
-    if session != null:
+func report_scene_ready() -> void:
+    # Let the first visible frame submit both liveries, wheels, labels and track before countdown.
+    await get_tree().process_frame
+    await get_tree().process_frame
+    if is_inside_tree() and session != null:
         session.report_loaded()
 
 ## The car stands still until GO (countdown); never frozen once the connection is gone.
@@ -139,26 +159,38 @@ func _on_state(st: int) -> void:
 
 func _on_lost(reason: String) -> void:
     lost_reason = reason
+    _score.text = ""
     remote_paused = false
     if _toast != null:
         _toast.text = "%s\n\nYOU CAN KEEP DRIVING. PAUSE > GARAGE / MENU LEAVES THE GAME." % reason
         _toast.visible = true
 
+var _last_count: String = ""
+var _next_ui_ms: int = 0
+
 func _refresh_ui() -> void:
     if session == null or _count == null:
         return
     var st: int = session.state
-    _count.text = ""
-    _status.text = ""
-    if st == NitroNetSession.State.STARTING:
-        _status.text = "WAITING FOR THE OTHER PLAYER TO LOAD THE TRACK"
-    elif st == NitroNetSession.State.COUNTDOWN:
-        var left: float = session.countdown_remaining()
-        _count.text = str(maxi(1,int(ceil(left)))) if left > 0.0 else "GO!"
-        _count.add_theme_color_override("font_color",Color(1,1,1) if left > 1.0 else Color(1.0,0.86,0.3))
-    elif st == NitroNetSession.State.RACING and Time.get_ticks_msec() < _go_until_msec:
-        _count.text = "GO!"
-        _count.add_theme_color_override("font_color",Color(0.4,1.0,0.5))
+    var count_text := ""
+    var now := Time.get_ticks_msec()
+    if st == SESSION.State.COUNTDOWN:
+        count_text = str(clampi(ceili(session.countdown_remaining()),1,3))
+    elif st == SESSION.State.RACING and now < _go_until_msec:
+        count_text = "GO!"
+    if count_text != _last_count:
+        _last_count = count_text
+        _count.text = count_text
+        var color := Color.WHITE
+        if count_text == "1":
+            color = Color(1.0,0.86,0.3)
+        elif count_text == "GO!":
+            color = Color(0.4,1.0,0.5)
+        _count.add_theme_color_override("font_color",color)
+    if now < _next_ui_ms:
+        return
+    _next_ui_ms = now+100
+    _status.text = "WAITING FOR THE OTHER PLAYER TO LOAD THE TRACK" if st == SESSION.State.STARTING else ""
     if st == NitroNetSession.State.RACING or st == NitroNetSession.State.COUNTDOWN:
         var who: String = str(session.other.get("name","PLAYER")) if not session.other.is_empty() else "OTHER PLAYER"
         if lost_reason == "":
@@ -212,6 +244,8 @@ func _process(delta: float) -> void:
     if lost_reason != "":
         _remote_fade = maxf(0.0,_remote_fade-delta*0.8)
         remote_car.visible = _remote_fade > 0.05
+    if freezes() or not remote_car.visible:
+        return  # Both cars are already placed on the grid until GO. Keep buffering samples.
     var pose: Dictionary = remote_view.step(float(SESSION.now_ms()),delta)
     if pose.is_empty():
         return
@@ -241,12 +275,22 @@ func _toast_text(t: String) -> void:
         _toast.visible = true
 
 ## race.gd _restart(): the car goes back to ITS OWN start slot (not the centre line, not the other car's slot).
+func _on_round_restarted() -> void:
+    race._reset_run()
+    session.report_loaded() # Same scene and meshes, both peers acknowledge their reset.
+
 func on_restart() -> void:
     if race == null or session == null:
         return
     var h: float = race.track.start_heading()
     race.model.reset(spawn_position(race.track.start_position(),h,session.local_index),h)
     _last_sent_pos = race.model.position
+    remote_view = VIEW.new()
+    remote_score = 0
+    remote_paused = false
+    _next_ui_ms = 0
+    _go_until_msec = 0
+    _place_remote(spawn_position(race.track.start_position(),h,1-session.local_index),h,0.0,0.0,0.0)
 
 func _exit_tree() -> void:
     # leaving the race scene (pause > GARAGE / MENU, back, app exit) always leaves the session: no network state remains

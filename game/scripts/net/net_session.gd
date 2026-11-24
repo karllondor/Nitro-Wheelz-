@@ -25,6 +25,8 @@ signal roster_changed
 signal error_raised(text: String)
 signal start_requested(track: String)
 signal countdown_started(seconds: float)
+signal round_restarted
+signal standings_changed
 signal remote_snapshot(snap: Dictionary)
 signal peer_lost(reason: String)
 
@@ -52,11 +54,17 @@ var last_error: String = ""
 var dropped_packets: int = 0
 var stale_snapshots: int = 0
 var accepted_snapshots: int = 0
+var round_start_usec: int = 0              # Scheduled GO on this peer’s monotonic clock
 var go_local_usec: int = 0                 # local clock at the moment GO happened (measurement)
 ## Test hooks only (tests/net_session_test.gd): pretend to run another build / carry another track file.
 var version_override: String = ""
 var fingerprint_override: String = ""
 var countdown_announced_usec: int = 0
+
+var round_id: int = 0
+var drivers: Array[Dictionary] = []        # Stable host/join slots, retained after disconnect
+var _host_offset_ms: float = 0.0
+var _best_ping_ms: float = INF
 
 var _last_rx_msec: int = 0
 var _phase_started_msec: int = 0
@@ -154,7 +162,13 @@ func _peer_target() -> int:
     return other_id if is_host else 1
 
 func _info_message() -> Dictionary:
-    return {"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":P.track_fingerprint(track_path)}
+    var profile := CARS.cosmetic_profile(me.car)
+    var saved := CARS.COSMETICS.current(me.car,profile)
+    var look := {}
+    for field in CARS.COSMETICS.SAVE_FIELDS:
+        if saved.has(field):
+            look[field] = saved[field]
+    return {"look":look,"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":P.track_fingerprint(track_path)}
 
 # --------------------------------------------------------------------- lobby API
 
@@ -166,7 +180,7 @@ func set_ready(on: bool) -> void:
     roster_changed.emit()
 
 func set_car(car: String) -> void:
-    if CARS.CARS.has(car):
+    if state in [State.HOSTING, State.LOBBY] and CARS.CARS.has(car):
         me["car"] = car
         if connected():
             _send(_info_message(),_peer_target())
@@ -192,13 +206,62 @@ func can_start() -> bool:
 func start_race() -> bool:
     if not can_start():
         return false
-    _loaded_me = false
-    _loaded_other = false
-    _load_deadline = now_ms()+LOAD_TIMEOUT_MS
-    _send({"t":P.Msg.START,"track":track_path,"fp":track_fp},other_id)
+    _prepare_round(1)
+    _send({"round":round_id,"t":P.Msg.START,"track":track_path,"fp":track_fp},other_id)
     _set_state(State.STARTING)
     start_requested.emit(track_path)
     return true
+
+func _prepare_round(id: int) -> void:
+    round_id = id
+    _loaded_me = false
+    _loaded_other = false
+    _load_deadline = now_ms()+LOAD_TIMEOUT_MS
+    _last_snap_seq = -1
+    _go_usec = 0
+    round_start_usec = 0
+    go_local_usec = 0
+    drivers.clear()
+    for slot in 2:
+        var player := me if slot == local_index else other
+        drivers.append({"slot":slot, "name":player.name, "car":player.car,
+            "points":0, "time_ms":-1, "status":"RACING"})
+
+func restart_race() -> bool:
+    if not is_host or state != State.RACING:
+        return false
+    _prepare_round(round_id+1)
+    _send({"t":P.Msg.RESTART,"round":round_id},other_id)
+    _set_state(State.STARTING)
+    round_restarted.emit()
+    return true
+
+func finish_local(points: int, time_ms: int) -> void:
+    if state not in [State.RACING, State.LOST] or drivers.size() != 2 or drivers[local_index].status != "RACING":
+        return
+    if state == State.RACING:
+        _send({"t":P.Msg.FINISH,"round":round_id,"points":points,"time_ms":time_ms},_peer_target())
+    _finish_slot(local_index,points,time_ms)
+
+func _finish_slot(slot: int, points: int, time_ms: int) -> void:
+    if drivers[slot].status == "RACING":
+        drivers[slot].merge({"points":points,"time_ms":time_ms,"status":"FINISHED"},true)
+        standings_changed.emit()
+
+func standings() -> Array[Dictionary]:
+    var rows := drivers.duplicate()
+    rows.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        if a.points != b.points:
+            return a.points > b.points
+        if a.time_ms != b.time_ms:
+            return a.time_ms >= 0 and (b.time_ms < 0 or a.time_ms < b.time_ms)
+        return a.slot < b.slot)
+    return rows
+
+func _live_points(slot: int, points: int) -> void:
+    if drivers.size() == 2 and drivers[slot].status == "RACING" and drivers[slot].points != points:
+        drivers[slot].points = points
+        standings_changed.emit()
 
 ## The race scene of this phone is built and the car is waiting: the host starts the countdown when both are.
 func report_loaded() -> void:
@@ -208,13 +271,13 @@ func report_loaded() -> void:
         _loaded_me = true
         _maybe_start_countdown()
     else:
-        _send({"t":P.Msg.LOADED},1)
+        _send({"t":P.Msg.LOADED,"round":round_id},1)
 
 func _maybe_start_countdown() -> void:
     if is_host and state == State.STARTING and _loaded_me and _loaded_other:
-        _send({"t":P.Msg.COUNTDOWN,"secs":COUNTDOWN_SECONDS},other_id)
         countdown_announced_usec = Time.get_ticks_usec()
         _go_usec = countdown_announced_usec+int(COUNTDOWN_SECONDS*1000000.0)
+        _send({"t":P.Msg.COUNTDOWN,"round":round_id,"secs":COUNTDOWN_SECONDS,"go_ms":int(_go_usec/1000)},other_id)
         _set_state(State.COUNTDOWN)
         countdown_started.emit(COUNTDOWN_SECONDS)
 
@@ -227,6 +290,8 @@ func countdown_remaining() -> float:
 func send_snapshot(s: Dictionary) -> void:
     if api == null or not (state == State.COUNTDOWN or state == State.RACING or state == State.STARTING):
         return
+    _live_points(local_index,int(s.get("score",0)))
+    s["round"] = round_id
     s["seq"] = _snap_seq
     _snap_seq = (_snap_seq+1) & 0xFFFF
     api.send_bytes(P.pack_snapshot(s),_peer_target(),MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED,0)
@@ -275,6 +340,9 @@ func _lose(reason: String) -> void:
     if state == State.CLOSED or state == State.FAILED or state == State.LOST:
         return
     var was_host_waiting: bool = is_host and (state == State.LOBBY or state == State.HOSTING)
+    if drivers.size() == 2 and drivers[1-local_index].status == "RACING":
+        drivers[1-local_index].status = "DNF"
+        standings_changed.emit()
     other = {}
     if other_id != 0:
         _safe_disconnect(other_id)
@@ -340,12 +408,13 @@ func _on_snapshot(bytes: PackedByteArray) -> void:
     if s.is_empty():
         dropped_packets += 1
         return
-    if _last_snap_seq >= 0 and not P.seq_newer(int(s["seq"]),_last_snap_seq):
+    if state not in [State.STARTING,State.COUNTDOWN,State.RACING] or s.round != round_id or (_last_snap_seq >= 0 and not P.seq_newer(int(s["seq"]),_last_snap_seq)):
         stale_snapshots += 1
         return
     _last_snap_seq = int(s["seq"])
     accepted_snapshots += 1
     s["recv_ms"] = now_ms()
+    _live_points(1-local_index,int(s.score))
     remote_snapshot.emit(s)
 
 func _on_control(m: Dictionary) -> void:
@@ -365,31 +434,46 @@ func _on_control(m: Dictionary) -> void:
             if not is_host:
                 _on_track(m)
         P.Msg.START:
-            if not is_host and state == State.LOBBY:
+            if not is_host and state == State.LOBBY and m.round == 1:
                 if _track_matches(str(m["track"]),str(m["fp"])):
+                    _prepare_round(1)
                     me["ready"] = true
                     _set_state(State.STARTING)
                     start_requested.emit(str(m["track"]))
+        P.Msg.RESTART:
+            # The host can press restart on its first GO frame before the joiner has polled its deadline.
+            if not is_host and state in [State.COUNTDOWN,State.RACING] and m.round == round_id+1:
+                _prepare_round(m.round)
+                _set_state(State.STARTING)
+                round_restarted.emit()
+        P.Msg.FINISH:
+            if state in [State.COUNTDOWN,State.RACING] and m.round == round_id:
+                _finish_slot(1-local_index,m.points,m.time_ms)
         P.Msg.LOADED:
-            if is_host and state == State.STARTING:
+            if is_host and state == State.STARTING and m.round == round_id:
                 _loaded_other = true
                 _maybe_start_countdown()
         P.Msg.COUNTDOWN:
-            if not is_host and state == State.STARTING:
+            if not is_host and state == State.STARTING and m.round == round_id:
                 var secs: float = float(m["secs"])
                 countdown_announced_usec = Time.get_ticks_usec()
                 # the announcement took about half a round trip to arrive: the joiner's GO is that much earlier
                 _go_usec = countdown_announced_usec+int(maxf(0.0,secs*1000.0-rtt_ms*0.5)*1000.0)
+                if is_finite(_best_ping_ms):
+                    _go_usec = int((float(m.go_ms)-_host_offset_ms)*1000.0)
                 _set_state(State.COUNTDOWN)
                 countdown_started.emit(secs)
         P.Msg.LEAVE:
             _lose("THE OTHER PLAYER LEFT")
         P.Msg.PING:
             if is_host:
-                _send({"t":P.Msg.PONG,"c":int(m["c"])},other_id)
+                _send({"t":P.Msg.PONG,"c":int(m["c"]),"host_ms":now_ms()},other_id)
         P.Msg.PONG:
             if not is_host:
                 var sample: float = float(now_ms()-int(m["c"]))
+                if sample >= 0 and sample <= _best_ping_ms:
+                    _best_ping_ms = sample
+                    _host_offset_ms = float(m.host_ms)-(float(m.c)+sample*0.5)
                 rtt_ms = sample if rtt_ms == 0.0 else lerpf(rtt_ms,sample,0.3)
 
 func _on_hello(m: Dictionary) -> void:
@@ -433,11 +517,13 @@ func _on_welcome(m: Dictionary) -> void:
     _hello_deadline = 0
     _set_state(State.LOBBY)
     _send(_info_message(),1)
+    _send({"t":P.Msg.PING,"c":now_ms()},1)
     roster_changed.emit()
 
 func _on_info(m: Dictionary) -> void:
-    if other.is_empty():
+    if state != State.LOBBY or other.is_empty():
         return
+    other["look"] = m.look
     other["name"] = P.clean_name(str(m["name"]))
     other["car"] = str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red"
     other["ready"] = bool(m["ready"])
@@ -480,15 +566,16 @@ func _process(_delta: float) -> void:
                 other_id = 0
                 _hello_deadline = 0
         State.LOBBY, State.STARTING, State.COUNTDOWN, State.RACING:
-            if now-_last_rx_msec > SILENCE_TIMEOUT_MS:
+            if state != State.STARTING and now-_last_rx_msec > SILENCE_TIMEOUT_MS:
                 _lose("CONNECTION LOST (NO DATA FOR %d s)" % (SILENCE_TIMEOUT_MS/1000))
                 return
             if not is_host and now-_last_ping_msec >= 1000:
                 _last_ping_msec = now
                 _send({"t":P.Msg.PING,"c":now},1)
-            if state == State.STARTING and is_host and now > _load_deadline:
+            if state == State.STARTING and now > _load_deadline:
                 _lose("THE OTHER PLAYER DID NOT FINISH LOADING")
             if state == State.COUNTDOWN and _go_usec != 0 and Time.get_ticks_usec() >= _go_usec:
+                round_start_usec = _go_usec
                 go_local_usec = Time.get_ticks_usec()
                 _go_usec = 0
                 _set_state(State.RACING)

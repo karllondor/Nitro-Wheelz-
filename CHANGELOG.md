@@ -1,3 +1,7 @@
+## Multiplayer reliability v2 (review branch)
+
+Host restarts both cars on a shared countdown. LAN results compare both drivers by points and time. The remote car carries its own livery and a cyan marker.
+
 ## [0.1.45] — UNIFIED DEVELOPMENT PREVIEW 3: smoother remote car + HOTSPOT guide for local multiplayer (DEV package, TEST BUILD)
 Issue #33, canonical branch `integration/nitro-dev` (v0.1.44 + the owner's first real two-phone test of local multiplayer); manifest: docs/dev/INTEGRATION_MANIFEST.md. Multiplayer only: no change to driving, scoring, HUD, builders, events or saves.
 - Remote car: new receiver `NitroNetRemoteView` (steered render clock, jitter-adaptive 110–340 ms delay, discontinuity smoothing instead of a pop, clock-step re-sync). The sender stamps snapshots with simulation time instead of the wall clock of the frame. In a deterministic Wi-Fi / phone-hitch MODEL (same packets through the v0.1.44 receiver and the new one) the old receiver popped up to 4.6 m in one frame after a 0.4–0.6 s link stall and 13 times > 0.5 m on 30 fps phones; the new one never more than 0.35 m. NOT a Wi-Fi measurement; the real cause on the owner's phones is unconfirmed.
