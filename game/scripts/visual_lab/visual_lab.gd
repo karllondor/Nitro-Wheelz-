@@ -518,7 +518,8 @@ func _refresh_panel_text() -> void:
     var mode: String = "ORIGINAL" if _is_restored else vehicle_style + environment_style + "  /  " + time_of_day
     mode_label.text = "VISUAL LAB v0.1   •   " + mode
     status_label.text = ("FUJI SPEEDWAY SMALL — TRACK DATA FOUND" if fuji_available
-        else "FUJI MISSING • SHIN-KAWA PROXY ONLY • NOT FUJI QA")
+        else "FUJI MISSING • SHIN-KAWA PROXY ONLY • NOT FUJI QA") + \
+        "\nVEHICLE: " + str(vehicle.name) + " • PLACEHOLDER (NOT AE86)"
     var fps: float = float(Engine.get_frames_per_second())
     var draw_calls: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
     var renderer: String = str(ProjectSettings.get_setting("rendering/renderer/rendering_method", "unknown"))
