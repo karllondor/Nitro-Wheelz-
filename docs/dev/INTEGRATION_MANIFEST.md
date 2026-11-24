@@ -6,6 +6,51 @@ CI passes; it is accepted after the owner's phone QA.**
 
 ---
 
+## v0.1.45 — unified development preview 3: smoother remote car + HOTSPOT guide (2026-11-24)
+
+| | |
+|---|---|
+| Canonical branch | `integration/nitro-dev` |
+| APK built from | **`ef7f9056d024d22a32d3ae3fc8742f11f55bafdf`** (= v0.1.44 docs head `0b87849` + one commit; later commits on the branch are documentation only) |
+| Integrator / model | Claude Code, **`claude-sonnet-5-5`** as reported by `get_session` |
+| Android package | **`com.karllondor.nitrowheelz.dev`** "Nitro Wheelz DEV" — verified in the built APK manifest; separate from production `com.karllondor.nitrowheelz` |
+| Version | 0.1.45, versionCode 45 |
+| Trigger | the owner's first real two-phone test of local multiplayer on v0.1.44 (#31 comment 7125741006, #33 comment 7125741282); claim #33 comment 7125990483 |
+| Status | CODE_READY · CI_PASS · EMULATOR_PASS · APK_READY · **OWNER_QA_PENDING** · NOT merged to `main` · NOT a production release |
+
+### What changed (multiplayer only; no driving, scoring, HUD, builder, editor, event, water or save change)
+| # | Owner report on v0.1.44 | Change in 0.1.45 | Proof |
+|---|---|---|---|
+| 1 | "at the start it glitched, the son's car jumped" (connection never dropped) | `NitroNetRemoteView` (steered render clock, jitter-adaptive 110–340 ms delay, discontinuity smoothing, clock-step re-sync); the sender stamps snapshots with simulation time | `net_remote_view_test`: deterministic Wi-Fi / phone-hitch MODEL, same packets through the v0.1.44 receiver and the new one: 21 visible pops (worst 4.60 m, link stalls and 30 fps phones) → 0 pops, worst 0.35 m. **A model, not a Wi-Fi measurement; the cause on the owner's phones is UNCONFIRMED.** Emulator: the new receiver drove the remote car 54.5 m inside the exported APK |
+| 2 | "it said we need Wi-Fi, we did not know a hotspot works" | menu line "NO WI-FI? NO PROBLEM. ONE PHONE'S HOTSPOT IS ENOUGH.", **NO WI-FI? HOTSPOT HOW-TO** page (steps for both phones), clearer no-address / not-on-a-network / unreachable texts | `multiplayer_lobby_test`; container screenshot `docs/dev/handoffs/evidence/issue-31-lobby-hotspot-v0145.jpg` |
+| 3 | (so the next report carries data) | `LINK GOOD / FAIR / POOR` next to the other player's score | `net_race_test` |
+Open question to the owner: what "I left the map" meant (exit to the menu is by design; app in the background or a locked screen hits the 6 s silence timeout).
+
+### Feature inclusion (unchanged from v0.1.44, all still IN the APK)
+Solo race / records / stars, Practice / Club / Pro events, ROAD 12 m, water (#19), node editor (OPEN / SET START / REVERSE / terrain / widths), offline multiplayer, Park + tutorial, garage, all six main-menu entries: covered by the same specs as v0.1.44 (all PASS again) and by the on-device inventory below.
+
+### Tests (exact)
+* Container: `GODOT_BIN=… bash tools/run_godot_checks.sh` on `ef7f905` → **exit 0, 59 specs, 61 PASS lines**, no `ERROR:` / `FAIL:` (v0.1.44: 58 specs / 60 PASS; +1 = `net_remote_view_test`).
+* CI on `ef7f905`: Godot pinned import and smoke [45355987413](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/45355987413) **success** (59 specs, 61 PASS) · Foundation checks [45355987373](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/45355987373) **success** · Android Debug APK [45355987448](https://github.com/karllondor/Nitro-Wheelz-/actions/runs/45355987448) **success** (jobs `android` + `workshop-device`).
+* Emulator (inside the exported APK, package `.dev`): Astra's workshop smoke **PASS** (`technical 90.16 | pending 138`, identical to v0.1.44) and the integration check **PASS** (25 ok items: 12 feature files packed, Practice / Club / Pro + ROAD 12 m, water footprint code, six menu entries, host on UDP 47821 + join, lobby, START after both READY, synchronised GO, records blocked in the multiplayer race, remote car followed 54.5 m, remote score label, own car drives, clean leave, solo race untouched, terrain circuit opened in the node editor, SET START, SAVE AS with terrain heights, Club event judging with 30 zones, race starts on the chosen node). The emulator is not a phone and not a radio: the two sessions talk over the device's own loopback.
+
+### APK
+* Artifact `Nitro-Wheelz_v0.1.45_Android-debug` (id 14902576613), run https://github.com/karllondor/Nitro-Wheelz-/actions/runs/45355987448
+* `Nitro-Wheelz_v0.1.45_Android-debug.apk`, 81,299,115 bytes, **SHA-256 `352e1066b641be8e206bc0080e5923daa8491f911b899110460d5a02f10cd632`** (downloaded again into a fresh directory, identical to the workflow's `.sha256`, zip test clean)
+* Manifest strings: package **`com.karllondor.nitrowheelz.dev`** (no `.review`), versionName 0.1.45, `android.permission.INTERNET`; arm64-v8a + x86_64.
+
+### Coordination
+* PR #36 (GPT-6, draft, `feat/pc-web-hud-v0145` @ `1cfab07`, PC/Web HUD, base `0b87849`): a dry-run merge with this commit conflicts **only** in `tools/run_godot_checks.sh` (the single spec line); it must rebase onto `ef7f905` or later, and it takes the next free version number (its branch name says v0145) when the owner accepts it. Nothing of it is in this build.
+
+### Open items (carried over, none blocks this build)
+* **Phone QA** of everything, above all the two-phone retest: does the jump at the start disappear, does a **hotspot** join work (never tried by anyone), what the LINK word says on real Wi-Fi — OWNER_QA_PENDING.
+* Typing the host's address is still manual (automatic room discovery not started): likely the next friction on a hotspot.
+* **Web:** the web menu still shows LOCAL MULTIPLAYER although browsers cannot send raw UDP — owner decision pending (see v0.1.44).
+* Graphics feedback from the owner (PC build "looks bad", concept image): awaiting the PC screenshot, the PC build type and the concept file; nothing changed in this build.
+* Headless teardown sometimes reports one leaked audio object at exit (cosmetic, pre-existing); promotion to the standard package needs an owner decision and a save-migration test; editor tests depend on the editor's "last track" marker being absent.
+
+---
+
 ## v0.1.44 — unified development preview 2: Astra's independent QA fixes integrated (2026-11-23)
 
 | | |
