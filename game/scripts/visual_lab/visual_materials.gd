@@ -6,6 +6,7 @@ class_name NitroVisualLabMaterials
 const CAR_C = preload("res://assets/shaders/visual_lab/illustrated_car.gdshader")
 const WORLD_C = preload("res://assets/shaders/visual_lab/illustrated_world.gdshader")
 var entries: Array[Dictionary] = []
+var _material_cache: Dictionary = {}
 var _vehicle_style: String = "A"
 var _world_style: String = "A"
 
@@ -57,8 +58,14 @@ func set_styles(vehicle: String, environment: String, night: bool = false) -> vo
         node.material_override = null
         for i in range(mini(originals.size(), node.mesh.get_surface_count())):
             var src: Material = originals[i]
-            var m: Material = _matte(src) if style == "A" else _illustrate(src, group, node.name, night)
-            node.set_surface_override_material(i, m)
+            var is_road: bool = group == "environment" and node.name.contains("driving surface")
+            var cache_key: String = "%s:%s:%s:%d:%d:%d" % [
+                group, style, str(src.get_instance_id()) if src != null else "nil",
+                int(is_road), int(night), i]
+            if not _material_cache.has(cache_key):
+                _material_cache[cache_key] = (_matte(src, is_road) if style == "A"
+                    else _illustrate(src, group, node.name, night))
+            node.set_surface_override_material(i, _material_cache[cache_key])
 
 static func _preserve(name: String) -> bool:
     var n: String = name.to_lower()
@@ -82,7 +89,7 @@ static func _parameter(src: ShaderMaterial, key: String, fallback: Variant) -> V
             return result
     return fallback
 
-static func _matte(src: Material) -> Material:
+static func _matte(src: Material, is_road: bool = false) -> Material:
     if src == null:
         return null
     var m: Material = src.duplicate() as Material
@@ -92,6 +99,10 @@ static func _matte(src: Material) -> Material:
             std.roughness = maxf(std.roughness, 0.78)
             std.metallic = minf(std.metallic, 0.12)
             std.metallic_specular = 0.25
+            if is_road:
+                # Production asphalt is UNSHADED, so functional headlight spots
+                # cannot illuminate it. Light only the reversible lab copy.
+                std.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
     elif m is ShaderMaterial:
         var sm := m as ShaderMaterial
         if _has_uniform(sm, "roughness"):
@@ -143,6 +154,7 @@ static func _illustrate(src: Material, group: String, label: String, night: bool
         if src is BaseMaterial3D:
             var b := src as BaseMaterial3D
             mat.set_shader_parameter("tint", b.albedo_color)
+            mat.set_shader_parameter("use_vertex_color", 1.0 if b.vertex_color_use_as_albedo else 0.0)
             if b.albedo_texture != null:
                 mat.set_shader_parameter("albedo_tex", b.albedo_texture)
                 mat.set_shader_parameter("use_texture", 1.0)
