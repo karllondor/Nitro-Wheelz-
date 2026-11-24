@@ -26,6 +26,30 @@ func _run() -> void:
     if lab.race == null or lab.vehicle == null or lab.track == null or lab.materials == null:
         _fail("race, track, vehicle or material capture missing")
         return
+    # Portrait screenshot from a real phone exposed tiny 12px text and 39px buttons.
+    if lab.panel.visible or not lab._panel_toggle.visible:
+        _fail("lab should start closed for unobstructed driving")
+        return
+    var portrait: Rect2 = NitroVisualLab.panel_geometry(Vector2(691,1536))
+    var landscape: Rect2 = NitroVisualLab.panel_geometry(Vector2(1280,720))
+    if portrait.size.x < 630 or portrait.size.y < 1100 or portrait.end.x > 691:
+        _fail("mobile portrait modal is too small or offscreen")
+        return
+    if landscape.size.x < 650 or landscape.end.x > 1280:
+        _fail("landscape modal is too small or offscreen")
+        return
+    lab._set_panel_open(true)
+    if not lab.panel.visible or not lab._panel_dim.visible or lab._panel_toggle.visible:
+        _fail("modal scrim or toggle visibility failed")
+        return
+    lab._set_tab("LIGHTS")
+    if not (lab._pages["LIGHTS"] as VBoxContainer).visible or (lab._pages["STYLE"] as VBoxContainer).visible:
+        _fail("tab selection shows multiple pages")
+        return
+    lab._set_panel_open(false)
+    if lab.panel.visible or lab._panel_dim.visible:
+        _fail("panel cannot be fully closed")
+        return
     if lab.fuji_available:
         _fail("unexpected Fuji track present; verify actual circuit before proxy QA")
         return

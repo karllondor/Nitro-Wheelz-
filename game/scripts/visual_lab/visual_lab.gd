@@ -25,6 +25,14 @@ var original_track: Variant
 var lab_props: Node3D
 var lab_layer: CanvasLayer
 var panel: PanelContainer
+var _panel_toggle: Button
+var _panel_dim: ColorRect
+var _ui_buttons: Array[Button] = []
+var _ui_labels: Array[Label] = []
+var _pages: Dictionary = {}
+var _tabs: Dictionary = {}
+var _controls: Dictionary = {}
+var _ui_scale: float = 1.0
 var stats: Label
 var mode_label: Label
 var status_label: Label
@@ -378,87 +386,82 @@ func _update_lamps() -> void:
     _brake.emission_energy_multiplier = 3.5 if braking else 0.0
     _reverse.emission_energy_multiplier = 2.0 if reverse_on else 0.0
 
+## User-tested portrait layout: readable modal, large tap targets and only 3 tabs.
+## Never overlay the driving HUD by default.
 func _make_panel() -> void:
+    STYLE.ensure_fonts()
     lab_layer = CanvasLayer.new()
-    lab_layer.name = "Visual Lab developer panel only"
+    lab_layer.name = "Visual Lab mobile controls"
     lab_layer.layer = 25
     add_child(lab_layer)
     var root := Control.new()
-    root.name = "Visual Lab UI"
+    root.name = "Visual Lab responsive UI"
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.mouse_filter = Control.MOUSE_FILTER_IGNORE
     lab_layer.add_child(root)
-    var open_button := Button.new()
-    open_button.name = "Visual Lab toggle"
-    open_button.text = "VISUAL LAB  •  #37"
-    open_button.anchor_left = 1.0
-    open_button.anchor_right = 1.0
-    open_button.offset_left = -205.0
-    open_button.offset_right = -8.0
-    open_button.offset_top = 7.0
-    open_button.offset_bottom = 47.0
-    STYLE.style_button(open_button, 0.72, true)
-    root.add_child(open_button)
+    _panel_toggle = _ui_button(root, "LAB #37", func(): _set_panel_open(true), 54.0, 22.0, true)
+    _panel_toggle.name = "Open Visual Lab controls"
+    _panel_toggle.size_flags_horizontal = Control.SIZE_SHRINK_END
+    _panel_dim = ColorRect.new()
+    _panel_dim.name = "Modal scrim"
+    _panel_dim.color = Color(0.01, 0.01, 0.025, 0.68)
+    _panel_dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    _panel_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+    root.add_child(_panel_dim)
     panel = PanelContainer.new()
-    panel.name = "Visual Lab overlay (independent of production HUD)"
-    panel.anchor_left = 1.0
-    panel.anchor_right = 1.0
-    panel.anchor_bottom = 1.0
-    var screen: Vector2 = get_viewport().get_visible_rect().size
-    panel.offset_left = -minf(390.0, screen.x * 0.79)
-    panel.offset_right = -8.0
-    panel.offset_top = 52.0
-    panel.offset_bottom = -8.0
+    panel.name = "Visual Lab settings, three tabs"
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    var skin := StyleBoxFlat.new()
-    skin.bg_color = Color(0.04, 0.055, 0.09, 0.90)
-    skin.border_color = Color.html("#8B43CB")
-    skin.set_border_width_all(1)
-    skin.set_corner_radius_all(9)
-    skin.set_content_margin_all(10)
+    var skin := STYLE.modal_box(1.0)
+    skin.bg_color = Color(0.035, 0.042, 0.065, 0.985)
+    skin.set_content_margin_all(16)
     panel.add_theme_stylebox_override("panel", skin)
     root.add_child(panel)
-    open_button.pressed.connect(func(): panel.visible = not panel.visible)
-    var scroller := ScrollContainer.new()
-    scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    panel.add_child(scroller)
-    var column := VBoxContainer.new()
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    column.add_theme_constant_override("separation", 5)
-    scroller.add_child(column)
-    mode_label = _label(column, "", 18, Color.html("#F5C343"))
-    status_label = _label(column, "", 12, Color.html("#E5A2B6"))
-    _button(column, "VEHICLE  A / C", func():
+    var shell := VBoxContainer.new()
+    shell.add_theme_constant_override("separation", 12)
+    panel.add_child(shell)
+    var header := HBoxContainer.new()
+    header.add_theme_constant_override("separation", 10)
+    shell.add_child(header)
+    mode_label = _ui_label(header, "", 26.0, Color.html("#F5C343"), true)
+    mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    _ui_button(header, "CLOSE ×", func(): _set_panel_open(false), 54.0, 18.0)
+    status_label = _ui_label(shell, "", 17.0, Color.html("#E5A2B6"))
+    var tab_row := HBoxContainer.new()
+    tab_row.add_theme_constant_override("separation", 8)
+    shell.add_child(tab_row)
+    for key in ["STYLE", "LIGHTS", "TOOLS"]:
+        var tab_name: String = key
+        _tabs[key] = _ui_button(tab_row, key, func(): _set_tab(tab_name), 60.0, 21.0)
+    var scroll := ScrollContainer.new()
+    scroll.name = "Scrollable settings"
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    shell.add_child(scroll)
+    var holder := VBoxContainer.new()
+    holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(holder)
+    for key in ["STYLE", "LIGHTS", "TOOLS"]:
+        var pg := VBoxContainer.new()
+        pg.name = key + " controls"
+        pg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        pg.add_theme_constant_override("separation", 12)
+        holder.add_child(pg)
+        _pages[key] = pg
+    var styles: VBoxContainer = _pages["STYLE"]
+    _ui_label(styles, "Compare car and world independently.", 18.0, STYLE.MUTED)
+    _controls["car"] = _ui_button(styles, "CAR STYLE • A", func():
         vehicle_style = "C" if vehicle_style == "A" else "A"
         _apply_presets())
-    _button(column, "ENVIRONMENT  A / C", func():
+    _controls["world"] = _ui_button(styles, "WORLD STYLE • A", func():
         environment_style = "C" if environment_style == "A" else "A"
         _apply_presets())
-    _button(column, "DAY  /  SUNSET  /  NIGHT", func():
+    _controls["time"] = _ui_button(styles, "TIME • DAY", func():
         time_of_day = "SUNSET" if time_of_day == "DAY" else ("NIGHT" if time_of_day == "SUNSET" else "DAY")
         _apply_presets())
-    _button(column, "CHASE / TOP-DOWN", func():
+    _controls["camera"] = _ui_button(styles, "CAMERA • TOP-DOWN", func():
         _set_camera(0 if int(race.get("camera_mode")) == 1 else 1))
-    _button(column, "HEADLIGHTS  AUTO / MANUAL", func():
-        automatic_lights = not automatic_lights
-        _update_lamps()
-        _refresh_panel_text())
-    _button(column, "MANUAL HEADLIGHTS  ON / OFF", func():
-        manual_lights = not manual_lights
-        _update_lamps()
-        _refresh_panel_text())
-    _button(column, "BRAKE LIGHT TEST  ON / OFF", func():
-        brake_test = not brake_test
-        _update_lamps()
-        _refresh_panel_text())
-    _button(column, "HANDBRAKE TEST  ON / OFF", func():
-        handbrake_test = not handbrake_test
-        _update_lamps()
-        _refresh_panel_text())
-    stats = _label(column, "", 13, Color.html("#EAE4D6"))
-    _button(column, "SCREENSHOT THIS VIEW", func(): _screenshot("manual"))
-    _button(column, "CAPTURE ALL 12 × 2 CAMERAS", _capture_matrix)
-    _button(column, "RESET LAB TO AA / DAY", func():
+    _ui_button(styles, "RESET • AA / DAY", func():
         vehicle_style = "A"
         environment_style = "A"
         time_of_day = "DAY"
@@ -467,26 +470,107 @@ func _make_panel() -> void:
         brake_test = false
         handbrake_test = false
         _apply_presets())
-    _button(column, "RESTORE ORIGINAL MATERIALS", _restore_production)
-    _button(column, "HIDE PANEL", func(): panel.visible = false)
-    _button(column, "EXIT LAB / RETURN TO MENU", func():
+    var lights: VBoxContainer = _pages["LIGHTS"]
+    _ui_label(lights, "AUTO headlights follow the time of day.", 18.0, STYLE.MUTED)
+    _controls["mode"] = _ui_button(lights, "HEADLIGHTS • AUTO", func():
+        automatic_lights = not automatic_lights
+        _update_lamps()
+        _refresh_panel_text())
+    _controls["manual"] = _ui_button(lights, "MANUAL LIGHTS • OFF", func():
+        manual_lights = not manual_lights
+        _update_lamps()
+        _refresh_panel_text())
+    _controls["brake"] = _ui_button(lights, "BRAKE TEST • OFF", func():
+        brake_test = not brake_test
+        _update_lamps()
+        _refresh_panel_text())
+    _controls["handbrake"] = _ui_button(lights, "HANDBRAKE TEST • OFF", func():
+        handbrake_test = not handbrake_test
+        _update_lamps()
+        _refresh_panel_text())
+    var tools_page: VBoxContainer = _pages["TOOLS"]
+    stats = _ui_label(tools_page, "", 18.0, Color.html("#EAE4D6"))
+    _ui_button(tools_page, "SAVE SCREENSHOT", func(): _screenshot("manual"))
+    _ui_button(tools_page, "CAPTURE ALL 24 VIEWS", _capture_matrix)
+    _ui_button(tools_page, "RESTORE ORIGINAL LOOK", _restore_production)
+    _ui_button(tools_page, "RETURN TO MENU", func():
         get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+    _ui_button(shell, "CLOSE PANEL • DRIVE", func(): _set_panel_open(false), 62.0, 21.0, true)
+    _set_tab("STYLE")
+    _set_panel_open(false)
+    get_viewport().size_changed.connect(_layout_panel)
+    _layout_panel()
 
-static func _label(parent: Node, value: String, size: int, color: Color) -> Label:
+static func panel_geometry(screen: Vector2) -> Rect2:
+    var portrait: bool = screen.y > screen.x
+    var w: float = screen.x * (0.94 if portrait else 0.68)
+    var h: float = screen.y * (0.82 if portrait else 0.90)
+    if not portrait:
+        w = minf(w, 780.0)
+    return Rect2(Vector2((screen.x-w)*0.5, (screen.y-h)*0.5), Vector2(w,h))
+
+func _layout_panel() -> void:
+    if panel == null or _panel_toggle == null:
+        return
+    var screen: Vector2 = get_viewport().get_visible_rect().size
+    var portrait: bool = screen.y > screen.x
+    _ui_scale = clampf(minf(screen.x/(700.0 if portrait else 1050.0),
+        screen.y/(1450.0 if portrait else 700.0)),1.0,1.35)
+    var r: Rect2 = panel_geometry(screen)
+    panel.position = r.position
+    panel.size = r.size
+    var tw: float = 166.0 * _ui_scale
+    _panel_toggle.position = Vector2(screen.x-tw-14.0,screen.y*0.27 if portrait else 14.0)
+    _panel_toggle.size = Vector2(tw,54.0*_ui_scale)
+    for b in _ui_buttons:
+        if is_instance_valid(b):
+            b.custom_minimum_size.y = float(b.get_meta("base_h",68.0))*_ui_scale
+            b.add_theme_font_size_override("font_size",maxi(18,roundi(float(b.get_meta("base_font",22.0))*_ui_scale)))
+            STYLE.style_button(b,_ui_scale,bool(b.get_meta("selected",false)))
+    for lbl in _ui_labels:
+        if is_instance_valid(lbl):
+            lbl.add_theme_font_size_override("font_size",maxi(17,roundi(float(lbl.get_meta("base_font",18.0))*_ui_scale)))
+
+func _set_panel_open(opened: bool) -> void:
+    panel.visible = opened
+    _panel_dim.visible = opened
+    _panel_toggle.visible = not opened
+
+func _set_tab(tab: String) -> void:
+    for key in _pages:
+        var active: bool = key == tab
+        var page: VBoxContainer = _pages[key]
+        page.visible = active
+        var button: Button = _tabs[key]
+        button.set_meta("selected",active)
+        STYLE.style_button(button,_ui_scale,active)
+
+func _ui_label(parent: Node, value: String, size: float, color: Color, bold: bool = false) -> Label:
     var lbl := Label.new()
     lbl.text = value
     lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    lbl.add_theme_font_size_override("font_size", size)
-    lbl.add_theme_color_override("font_color", color)
+    lbl.add_theme_font_override("font",STYLE.BOLD if bold else STYLE.SEMI)
+    lbl.add_theme_color_override("font_color",color)
+    lbl.add_theme_font_size_override("font_size",int(size))
+    lbl.set_meta("base_font",size)
     parent.add_child(lbl)
+    _ui_labels.append(lbl)
     return lbl
 
-static func _button(parent: Node, title: String, callback: Callable) -> Button:
+func _ui_button(parent: Node, caption: String, callback: Callable,
+        height: float = 68.0, size: float = 22.0, active: bool = false) -> Button:
     var b := Button.new()
-    b.text = title
-    b.custom_minimum_size = Vector2(0.0, 39.0)
+    b.text = caption
+    b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    b.custom_minimum_size.y = height
+    b.add_theme_font_size_override("font_size",int(size))
+    b.set_meta("base_h",height)
+    b.set_meta("base_font",size)
+    b.set_meta("selected",active)
+    STYLE.style_button(b,1.0,active)
     b.pressed.connect(callback)
     parent.add_child(b)
+    _ui_buttons.append(b)
     return b
 
 func _set_camera(idx: int) -> void:
@@ -515,19 +599,28 @@ func _restore_production() -> void:
 func _refresh_panel_text() -> void:
     if mode_label == null or stats == null:
         return
-    var mode: String = "ORIGINAL" if _is_restored else vehicle_style + environment_style + "  /  " + time_of_day
-    mode_label.text = "VISUAL LAB v0.1   •   " + mode
-    status_label.text = ("FUJI SPEEDWAY SMALL — TRACK DATA FOUND" if fuji_available
-        else "FUJI MISSING • SHIN-KAWA PROXY ONLY • NOT FUJI QA") + \
-        "\nVEHICLE: " + str(vehicle.name) + " • PLACEHOLDER (NOT AE86)"
+    var mode: String = "ORIGINAL" if _is_restored else vehicle_style + environment_style + " / " + time_of_day
+    mode_label.text = "VISUAL LAB • " + mode
+    status_label.text = ("FUJI TRACK DATA AVAILABLE" if fuji_available
+        else "SHIN-KAWA PROXY — NOT FUJI") + "\nPLACEHOLDER CAR — NOT AE86"
     var fps: float = float(Engine.get_frames_per_second())
     var draw_calls: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-    var renderer: String = str(ProjectSettings.get_setting("rendering/renderer/rendering_method", "unknown"))
-    stats.text = "FPS %.1f  •  FRAME BUDGET %.1f ms\nDRAW CALLS %d  •  %s\nHEADLIGHTS %s • MANUAL %s\nBRAKE %s • HANDBRAKE %s\n%s" % [
-        fps, 1000.0 / maxf(fps, 1.0), draw_calls, renderer,
-        "AUTO" if automatic_lights else "MANUAL", "ON" if manual_lights else "OFF",
-        "ON" if brake_test else "OFF", "ON" if handbrake_test else "OFF",
-        "CAPTURE IN PROGRESS" if _capturing else "Android / Web / PC: test on actual targets"]
+    var renderer: String = str(ProjectSettings.get_setting("rendering/renderer/rendering_method","unknown"))
+    stats.text = "FPS %.0f  •  FRAME %.1f ms\nDRAW CALLS %d  •  %s\nHEADLIGHTS %s  •  MANUAL %s\nBRAKE %s  •  HANDBRAKE %s\n%s" % [
+        fps,1000.0/maxf(fps,1.0),draw_calls,renderer,
+        "AUTO" if automatic_lights else "MANUAL","ON" if manual_lights else "OFF",
+        "ON" if brake_test else "OFF","ON" if handbrake_test else "OFF",
+        "CAPTURING 24 VIEWS" if _capturing else "Check FPS on a real phone"]
+    if _controls.is_empty():
+        return
+    (_controls["car"] as Button).text = "CAR STYLE • " + vehicle_style
+    (_controls["world"] as Button).text = "WORLD STYLE • " + environment_style
+    (_controls["time"] as Button).text = "TIME • " + time_of_day
+    (_controls["camera"] as Button).text = "CAMERA • " + ("CHASE" if int(race.get("camera_mode")) == 1 else "TOP-DOWN")
+    (_controls["mode"] as Button).text = "HEADLIGHTS • " + ("AUTO" if automatic_lights else "MANUAL")
+    (_controls["manual"] as Button).text = "MANUAL LIGHTS • " + ("ON" if manual_lights else "OFF")
+    (_controls["brake"] as Button).text = "BRAKE TEST • " + ("ON" if brake_test else "OFF")
+    (_controls["handbrake"] as Button).text = "HANDBRAKE TEST • " + ("ON" if handbrake_test else "OFF")
 
 func _screenshot(label: String) -> void:
     if lab_layer == null:

@@ -6,6 +6,7 @@ on:
       - "game/assets/shaders/visual_lab/**"
       - "game/scenes/visual_lab.tscn"
       - "game/tests/visual_lab_test.gd"
+      - "game/tests/visual_lab_ui_test.gd"
       - ".github/workflows/visual-lab-preview.yml"
   workflow_dispatch:
 permissions:
@@ -43,6 +44,22 @@ jobs:
           find "$OUT_DIR" -maxdepth 1 -name '*.png' -size +100c | tee /tmp/visual-lab-files.txt
           test "$(wc -l < /tmp/visual-lab-files.txt)" -eq 24
           printf '%s\n' "24 screenshots: SHIN-KAWA PROXY ONLY, not Fuji Speedway Small"
+      - name: Portrait UI screenshot and tab regression test
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          OUT_DIR: ${{ github.workspace }}/builds/visual-lab-portrait-ui
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT_DIR"
+          xvfb-run -a -s "-screen 0 900x1700x24" "$GODOT_BIN" --path game --rendering-driver opengl3 --resolution 720x1560 --script res://tests/visual_lab_ui_test.gd
+          test "$(find "$OUT_DIR" -maxdepth 1 -name 'UI-PORTRAIT-*.png' | wc -l)" -eq 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Visual-Lab-PR-${{ github.event.pull_request.number }}-Readable-Mobile-UI
+          path: builds/visual-lab-portrait-ui/*.png
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: Visual-Lab-PR-${{ github.event.pull_request.number }}-Shin-Kawa-PROXY-24-views
