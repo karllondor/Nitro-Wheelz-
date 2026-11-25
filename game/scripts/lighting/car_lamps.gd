@@ -138,7 +138,7 @@ func _apply() -> void:
     _applied = bits
     var driving := (bits & POSITION) != 0
     var braking := (bits & BRAKING) != 0
-    var rear := 1.0 if braking else (0.24 if driving else 0.0)
+    var rear := 1.0 if braking else (0.52 if driving else 0.0)
     for light in spots:
         light.visible = driving
     for material in _atlas:
