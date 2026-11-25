@@ -1,3 +1,7 @@
+## v0.1.49 three-circuit review
+
+See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md) for geometry provenance, visual comparisons, automated checks and the owner playtest.
+
 ## v0.1.48 unified platform review
 
 The [platform handoff](docs/dev/handoffs/platform-integration-20261125.md) covers PRs #35 and #36 on the current Park branch, runtime checks, builds and owner playtest.

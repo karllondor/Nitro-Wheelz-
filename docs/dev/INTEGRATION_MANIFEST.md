@@ -6,6 +6,13 @@ CI passes; it is accepted after the owner's phone QA.**
 
 ---
 
+## v0.1.49 — three owner-reference circuits (review)
+
+Review branch `feat/three-circuits-v0149` starts at `3f4f4c668c6c98983a55cec91c197f1984779cfc`.
+Built-ins: Driftwood Circuit, Testandori Raceway and Fuji Speedway Short (PRO), supported in solo, editor OPEN and native LAN. App 0.1.49, Android code 49 and protocol 6. The APK review package and evidence are on the draft PR's Android workflow. Physical-device acceptance is pending.
+
+[Track review handoff and owner checklist](handoffs/three-circuits-v0149.md).
+
 ## v0.1.48 — unified platform review (2026-11-25)
 
 | Field | Value |

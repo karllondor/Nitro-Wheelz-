@@ -86,7 +86,7 @@ func _run() -> void:
             found_src = str(t["kind"]) == "terrain" and not bool(t["open"]) and not bool(t["builtin"])
         if bool(t["builtin"]):
             builtins += 1
-    if not found_src or builtins != 4:
+    if not found_src or builtins != TOOLS.BUILTIN.size():
         _fail("OPEN list: terrain circuit listed = %s, built-in copies = %d" % [str(found_src),builtins])
         return
     # ---- opening it in the node editor (EDIT NODES with this circuit being the last one touched)

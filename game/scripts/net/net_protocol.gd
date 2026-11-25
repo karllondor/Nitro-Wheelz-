@@ -43,10 +43,16 @@ enum ParkEvent { RESET_TRAINING = 1, OBJECT_IMPULSE, PLAYER_CONTACT, BUMPER_DAMA
 ## edited copy is refused with a clear message.
 const TRACKS: Array[String] = [
     "res://tracks/benchmark_oval.json","res://tracks/benchmark_sweepers.json",
-    "res://tracks/shin_kawa_v2.json","res://tracks/shin_kawa_full_circuit.json"]
+    "res://tracks/shin_kawa_v2.json","res://tracks/shin_kawa_full_circuit.json",
+    "res://tracks/driftwood_circuit.json",
+    "res://tracks/testandori_raceway.json",
+    "res://tracks/fuji_speedway_short.json"]
 const TRACK_NAMES: Dictionary = {
     "res://tracks/benchmark_oval.json":"OVAL","res://tracks/benchmark_sweepers.json":"SWEEPERS",
-    "res://tracks/shin_kawa_v2.json":"SHIN-KAWA","res://tracks/shin_kawa_full_circuit.json":"SHIN-KAWA • FULL CIRCUIT"}
+    "res://tracks/shin_kawa_v2.json":"SHIN-KAWA","res://tracks/shin_kawa_full_circuit.json":"SHIN-KAWA • FULL CIRCUIT",
+    "res://tracks/driftwood_circuit.json":"DRIFTWOOD CIRCUIT",
+    "res://tracks/testandori_raceway.json":"TESTANDORI RACEWAY",
+    "res://tracks/fuji_speedway_short.json":"FUJI SPEEDWAY SHORT"}
 
 static func game_version() -> String:
     return str(ProjectSettings.get_setting("application/config/version","unknown"))

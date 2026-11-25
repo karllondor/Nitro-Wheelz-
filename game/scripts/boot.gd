@@ -34,7 +34,10 @@ const TRACKS: Array = [
     ["SHIN-KAWA","res://tracks/shin_kawa_v2.json","shin_kawa_v2"],
     ["SHIN-KAWA • FULL CIRCUIT","res://tracks/shin_kawa_full_circuit.json","shin_kawa_full_circuit"],
     ["OVAL","res://tracks/benchmark_oval.json","benchmark_oval"],
-    ["SWEEPERS","res://tracks/benchmark_sweepers.json","benchmark_sweepers"]]
+    ["SWEEPERS","res://tracks/benchmark_sweepers.json","benchmark_sweepers"],
+    ["DRIFTWOOD CIRCUIT","res://tracks/driftwood_circuit.json","driftwood_circuit"],
+    ["TESTANDORI RACEWAY","res://tracks/testandori_raceway.json","testandori_raceway"],
+    ["FUJI SPEEDWAY SHORT","res://tracks/fuji_speedway_short.json","fuji_speedway_short"]]
 
 var ui_unit: float = 1.0
 var page: VBoxContainer
@@ -102,6 +105,9 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-integration.once"):
         DirAccess.remove_absolute("user://qa-integration.once")
         get_tree().root.add_child.call_deferred(load("res://tests/android_integration_capture.gd").new())
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-circuits.once"):
+        DirAccess.remove_absolute("user://qa-circuits.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/three_circuit_checks.gd").new())
 
 func _clear_page() -> void:
     for child in page.get_children():

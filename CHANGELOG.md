@@ -1,3 +1,7 @@
+# v0.1.49 — Three-circuit review
+
+- Adds Driftwood Circuit, Testandori Raceway and Fuji Speedway Short to solo, the Node Editor and native LAN. Fuji uses PRO judging on generated Sakura terrain. See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md).
+
 # v0.1.48 — Unified platform review
 
 - Integrated the PC/Web HUD and native/Web runtime checks into the Park and production-lighting review. Android keeps the touch profile. See the [platform handoff](docs/dev/handoffs/platform-integration-20261125.md).

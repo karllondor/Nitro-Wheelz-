@@ -22,7 +22,10 @@ const BUILTIN: Array = [
     ["SHIN-KAWA","res://tracks/shin_kawa_v2.json"],
     ["SHIN-KAWA • FULL CIRCUIT","res://tracks/shin_kawa_full_circuit.json"],
     ["OVAL","res://tracks/benchmark_oval.json"],
-    ["SWEEPERS","res://tracks/benchmark_sweepers.json"]]
+    ["SWEEPERS","res://tracks/benchmark_sweepers.json"],
+    ["DRIFTWOOD CIRCUIT","res://tracks/driftwood_circuit.json"],
+    ["TESTANDORI RACEWAY","res://tracks/testandori_raceway.json"],
+    ["FUJI SPEEDWAY SHORT","res://tracks/fuji_speedway_short.json"]]
 
 # ------------------------------------------------------------------------ kinds
 
