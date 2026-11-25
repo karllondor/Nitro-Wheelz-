@@ -1,3 +1,7 @@
+## v0.1.48 unified platform review
+
+The [platform handoff](docs/dev/handoffs/platform-integration-20261125.md) covers PRs #35 and #36 on the current Park branch, runtime checks, builds and owner playtest.
+
 ## v0.1.47 production lighting review
 
 The [production-lighting handoff](docs/dev/handoffs/production-lighting-20261125.md) records calibration, runtime controls, LAN, measurements and Android acceptance.

@@ -57,4 +57,4 @@ The evidence package records the four preset views at a fixed spawn and camera, 
 | Two devices | Install the same review APK, host NIGHT and join. Change to DAWN in Park. Guest uses manual OFF and BRAKE. Reconnect and confirm the live time, lights on the other car, props and damage. |
 | Performance | Compare DAY, NIGHT with one car, NIGHT with two cars and NIGHT while scattering stunt props. Record phone model, camera mode and the circumstances of any frame drop. |
 
-PR #35 and #36 remain separate integration work. The new setup, lobby and pause rows use the shared selector script. The racing HUD, camera controls and touch layouts remain the integration points for those PRs. Re-run the UI and network checks after their eventual review.
+The [v0.1.48 platform handoff](platform-integration-20261125.md) follows review PR #44 into the PC/Web HUD and platform integration. The calibration and phone acceptance requirements above apply to the release candidate.

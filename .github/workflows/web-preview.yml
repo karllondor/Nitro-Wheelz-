@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -28,19 +28,38 @@ jobs:
           unzip -q /tmp/godot.tpz -d /tmp/nitro-templates
           cp -a /tmp/nitro-templates/templates/. "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
           echo "GODOT_BIN=$PWD/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
-      - name: Export the browser build (not hardware-tested)
+      - name: Export the browser build
         shell: bash
         run: |
           set -euo pipefail
+          echo "NW_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
           mkdir -p builds/web
           "$GODOT_BIN" --headless --editor --path game --import
           "$GODOT_BIN" --headless --path game --export-release "Web" "$PWD/builds/web/index.html"
           test -s builds/web/index.html
           test -s builds/web/index.wasm
-          echo "Web export generated; manual Android browser test remains NOT RUN."
+          (cd builds/web && sha256sum index.* > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.45_Web
+          name: Nitro-Wheelz_v${{ env.NW_VERSION }}_Web
           path: builds/web/*
           if-no-files-found: error
           compression-level: 6
+      - name: Verify the shipped Web runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          python3 -m pip install Pillow playwright
+          if command -v google-chrome >/dev/null; then
+            export CHROMIUM="$(command -v google-chrome)"
+          else
+            python3 -m playwright install --with-deps chromium
+          fi
+          python3 tools/qa_web_browser.py builds/web builds/qa-web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nitro-Wheelz_v${{ env.NW_VERSION }}_Web-runtime
+          path: builds/qa-web/
+          if-no-files-found: warn
+          retention-days: 30

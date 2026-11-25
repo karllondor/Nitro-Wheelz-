@@ -69,10 +69,8 @@ func _build() -> void:
     centre.add_child(scroll)
     panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(panel)
-    panel.minimum_size_changed.connect(func():
-        scroll.custom_minimum_size.y = minf(s.y * 0.92, panel.get_combined_minimum_size().y))
-    var resize_scroll := func():
-        scroll.custom_minimum_size.y = minf(s.y * 0.92, panel.get_combined_minimum_size().y)
+    var resize_scroll := _fit_pause_scroll.bind(weakref(scroll), weakref(panel), s.y)
+    panel.minimum_size_changed.connect(resize_scroll)
     var margin := MarginContainer.new()
     var p: int = int(20.0*sc)
     for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
@@ -136,6 +134,12 @@ func _build() -> void:
     settings.accent_changed.connect(func(_a: String) -> void: call_deferred("_build"))
     resize_scroll.call_deferred()
 
+func _fit_pause_scroll(scroll_ref: WeakRef, panel_ref: WeakRef, viewport_height: float) -> void:
+    var scroll: ScrollContainer = scroll_ref.get_ref()
+    var panel: PanelContainer = panel_ref.get_ref()
+    if scroll != null and panel != null:
+        scroll.custom_minimum_size.y = minf(viewport_height * 0.92, panel.get_combined_minimum_size().y)
+
 func _lighting_row(parent: Control, title: String, options: Array, value: int, on_chosen: Callable, sc: float, icons := false) -> HBoxContainer:
     var column := VBoxContainer.new()
     column.add_theme_constant_override("separation", 3)
@@ -188,11 +192,14 @@ func _confirm(btn: Button, prompt: String, action: Callable) -> void:
     btn.set_meta("armed",Time.get_ticks_msec())
     btn.text = prompt
     STYLE.style_button(btn,btn.get_theme_font_size("font_size")/21.0,true)
-    get_tree().create_timer(2.5).timeout.connect(func() -> void:
-        if is_instance_valid(btn) and btn.has_meta("armed"):
-            btn.remove_meta("armed")
-            btn.text = label
-            STYLE.style_button(btn,btn.get_theme_font_size("font_size")/21.0,false))
+    get_tree().create_timer(2.5).timeout.connect(_restore_confirmation.bind(weakref(btn), label))
+
+func _restore_confirmation(button_ref: WeakRef, label: String) -> void:
+    var button: Button = button_ref.get_ref()
+    if button != null and button.has_meta("armed"):
+        button.remove_meta("armed")
+        button.text = label
+        STYLE.style_button(button,button.get_theme_font_size("font_size")/21.0,false)
 
 ## Kept for callers/tests: same actions as the panel buttons.
 func _toggle_sound() -> void:

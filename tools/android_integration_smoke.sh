@@ -17,7 +17,8 @@ await_file() {
   echo "Timed out waiting for $1" >&2
   return 1
 }
-for view in mp_race editor_set_start editor_drive; do
+for view in mp_race editor_set_start editor_drive platform_hud_top_down platform_hud_chase \
+  platform_night_pause platform_night_auto platform_night_touch_stop; do
   await_file "ready-$view"
   adb exec-out screencap -p > "$out/$view.png"
   adb shell run-as "$pkg" touch "files/captured-$view"
@@ -29,6 +30,10 @@ grep -q '^PASS' "$out/verdict.txt"
 from pathlib import Path
 from PIL import Image
 for path in Path("builds/integration-android").glob("*.png"):
+    if path.stem.startswith("platform_"):
+        with Image.open(path) as image:
+            assert max(image.convert("L").getextrema()) > 40, f"Blank Android HUD capture {path}"
+        continue
     with Image.open(path) as image:
         w,h=image.size
         scene=image.crop((w//5,h//4,4*w//5,2*h//3)).convert("RGB").resize((128,128))

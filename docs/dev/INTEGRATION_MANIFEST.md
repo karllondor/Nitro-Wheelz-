@@ -6,6 +6,20 @@ CI passes; it is accepted after the owner's phone QA.**
 
 ---
 
+## v0.1.48 — unified platform review (2026-11-25)
+
+| Field | Value |
+| --- | --- |
+| Review branch | `integration/park-unified-rc`, [PR #44](https://github.com/karllondor/Nitro-Wheelz-/pull/44) |
+| Starting source | `17a65634f55df4ffba6e71feaef138458f3faa7b` (production lighting and unified Park) |
+| PC/Web HUD source | PR #36, `1cfab07c617a01abc0a5b8e6d442f3fb77b0e98d` |
+| Runtime QA source | PR #35, `6fa7f27febfe651b6c62b772f3d2f47781e8a885` |
+| Version | App 0.1.48 / Android code 48 / LAN protocol 6 |
+| Build identity | Current PR head, Actions artifact tree and checksums published in the PR |
+| Owner approval | Phone lighting and performance still pending |
+
+[Platform integration handoff](handoffs/platform-integration-20261125.md).
+
 ## v0.1.47 — Park unified lighting review (2026-11-25)
 
 | Field | Source |
