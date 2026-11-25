@@ -14,6 +14,8 @@ const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
+const HUD_STYLE = preload("res://scripts/ui/hud_style.gd")
+const DESKTOP_ACTIONS = preload("res://scripts/ui/race_desktop_actions.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const SKID_SHADER = preload("res://assets/shaders/skid_marks.gdshader")
 ## Half width of one tyre mark in metres (v0.1.35: 0.15, hard edged and dark).
@@ -43,6 +45,7 @@ var front_wheels: Array[Node3D] = []
 var overhead: Camera3D
 var chase: Camera3D
 var touch: NitroRaceTouch
+var desktop_actions: NitroRaceDesktopActions
 var hud: NitroRaceHUD
 var pause_layer: CanvasLayer
 var results_layer: CanvasLayer
@@ -466,11 +469,22 @@ func _make_ui() -> void:
     touch.name = "Steering / Drift / Brake / Gas"
     touch_layer.add_child(touch)
     touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+    touch.visible = HUD_STYLE.platform_profile() == "mobile"
+    # Keep input processing active for synthetic touch / Park tutorials even
+    # on desktop. Visibility controls drawing, not touchscreen event routing.
     touch.camera_requested.connect(_toggle_camera)
     touch.pause_requested.connect(_toggle_pause)
     touch.restart_requested.connect(_restart)
     touch.menu_requested.connect(func():get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+    # On PC/Web the huge touch layer is intentionally absent. CAMERA and PAUSE
+    # have independent mouse targets at the same desktop HUD metric rectangles.
+    desktop_actions = DESKTOP_ACTIONS.new()
+    desktop_actions.name = "Desktop / Web CAMERA and PAUSE"
+    touch_layer.add_child(desktop_actions)
+    desktop_actions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
+    desktop_actions.camera_requested.connect(_toggle_camera)
+    desktop_actions.pause_requested.connect(_toggle_pause)
 
 func _physics_process(delta: float) -> void:
     _read_lamps()
@@ -589,6 +603,8 @@ func _show_results() -> void:
         touch.release_all()
         touch.visible = false
         touch.set_process_input(false)
+    if desktop_actions != null:
+        desktop_actions.visible = false
     results_layer = CanvasLayer.new()
     results_layer.layer = 24
     results_layer.name = "Finish results and local leaderboard"
@@ -799,6 +815,9 @@ func _update_visuals() -> void:
         hud.car_world_position = model.position
         hud.track_progress = float(track.sample_info(model.position)["progress"])
         hud.lap = lap
+        if HUD_STYLE.platform_profile() != "mobile":
+            hud.current_lap_time = maxf(0.0, time_elapsed - lap_started_at)
+            hud.last_lap_time = float(lap_splits.back().time) if not lap_splits.is_empty() else -1.0
         hud.speed = model.speed_kmh()
         hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
@@ -1002,6 +1021,8 @@ func _toggle_pause() -> void:
             touch.release_all()
             touch.visible = false
             touch.set_process_input(false)
+        if desktop_actions != null:
+            desktop_actions.visible = false
         pause_layer = CanvasLayer.new()
         pause_layer.name = "Exclusive Pause Menu"
         pause_layer.layer = 24
@@ -1034,8 +1055,10 @@ func _toggle_pause() -> void:
             pause_layer = null
             pause_menu = null
         if touch != null:
+            touch.visible = HUD_STYLE.platform_profile() == "mobile"
             touch.set_process_input(true)
-            touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+        if desktop_actions != null:
+            desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
     _read_lamps()
     _update_visuals()
 
@@ -1115,8 +1138,10 @@ func _reset_run() -> void:
     if hud != null:
         hud.visible = true
     if touch != null:
+        touch.visible = HUD_STYLE.platform_profile() == "mobile"
         touch.set_process_input(true)
-        touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+    if desktop_actions != null:
+        desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
     model.reset(track.start_position(),track.start_heading())
     car_y = track.road_height_at(model.position)
     car_y_vel = 0.0
