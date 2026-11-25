@@ -17,10 +17,6 @@ const TRACK_PATH: String = "res://tracks/nitro_wheelz_park.json"
 ## Paved surface: a rounded rectangle centred on the origin (full size).
 const PAD_SIZE: Vector2 = Vector2(340.0,260.0)
 const PAD_CORNER: float = 40.0
-## Invisible soft edge: this far outside the paving the car is gently held back
-## (the world must end somewhere). It is NOT a wall: no sound, no shake.
-const SOFT_EDGE_M: float = 30.0
-
 ## The car starts south of the logo, facing it.
 const START_POS: Vector2 = Vector2(0.0,30.0)
 const START_HEADING: float = 0.0
@@ -40,7 +36,7 @@ const DONUT_RIGHT: Vector2 = Vector2(105.0,0.0)    # turn RIGHT (clockwise)
 ## the x axis; the path runs around one circle, through the crossing point on a
 ## straight internal tangent, around the other circle the other way and back.
 const EIGHT_LARGE_CENTRE: Vector2 = Vector2(-70.0,80.0)
-const EIGHT_LARGE_RADIUS: float = 15.0
+const EIGHT_LARGE_RADIUS: float = 19.0
 const EIGHT_SMALL_CENTRE: Vector2 = Vector2(70.0,80.0)
 const EIGHT_SMALL_RADIUS: float = 9.0
 const EIGHT_SPREAD: float = 1.35
@@ -140,8 +136,7 @@ static func route_path(step_m: float = 1.5) -> PackedVector2Array:
 
 # ---------------------------------------------------------------------- pad
 
-## Outline of the paved rounded rectangle, grown by `grow` metres (a SOFT_EDGE_M
-## ring for the invisible edge), `segments` per corner.
+## Outline of the paved rounded rectangle, grown by `grow` metres, with `segments` per corner.
 static func pad_outline(grow: float = 0.0, segments: int = 10) -> PackedVector2Array:
     var half: Vector2 = PAD_SIZE*0.5+Vector2(grow,grow)
     var r: float = PAD_CORNER+grow

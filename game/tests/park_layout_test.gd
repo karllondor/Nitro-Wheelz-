@@ -10,7 +10,7 @@ extends SceneTree
 ##    opposite ways); the long route has wide, forgiving curves (radius >= 17 m);
 ##  * cones: bounded count, none inside the logo, route cones never in the other strand;
 ##  * a starter car follows the long route inside the corridor (physics, weakest car);
-##  * the far soft edge holds the car silently; cones never change the car.
+##  * out-of-bounds recovery returns the car to the plaza; cones never change the car.
 const LAYOUT = preload("res://scripts/park/park_layout.gd")
 const PARK_TRACK = preload("res://scripts/park/park_track.gd")
 const CONES = preload("res://scripts/park/park_cones.gd")
@@ -284,17 +284,16 @@ func _run() -> void:
     if race.find_child("Park guide layer",true,false) != null:
         _fail("FREE DRIVE must not create the guide layer")
         return
-    # the soft edge: far away -> held at the edge, silently
+    # Out-of-bounds recovery resets position, heading and velocity.
     race.model.position = Vector2(2000,2000)
     race.model.velocity = Vector2(30,30)
     var cooldown_before: float = race.collision_cooldown
     race._physics_process(1.0/120.0)
-    var d_edge: float = LAYOUT.pad_distance(race.model.position,0.0)
-    if d_edge > LAYOUT.SOFT_EDGE_M+0.8:
-        _fail("the soft edge did not hold the car (%.1f m outside the paving)" % d_edge)
+    if race.model.position != LAYOUT.START_POS or race.model.velocity != Vector2.ZERO or race.model.heading != LAYOUT.START_HEADING:
+        _fail("recovery did not return a stopped car to the plaza spawn")
         return
     if race.wall_collision_count != 0 or race.collision_cooldown != cooldown_before:
-        _fail("the soft edge must be silent (no wall feedback)")
+        _fail("recovery should not register a wall hit")
         return
     # cones never change the car: drive straight through the donut cones with and without cones
     var results: Array = []
@@ -313,5 +312,5 @@ func _run() -> void:
     if Vector2(a_res[0]).distance_to(Vector2(b_res[0])) > 0.0001 or Vector2(a_res[1]).distance_to(Vector2(b_res[1])) > 0.0001:
         _fail("cones changed the car: with %s without %s" % [str(a_res[0]),str(b_res[0])])
         return
-    print("PASS: Nitro Wheelz Park - one surface with 5 exercises + the logo, no overlap, no collider anywhere, the approved logo asset (blob %s) lying flat and centred, real figure-eights (two crossings, opposite lobes), the long route %.0f m with curves >= %.0f m radius that a starter car follows (E30 and Lada), %d cones (route cone lines on the corridor edge, none on the logo), silent soft edge, cones never change the car" % [blob.substr(0,8),route_len,min_r,cones.size()])
+    print("PASS: Nitro Wheelz Park - one surface with 5 exercises + the logo, no overlap, no collider anywhere, the approved logo asset (blob %s) lying flat and centred, real figure-eights (two crossings, opposite lobes), the long route %.0f m with curves >= %.0f m radius that a starter car follows (E30 and Lada), %d cones (route cone lines on the corridor edge, none on the logo), safe out-of-bounds recovery, cones never change the car" % [blob.substr(0,8),route_len,min_r,cones.size()])
     quit(0)
