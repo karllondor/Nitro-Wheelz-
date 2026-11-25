@@ -1,3 +1,7 @@
+## Multiplayer reliability v2 (review branch)
+
+Host restarts both cars on a shared countdown. LAN results compare both drivers by points and time. The remote car carries its own livery and a cyan marker.
+
 ## [0.1.45] — UNIFIED DEVELOPMENT PREVIEW 3: smoother remote car + HOTSPOT guide for local multiplayer (DEV package, TEST BUILD)
 
 ## Park 2.0 feature preview

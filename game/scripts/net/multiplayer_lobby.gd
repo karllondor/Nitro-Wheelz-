@@ -23,6 +23,8 @@ var mode: String = "menu"
 var ip_input: LineEdit = null
 var ip_text: String = ""
 var starting: bool = false
+const RACE_PATH = "res://scenes/race.tscn"
+var _race_preload: bool = false
 ## Tests: do not really change scene; the request is recorded instead.
 var navigate_enabled: bool = true
 var last_scene: String = ""
@@ -160,6 +162,8 @@ static func clean_address(raw: String) -> String:
 
 func _new_session() -> NitroNetSession:
     _drop_session()
+    if navigate_enabled and not _race_preload:
+        _race_preload = ResourceLoader.load_threaded_request(RACE_PATH) == OK
     session = SESSION.new()
     session.name = "Local multiplayer session"
     get_tree().root.add_child(session)
@@ -197,6 +201,8 @@ func _on_state(st: int) -> void:
 func _after_end() -> void:
     if session == null or not is_instance_valid(session):
         return
+    if starting:
+        return # The race owns an in-flight disconnect once START has been accepted.
     var st: int = session.state
     if st != NitroNetSession.State.FAILED and st != NitroNetSession.State.LOST and st != NitroNetSession.State.CLOSED:
         return
@@ -221,6 +227,14 @@ func _go(scene: String) -> void:
         load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING",false,true)
         await get_tree().process_frame
         await get_tree().process_frame
+    if scene == RACE_PATH and _race_preload:
+        while ResourceLoader.load_threaded_get_status(scene) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+            await get_tree().process_frame
+        if ResourceLoader.load_threaded_get_status(scene) == ResourceLoader.THREAD_LOAD_LOADED:
+            var packed: PackedScene = ResourceLoader.load_threaded_get(scene)
+            _race_preload = false
+            get_tree().change_scene_to_packed(packed)
+            return
     get_tree().change_scene_to_file(scene)
 
 # ------------------------------------------------------------------------ actions
@@ -496,6 +510,8 @@ func _notification(what: int) -> void:
             leave_session()
 
 func _exit_tree() -> void:
+    if _race_preload:
+        ResourceLoader.load_threaded_get(RACE_PATH) # Release the unused request on lobby cancellation.
     # leaving this screen by any other way than START ends the session (nothing keeps listening on the port)
     if not starting and session != null and is_instance_valid(session):
         _disconnect_signals()

@@ -1,5 +1,9 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## Multiplayer reliability v2
+
+Two isolated games exchanged ENet traffic through three rounds per host role. Countdown, restarts, results, livery and disconnect assertions passed. Physical Android Wi-Fi and hotspot QA are pending. [Measurements and checklist](dev/handoffs/issue-31-multiplayer-reliability-v2.md).
+
 PASS only when actually executed. BUILT does not mean played or installed.
 
 | Check | Platform | Status | Evidence |

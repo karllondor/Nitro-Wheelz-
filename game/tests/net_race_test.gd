@@ -308,7 +308,7 @@ func _run() -> void:
     race._show_results()
     var loss_view = race.results_layer.get_child(0)
     var after_loss: String = FileAccess.get_file_as_string(RUNS) if FileAccess.file_exists(RUNS) else ""
-    if loss_view.data.stored or not loss_view.data.multiplayer or after_loss != runs_before:
+    if loss_view.session.standings().size() != 2 or not ("DNF" in [loss_view.cells[3].text,loss_view.cells[7].text]) or after_loss != runs_before:
         _fail("finishing after the peer left changed official results")
         return
     # leaving the race scene leaves no network state and re-enables records
