@@ -119,9 +119,11 @@ class RuntimeChecks:
 
     def resume(self):
         self.select("RESUME")
+        self.expect("CAMERA")
 
     def pause_option(self, label, options, vertical):
         self.pause()
+        self.expect("RESUME")
         w, h = self.capture().size
         assert (w, h) == (1280, 720), "lighting interaction uses the 1280x720 reference viewport"
         # The small stylised buttons can defeat OCR, especially inactive heads.
@@ -130,10 +132,22 @@ class RuntimeChecks:
         start = (w - panel) / 2 + 19
         end = (w + panel) / 2 - 31
         slot = options.index(label) + .5
-        self.driver.click(round(start + (end - start) * slot / len(options)), round(h * vertical))
-        time.sleep(.42)
-        self.resume()
-        time.sleep(.55)
+        x = round(start + (end - start) * slot / len(options))
+        for attempt in range(2):
+            self.driver.click(x, round(h * vertical))
+            time.sleep(.55)
+            # On virtual X11 a queued resume can be rendered after the next
+            # click was submitted. Re-open once if the current frame is already driving.
+            frame = self.capture()
+            if list(text_points(frame, "RESUME")):
+                self.resume()
+                return
+            self.expect("CAMERA")
+            if attempt == 0:
+                self.pause()
+                self.expect("RESUME")
+        self.capture("failure")
+        raise AssertionError(f"No stable pause menu while selecting {label}")
 
     def switch_time(self, label):
         self.pause_option(label, ("DAWN", "DAY", "GOLDEN HOUR", "NIGHT"), .855)
