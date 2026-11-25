@@ -109,6 +109,11 @@ func _check_editor(editor, id: String, path: String, raw: Dictionary, compiled: 
     _check(editor.ready_to_play and editor.preview.centerline == compiled.centerline,id+" editor opening")
     var original: Array = raw.control_points
     if raw.has("world"):
+        # The exported game opens terrain behind its loading card.
+        for frame in range(60):
+            if editor.terrain_field != null:
+                break
+            await get_tree().process_frame
         var world: Dictionary = raw.world
         var evaluation: Dictionary = TERRAIN.evaluate(FIELD.new(world.archetype,world.terrain_seed),raw)
         _check(evaluation.ok and editor.message_label.text.contains("TERRAIN OK"),id+" terrain classification "+str(evaluation.errors)+" "+editor.message_label.text)

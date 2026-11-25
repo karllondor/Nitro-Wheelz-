@@ -13,7 +13,13 @@ adb shell wm dismiss-keyguard
 adb shell wm size 720x1536
 adb shell wm density 240
 adb shell run-as "$pkg" mkdir -p files
-adb shell run-as "$pkg" rm -f files/circuits-verdict.txt 'files/ready-*' 'files/captured-*'
+adb shell run-as "$pkg" rm -f files/circuits-verdict.txt
+circuits=(driftwood_circuit testandori_raceway fuji_speedway_short)
+for circuit in "${circuits[@]}"; do
+    for scene in editor race; do
+        adb shell run-as "$pkg" rm -f "files/ready-$circuit-$scene" "files/captured-$circuit-$scene"
+    done
+done
 adb shell run-as "$pkg" touch files/qa-circuits.once
 adb shell monkey -p "$pkg" 1
 trap 'adb logcat -d -s godot > "$out/godot.log" || true' EXIT
@@ -31,7 +37,7 @@ await_file() {
     return 1
 }
 
-for circuit in driftwood_circuit testandori_raceway fuji_speedway_short; do
+for circuit in "${circuits[@]}"; do
     for scene in editor race; do
         shot="$circuit-$scene"
         await_file "ready-$shot"

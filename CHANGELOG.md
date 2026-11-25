@@ -1,6 +1,6 @@
 # v0.1.49 — Three-circuit review
 
-- Adds Driftwood Circuit, Testandori Raceway and Fuji Speedway Short to solo, the Node Editor and native LAN. Fuji uses PRO judging on generated Sakura terrain. See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md).
+- Adds Driftwood Circuit, Testandori Raceway and Fuji Speedway Short to solo, the Node Editor and native LAN. Fuji uses PRO judging in solo and standard race scoring in LAN, on the same Sakura terrain. See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md).
 
 # v0.1.48 — Unified platform review
 
