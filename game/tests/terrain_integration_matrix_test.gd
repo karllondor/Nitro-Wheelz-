@@ -4,7 +4,7 @@ extends SceneTree
 ##    surface, event mode or landscape; SET START + a shaping move + SAVE AS keep all of it,
 ##  * the race of the shaped circuit judges it as a Club event (zones regenerated from the edited road, narrow surface),
 ##  * the #19 water fix still holds under the shaped road (Astra's own footprint measure: stream >= 2.19 m below the deck),
-##  * multiplayer (v0.1.41) stays on unjudged circuits (no judged event can be shared yet: gated, not removed),
+##  * the built-in LAN whitelist still refuses procedural and player-authored event circuits,
 ##  * a judged event run writes no record / star (same rule as multiplayer and the diagnostic physics mode).
 ## NOT proven here: anything on a phone (owner QA).
 const TOOLS = preload("res://scripts/world/track_edit_tools.gd")
@@ -230,12 +230,8 @@ func _run() -> void:
         return
     var water_min: float = float(m["min"])
     w.queue_free()
-    # ---- multiplayer stays on unjudged circuits (gated, not removed)
-    for path in P.TRACKS:
-        var raw: Dictionary = _read(path)
-        if int(raw.get("event_version",0)) == 1:
-            _fail("a judged event circuit must not be shareable in multiplayer yet: "+path)
-            return
+    # The built-in Fuji circuit uses standard LAN race scoring (multiplayer_lobby_test).
+    # Editor/workshop event files cannot be shared.
     if P.track_allowed("res://tracks/event_workshop_29.json") or P.track_allowed(shaped_path):
         _fail("multiplayer must refuse judged / player circuits")
         return
@@ -243,6 +239,6 @@ func _run() -> void:
         _fail("OPEN list empty")
         return
     _restore()
-    print("PASS: integration matrix - #29 Club ROAD (12 m) circuit on Ojców 621727 opens in the #42 node editor with width / surface / event / landscape intact (CLUB EVENT • ROAD • TERRAIN OK), SET START + shaping + SAVE AS keep them; the race judges it as a Club event on the narrow road with %d zones regenerated from the edited road (were %d); the #19 water fix holds under the shaped road (%d crossings, minimum %.2f m); a judged run writes no record and shows the event panel; EDIT routes shaped -> node editor, untouched -> Terrain Builder; multiplayer stays on the 4 unjudged circuits" % [za.size(),zb.size(),int(m["sections"]),water_min])
-    print("NOT RUN: any of it on a phone; multiplayer on a judged event (not designed yet: gated)")
+    print("PASS: integration matrix - #29 Club ROAD (12 m) circuit on Ojców 621727 opens in the #42 node editor with width / surface / event / landscape intact (CLUB EVENT • ROAD • TERRAIN OK), SET START + shaping + SAVE AS keep them; the race judges it as a Club event on the narrow road with %d zones regenerated from the edited road (were %d); the #19 water fix holds under the shaped road (%d crossings, minimum %.2f m); a judged run writes no record and shows the event panel; EDIT routes shaped -> node editor, untouched -> Terrain Builder; the LAN whitelist still excludes Workshop and user event files" % [za.size(),zb.size(),int(m["sections"]),water_min])
+    print("NOT RUN: any of it on a phone")
     quit(0)

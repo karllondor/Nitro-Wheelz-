@@ -9,6 +9,7 @@ const TRACK_DATA: String = "res://tracks/shin_kawa_v2.json"
 const EVENT_LAYOUT = preload("res://scripts/events/event_layout.gd")
 const EVENT_PAINT = preload("res://scripts/events/event_paint.gd")
 var road_style := "circuit"
+var with_event_judging: bool = true
 var event_mode := ""
 var event_layout := {"zones":[],"warnings":[]}
 var track_data_path: String = TRACK_DATA
@@ -128,8 +129,9 @@ func build() -> void:
         with_environment = false
         apply_region_style(tdesc)
         if raw.get("event_version",0)==1:
-            event_mode=str(tdesc.get("event_mode","practice"))
             road_style=str(raw.get("road_style","circuit"))
+            if with_event_judging:
+                event_mode=str(tdesc.get("event_mode","practice"))
     _apply_compiled(compiled)
     if not tdesc.is_empty() and track_valid:
         if defer_terrain:

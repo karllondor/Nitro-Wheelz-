@@ -6,6 +6,8 @@ const P = preload("res://scripts/net/net_protocol.gd")
 const SESSION = preload("res://scripts/net/net_session.gd")
 const LOBBY = preload("res://scenes/multiplayer_lobby.tscn")
 const BOOT = preload("res://scenes/boot.tscn")
+const RACE = preload("res://scenes/race.tscn")
+const FUJI = "res://tracks/fuji_speedway_short.json"
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 
 var _track_before: Variant = null
@@ -158,6 +160,15 @@ func _run() -> void:
     if not ok:
         _fail("the track choice (back) did not reach the guest")
         return
+    # Visit every circuit in the real lobby before finishing the test on Fuji.
+    for expected in P.TRACKS.slice(1):
+        await process_frame
+        if not _press(host_ui,"TRACK NEXT") or not await _until(func(): return gs.track_path == expected):
+            _fail("the host track choice did not reach the guest: "+expected)
+            return
+    if hs.track_path != FUJI or gs.track_path != FUJI or hs.track_fp != gs.track_fp:
+        _fail("both peers must agree on the built-in Fuji file and fingerprint")
+        return
     await process_frame
     _press(host_ui,"READY")
     _press(guest_ui,"READY")
@@ -178,7 +189,7 @@ func _run() -> void:
     if not ok:
         _fail("START must send both phones to the race scene (host %s, guest %s)" % [str(host_ui.get("last_scene")),str(guest_ui.get("last_scene"))])
         return
-    if str(ProjectSettings.get_setting("nitro/selected_track","")) != before_track:
+    if str(ProjectSettings.get_setting("nitro/selected_track","")) != FUJI:
         _fail("the race must load the agreed track")
         return
     # the session stays alive for the race scene when the lobby goes away
@@ -189,6 +200,14 @@ func _run() -> void:
     if not is_instance_valid(hs) or hs.state == NitroNetSession.State.CLOSED:
         _fail("leaving the lobby for the race must not close the session")
         return
+    SESSION.current = hs
+    var race = RACE.instantiate()
+    root.add_child(race)
+    if race.net == null or race.track.terrain == null or race.track.track_data_path != FUJI \
+            or not str(race.track.event_mode).is_empty() or not race.track.event_layout.zones.is_empty():
+        _fail("Fuji must load with the same terrain and ordinary drift scoring in LAN")
+        return
+    race.free()
     hs.leave()
     gs.leave()
     hs.queue_free()
@@ -236,6 +255,6 @@ func _run() -> void:
     a.queue_free()
     await process_frame
     ProjectSettings.set_setting("nitro/selected_track",_track_before)
-    print("PASS: LOCAL MULTIPLAYER lobby - main menu entry, HOST GAME / JOIN GAME / READY / START / LEAVE through real loopback sessions, malformed and public addresses refused, START only when both READY, track choice reaches the guest, START opens the race scene on both with the agreed track and keeps the session, LEAVE closes the room, a lost host is explained")
+    print("PASS: LOCAL MULTIPLAYER lobby - main menu entry, HOST GAME / JOIN GAME / READY / START / LEAVE through real loopback sessions, malformed and public addresses refused, START only when both READY, all circuit choices reach the guest, START keeps the session and Fuji loads with terrain and standard LAN scoring, LEAVE closes the room, a lost host is explained")
     print("NOT RUN: typing the address with a phone keyboard, Wi-Fi / hotspot reachability on two Android phones (owner QA)")
     quit(0)

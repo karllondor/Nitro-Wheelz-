@@ -86,7 +86,7 @@ func _run() -> void:
             found_src = str(t["kind"]) == "terrain" and not bool(t["open"]) and not bool(t["builtin"])
         if bool(t["builtin"]):
             builtins += 1
-    if not found_src or builtins != 4:
+    if not found_src or builtins != TOOLS.BUILTIN.size():
         _fail("OPEN list: terrain circuit listed = %s, built-in copies = %d" % [str(found_src),builtins])
         return
     # ---- opening it in the node editor (EDIT NODES with this circuit being the last one touched)
@@ -352,6 +352,6 @@ func _run() -> void:
     editor.queue_free()
     await process_frame
     _restore_marker()
-    print("PASS: node editor v0.1.42 - a Terrain Builder circuit opens with its landscape (water shown, TERRAIN OK), OPEN lists terrain / tile / node circuits + 4 built-in copies, SET START makes the selected node knot 0 driving to the next node (road, length and heights unchanged), REVERSE, UNDO, a node over the sea is red and cannot be saved, SAVE AS re-solves heights + keeps the world + marks it node-shaped, the race starts on knot 0 towards knot 1, the Terrain Builder refuses node-shaped tiles and the menu routes them to the node editor, built-in circuits open as copies, four button rows without overlap")
+    print("PASS: node editor v0.1.42 - a Terrain Builder circuit opens with its landscape (water shown, TERRAIN OK), OPEN lists terrain / tile / node circuits and all built-in copies, SET START makes the selected node knot 0 driving to the next node (road, length and heights unchanged), REVERSE, UNDO, a node over the sea is red and cannot be saved, SAVE AS re-solves heights + keeps the world + marks it node-shaped, the race starts on knot 0 towards knot 1, the Terrain Builder refuses node-shaped tiles and the menu routes them to the node editor, built-in circuits open as copies, four button rows without overlap")
     print("NOT RUN: finger feel and the layout on a real phone, open point-to-point routes (still edited in the Terrain Builder)")
     quit(0)

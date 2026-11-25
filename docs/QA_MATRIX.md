@@ -1,3 +1,12 @@
+## v0.1.49 three-circuit review
+
+| Coverage | Evidence |
+| --- | --- |
+| Track lengths, geometry, Solo and Node Editor integration, record isolation, reverse seam and PRO sector scoring | `three_circuits_test` in the pinned Godot suite |
+| Linux portrait editor and race scenes | [Godot 4.7.2 viewport captures](dev/handoffs/evidence/three-circuits/linux-godot-runtime.jpg), Mesa software renderer |
+| Android review build and exported-APK smoke | Draft PR Actions, `Android Debug APK` |
+| Physical-device driving, touch and paired LAN | Owner playtest pending |
+
 # Nitro Wheelz QA evidence — 2026-11-17
 
 ## Platform integration v0.1.48

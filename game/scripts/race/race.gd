@@ -123,9 +123,13 @@ func _ready() -> void:
     (load("res://scripts/ui/hud_style.gd")).ensure_settings()
     TOUCH_DIAG.attach(self)
     var wanted_track: String = str(ProjectSettings.get_setting("nitro/selected_track",TRACK.TRACK_DATA))
+    var use_network := NET_RACE.should_attach()
+    # LAN retains its existing race scoring on a circuit with a solo event.
+    # The road, terrain and track fingerprint are identical on both peers.
     # The Park is a special "track" (open pad, no walls); every circuit keeps the DNA class.
     track = (PARK_TRACK if wanted_track == PARK_LAYOUT.TRACK_PATH else TRACK).new()
     track.track_data_path = wanted_track
+    track.with_event_judging = not use_network
     track.name = "Nitro Track DNA"
     # Game: terrain tracks load behind the loading animation (tests keep the
     # synchronous build).
@@ -165,7 +169,6 @@ func _ready() -> void:
     _make_ui()
     if hud != null:
         hud.lap_limit = laps_total
-    var use_network := NET_RACE.should_attach()
     if track.has_method("is_park") and track.is_park():
         park = PARK.new()
         add_child(park)
