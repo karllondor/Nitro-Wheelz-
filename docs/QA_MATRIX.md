@@ -261,3 +261,13 @@ Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/
 #29 workshop • Local Godot 4.7.2: PASS for mode switching, Builder/race save parity, E30 and RYU-32 real race ticks at opposite edges, points isolation while parked. Physical Android device, sustained touch handling and performance: owner QA pending. See Issue #29 for exact CI and artifact.
 
 Issue 19 footprint regression (Godot 4.7.2, Ojców 621727). Original narrow route and its reversed/shortened edit had 1.20 m minimum clearance. The circuit had -1.02 m. All three now reach at least 2.20 m to rounding at the intersecting triangles. Historical eight-loop water, slope, edit, clear and fresh-world checks also pass. Before/after Builder and race captures run in Android CI on the integration PR.
+
+## Park 2.0 feature preview
+
+| Coverage | Evidence |
+| --- | --- |
+| Connected zones, two uninterrupted laps, both circuit accesses, clear stunt run-ups and landings | Godot `park_site_test` on Linux |
+| Moving cones, approved logo and spawn recovery | Godot `park_layout_test` on Linux |
+| Service speed, repeat-trigger gating and visible fence contact | Godot `park_site_test` on Linux |
+| Chase and Top-down rendering, including portrait preview | Engine captures in the Park 2.0 evidence package |
+| Handset driving FPS and touch | NOT RUN |
