@@ -15,14 +15,16 @@ var _on_edit: Callable
 ## NITRO WHEELZ PARK (issue #27): an optional extra row (TUTORIAL ON / OFF).
 var extra_label: String = ""
 var _on_extra: Callable
+var _park_options: Dictionary = {}
 var settings: NitroSettingsPanel
 ## v0.1.27: settings fold away under SOUND & STYLE (more readable menu).
 static var settings_open: bool = false
 
 func show_pause(on_resume: Callable,on_restart: Callable,on_garage: Callable,on_edit: Callable = Callable(),
-        on_extra: Callable = Callable(),label_extra: String = "") -> void:
+        on_extra: Callable = Callable(),label_extra: String = "",park_options: Dictionary = {}) -> void:
     _on_extra = on_extra
     extra_label = label_extra
+    _park_options = park_options
     _on_resume = on_resume
     _on_restart = on_restart
     _on_garage = on_garage
@@ -76,16 +78,27 @@ func _build() -> void:
     stack.add_child(row)
     # v0.1.32 (owner QA): RESTART and GARAGE / MENU end the run, so they ask
     # for a second tap (the label says so for 2.5 s) instead of a popup.
-    var rb: Button = _menu_button(row,"↻  RESTART",Callable(),sc,60.0,21.0)
-    rb.name = "RESTART"
-    rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RESTART",_on_restart))
+    var restart_label: String = _park_options.get("restart","↻  RESTART")
+    var rb: Button = _menu_button(row,restart_label,Callable(),sc,60.0,21.0)
+    rb.name = _park_options.get("restart","RESTART")
+    if _on_restart.is_valid():
+        rb.pressed.connect(_confirm.bind(rb,"TAP AGAIN TO RECOVER" if _park_options.has("restart") else "TAP AGAIN TO RESTART",_on_restart))
+    else:
+        rb.text = "RESTART UNAVAILABLE"
+        rb.disabled = true
     if _on_edit.is_valid():
         _menu_button(row,"✎  EDIT TRACK",_on_edit,sc,60.0,21.0).name = "EDIT TRACK"
     if _on_extra.is_valid() and extra_label != "":
         _menu_button(stack,extra_label,_on_extra,sc,60.0,19.0).name = "Park tutorial toggle"
-    var gb: Button = _menu_button(stack,"GARAGE / MENU",Callable(),sc,60.0,21.0)
-    gb.name = "GARAGE / MENU"
-    gb.pressed.connect(_confirm.bind(gb,"TAP AGAIN TO LEAVE THE RUN",_on_garage))
+    var reset_action: Callable = _park_options.get("reset",Callable())
+    if reset_action.is_valid():
+        var reset: Button = _menu_button(stack,"RESET TRAINING OBJECTS",Callable(),sc,60.0,19.0)
+        reset.name = "RESET TRAINING OBJECTS"
+        reset.pressed.connect(_confirm.bind(reset,"TAP AGAIN TO RESET CONES",reset_action))
+    var leave_label: String = _park_options.get("leave","GARAGE / MENU")
+    var gb: Button = _menu_button(stack,leave_label,Callable(),sc,60.0,21.0)
+    gb.name = leave_label
+    gb.pressed.connect(_confirm.bind(gb,"TAP AGAIN TO RETURN" if _park_options.has("leave") else "TAP AGAIN TO LEAVE THE RUN",_on_garage))
     var fold: Button = _menu_button(stack,("▾  SOUND & STYLE" if settings_open else "▸  SOUND & STYLE"),
         func() -> void:
             settings_open = not settings_open

@@ -3,23 +3,34 @@ class_name NitroNetProtocol
 ## Offline local multiplayer (issue #31): wire protocol of the two-phone prototype.
 ##
 ## Transport = ENet (UDP) between two phones on the same Wi-Fi / hotspot, no Internet, no server, no account.
-## Two packet kinds, the first byte says which:
+## The first byte identifies reliable control, car snapshots, or Park cone snapshots:
 ##   KIND_CONTROL  (1) + var_to_bytes(Dictionary): lobby / handshake / countdown, RELIABLE, rare, decoded with
-##                 bytes_to_var (NO object decoding) and validated field by field (validate_control).
-##   KIND_SNAPSHOT (2) + 39 bytes of fixed binary layout: the sender's own car, UNRELIABLE ORDERED, 20 Hz.
+##                 bytes_to_var (no object decoding), with validated fields (validate_control).
+##   KIND_SNAPSHOT (2) + 43 bytes: the sender's own car, UNRELIABLE ORDERED, 20 Hz.
+##   KIND_PARK_CONES (3): bounded host object state, unreliable in motion and reliable when settled.
 ## Remote positions are CLIENT-REPORTED: they are for the other player's eyes only. They are never trusted for
 ## ranking, records or stars (prototype, collisionless).
-const PROTOCOL_VERSION: int = 1
+const PROTOCOL_VERSION: int = 3
 const DEFAULT_PORT: int = 47821
 const MAX_PLAYERS: int = 2
 const SNAPSHOT_HZ: float = 20.0
 const KIND_CONTROL: int = 1
 const KIND_SNAPSHOT: int = 2
-const SNAPSHOT_SIZE: int = 40
+const KIND_PARK_CONES: int = 3
+const PARK_CONE_HEADER := 11
+const PARK_CONE_BYTES := 11
+const MAX_PARK_CONES := 80
+const PARK_PATH := "res://tracks/nitro_wheelz_park.json"
+const PARK_SITE = preload("res://scripts/park/park_site.gd")
+const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
+const SNAPSHOT_SIZE: int = 44
 const MAX_CONTROL_BYTES: int = 1024
 const MAX_NAME_CHARS: int = 16
 
-enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12 }
+enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12, RESTART = 13, FINISH = 14, PARK_OPEN = 15, PARK_EVENT = 16, PARK_LOBBY = 17 }
+
+## Reserved event IDs become valid only when their implementation and validator ship.
+enum ParkEvent { RESET_TRAINING = 1, OBJECT_IMPULSE, PLAYER_CONTACT, BUMPER_DAMAGE, DETACH_COMPONENT, SERVICE_REPAIR }
 
 ## Built-in circuits both phones carry in the same APK. The host's choice travels as one of these paths
 ## (never an arbitrary path, never a user:// file) plus the SHA-256 of the file, so a different build or an
@@ -35,12 +46,21 @@ static func game_version() -> String:
     return str(ProjectSettings.get_setting("application/config/version","unknown"))
 
 static func track_allowed(path: String) -> bool:
-    return TRACKS.has(path)
+    return path == PARK_PATH or TRACKS.has(path)
 
 ## SHA-256 of a whitelisted track file ("" for anything else): the layout identity both phones must share.
 static func track_fingerprint(path: String) -> String:
     if not track_allowed(path) or not FileAccess.file_exists(path):
         return ""
+    if path == PARK_PATH:
+        var layout_bytes := var_to_bytes([PARK_SITE.LAN_LAYOUT_REVISION, PARK_SITE.BOUNDS,
+            PARK_SITE.LOOP, PARK_SITE.ENTRY_LANE, PARK_SITE.EXIT_LANE, PARK_SITE.STUNT_ACCESS,
+            PARK_SITE.PAVED, PARK_SITE.RAMPS, PARK_SITE.REPAIR, PARK_LAYOUT.cones()])
+        var hash_context := HashingContext.new()
+        hash_context.start(HashingContext.HASH_SHA256)
+        hash_context.update(FileAccess.get_file_as_bytes(path))
+        hash_context.update(layout_bytes)
+        return hash_context.finish().hex_encode()
     return FileAccess.get_sha256(path)
 
 static func clean_name(raw: String) -> String:
@@ -78,6 +98,9 @@ static func _is_str(d: Dictionary, key: String, max_len: int) -> bool:
 
 ## "" when the message is well-formed, else the reason (the packet is dropped and counted, never executed).
 static func validate_control(m: Dictionary) -> String:
+    if m["t"] in [Msg.START, Msg.RESTART, Msg.LOADED, Msg.COUNTDOWN, Msg.FINISH, Msg.PARK_OPEN, Msg.PARK_EVENT, Msg.PARK_LOBBY]:
+        if not (m.get("round") is int) or m.round < 1 or m.round > 0xffffffff:
+            return "round"
     match int(m["t"]):
         Msg.HELLO:
             if not (m.get("proto",null) is int) or not _is_str(m,"ver",24) or not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16):
@@ -91,11 +114,16 @@ static func validate_control(m: Dictionary) -> String:
         Msg.INFO:
             if not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16) or not (m.get("ready",null) is bool) or not _is_str(m,"fp",80):
                 return "INFO fields"
+            if not (m.get("look") is Dictionary) or m.look.size() > 5:
+                return "appearance"
+            for key in m.look:
+                if key not in ["paint_color_hex","paint_finish","wheel_asset_id","wheel_finish","livery_id"] or not _is_str(m.look,key,48):
+                    return "appearance field"
         Msg.TRACK, Msg.START:
             if not _is_str(m,"track",96) or not _is_str(m,"fp",80):
                 return "TRACK fields"
         Msg.COUNTDOWN:
-            if not (m.get("secs",null) is float) or float(m["secs"]) < 0.5 or float(m["secs"]) > 10.0:
+            if not (m.get("secs",null) is float) or m.secs != 3.0 or not (m.get("go_ms") is int):
                 return "COUNTDOWN seconds"
         Msg.PING:
             if not (m.get("c",null) is int):
@@ -103,16 +131,72 @@ static func validate_control(m: Dictionary) -> String:
         Msg.PONG:
             if not (m.get("c",null) is int):
                 return "PONG"
-        Msg.LOADED, Msg.LEAVE:
+            if not (m.get("host_ms") is int):
+                return "host clock"
+        Msg.FINISH:
+            if not (m.get("points") is int) or m.points < 0 or m.points > 100000000:
+                return "finish points"
+            if not (m.get("time_ms") is int) or m.time_ms < 0 or m.time_ms > 0x7fffffff:
+                return "finish time"
+        Msg.PARK_OPEN:
+            var host_at: Variant = m.get("host_at")
+            if not _valid_revision(m.get("revision")) or not (host_at is Vector2) or not host_at.is_finite() or not PARK_SITE.BOUNDS.has_point(host_at):
+                return "Park open state"
+        Msg.PARK_EVENT:
+            if not _valid_revision(m.get("revision")) or not (m.get("event") is int) or not (m.get("payload") is Dictionary):
+                return "Park event"
+            if m.event != ParkEvent.RESET_TRAINING or not m.payload.is_empty():
+                return "Unsupported Park event"
+        Msg.RESTART, Msg.LOADED, Msg.LEAVE, Msg.PARK_LOBBY:
             pass
         _:
             return "unknown type %d" % int(m["t"])
     return ""
 
+static func _valid_revision(value: Variant) -> bool:
+    return value is int and value >= 0 and value <= 0xffffffff
+
+## Full sparse cone state. Each record is index, float32 x/z, tilt u8 and direction u8.
+## At most 891 bytes including round/revision/sequence, below the control packet cap.
+static func pack_park_cones(round_id: int, revision: int, seq: int, poses: Array) -> PackedByteArray:
+    var b := PackedByteArray()
+    b.resize(PARK_CONE_HEADER + PARK_CONE_BYTES * poses.size())
+    b[0] = KIND_PARK_CONES
+    b.encode_u32(1,round_id)
+    b.encode_u32(5,revision)
+    b.encode_u16(9,seq)
+    var offset := PARK_CONE_HEADER
+    for pose in poses:
+        b[offset] = pose.index
+        b.encode_float(offset+1,pose.pos.x)
+        b.encode_float(offset+5,pose.pos.y)
+        b[offset+9] = roundi(clampf(pose.tilt/(PI*0.5),0.0,1.0)*255.0)
+        b[offset+10] = roundi(fposmod(pose.angle,TAU)*256.0/TAU) & 0xff
+        offset += PARK_CONE_BYTES
+    return b
+
+static func unpack_park_cones(b: PackedByteArray) -> Dictionary:
+    if b.size() < PARK_CONE_HEADER or b[0] != KIND_PARK_CONES:
+        return {}
+    var bytes := b.size()-PARK_CONE_HEADER
+    if bytes % PARK_CONE_BYTES != 0 or bytes > MAX_PARK_CONES*PARK_CONE_BYTES:
+        return {}
+    var poses: Array = []
+    var seen := {}
+    for offset in range(PARK_CONE_HEADER,b.size(),PARK_CONE_BYTES):
+        var index := int(b[offset])
+        var at := Vector2(b.decode_float(offset+1),b.decode_float(offset+5))
+        if index >= MAX_PARK_CONES or seen.has(index) or not at.is_finite() or maxf(absf(at.x),absf(at.y)) > 900.0:
+            return {}
+        seen[index] = true
+        poses.append({"index":index,"pos":at,"tilt":float(b[offset+9])/255.0*PI*0.5,
+            "angle":float(b[offset+10])*TAU/256.0})
+    return {"round":b.decode_u32(1),"revision":b.decode_u32(5),"seq":b.decode_u16(9),"poses":poses}
+
 # ---------------------------------------------------------------- snapshot packets
 
-## Layout (little endian, 40 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
-## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score.
+## Layout (little endian, 44 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
+## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score, [40] u32 round.
 ## flags: 1 drifting, 2 paused, 4 reset (a deliberate jump: restart), 8 handbrake.
 static func pack_snapshot(s: Dictionary) -> PackedByteArray:
     var b := PackedByteArray()
@@ -129,13 +213,14 @@ static func pack_snapshot(s: Dictionary) -> PackedByteArray:
     b.encode_float(28,float(s.get("yaw",0.0)))
     b.encode_float(32,float(s.get("steer",0.0)))
     b.encode_s32(36,int(s.get("score",0)))
+    b.encode_u32(40,int(s.get("round",0)))
     return b
 
 ## {} for anything malformed: wrong size / kind, NaN / infinity, absurd position / speed / angle / score.
 static func unpack_snapshot(b: PackedByteArray) -> Dictionary:
     if b.size() != SNAPSHOT_SIZE or b[0] != KIND_SNAPSHOT:
         return {}
-    var s: Dictionary = {"flags":int(b[1]),"seq":b.decode_u16(2),"ms":b.decode_u32(4),"x":b.decode_float(8),"z":b.decode_float(12),
+    var s: Dictionary = {"round":b.decode_u32(40),"flags":int(b[1]),"seq":b.decode_u16(2),"ms":b.decode_u32(4),"x":b.decode_float(8),"z":b.decode_float(12),
         "heading":b.decode_float(16),"vx":b.decode_float(20),"vz":b.decode_float(24),"yaw":b.decode_float(28),
         "steer":b.decode_float(32),"score":b.decode_s32(36)}
     for key in ["x","z","heading","vx","vz","yaw","steer"]:

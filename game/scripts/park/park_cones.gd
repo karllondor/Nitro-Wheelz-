@@ -24,6 +24,7 @@ var tilt: PackedFloat32Array = PackedFloat32Array()
 var tilt_vel: PackedFloat32Array = PackedFloat32Array()
 var touched: PackedByteArray = PackedByteArray()
 var awake: Dictionary = {}
+var _network_displaced: Dictionary = {}
 var multimesh: MultiMesh
 var hits_total: int = 0
 
@@ -70,6 +71,7 @@ func reset_all() -> void:
         touched[i] = 0
         _write(i)
     awake.clear()
+    _network_displaced.clear()
 
 func displaced_count() -> int:
     var n: int = 0
@@ -83,6 +85,10 @@ func displaced_count() -> int:
 ## car, never writes it.
 func step(delta: float, car_pos: Vector2, heading: float, car_vel: Vector2,
         half_len: float, half_wid: float) -> void:
+    contact(car_pos,heading,car_vel,half_len,half_wid)
+    advance(delta)
+
+func contact(car_pos: Vector2, heading: float, car_vel: Vector2, half_len: float, half_wid: float) -> void:
     var fwd := Vector2(sin(heading),-cos(heading))
     var right := Vector2(cos(heading),sin(heading))
     var near: float = half_len+half_wid+1.0
@@ -96,7 +102,8 @@ func step(delta: float, car_pos: Vector2, heading: float, car_vel: Vector2,
         var ly: float = dx.dot(right)
         if absf(lx) < half_len+CONE_RADIUS and absf(ly) < half_wid+CONE_RADIUS:
             _hit(i,dx,car_vel,speed)
-    # advance the cones that are moving
+
+func advance(delta: float) -> void:
     var done: Array = []
     for key in awake.keys():
         var i2: int = int(key)
@@ -115,6 +122,32 @@ func step(delta: float, car_pos: Vector2, heading: float, car_vel: Vector2,
             done.append(key)
     for k in done:
         awake.erase(k)
+
+## Complete sparse state, including already settled cones for a late joiner.
+func network_poses() -> Array:
+    var poses := []
+    for i in range(homes.size()):
+        if tilt[i] > 0.001 or positions[i].distance_squared_to(homes[i]) > 0.0001:
+            poses.append({"index":i,"pos":positions[i],"tilt":tilt[i],"angle":fall_dir[i].angle()})
+    return poses
+
+func apply_network_poses(poses: Array) -> void:
+    var displaced := {}
+    for pose in poses:
+        var i: int = pose.index
+        if i >= homes.size():
+            continue
+        displaced[i] = true
+        positions[i] = pose.pos
+        tilt[i] = pose.tilt
+        fall_dir[i] = Vector2.from_angle(pose.angle)
+        _write(i)
+    for i in _network_displaced:
+        if not displaced.has(i):
+            positions[i] = homes[i]
+            tilt[i] = 0.0
+            _write(i)
+    _network_displaced = displaced
 
 func _hit(i: int, dx: Vector2, car_vel: Vector2, speed: float) -> void:
     var radial: Vector2 = dx.normalized() if dx.length_squared() > 0.0001 else Vector2(0,-1)

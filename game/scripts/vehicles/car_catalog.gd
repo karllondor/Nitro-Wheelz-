@@ -224,7 +224,7 @@ static func info(variant: String) -> Dictionary:
 
 ## New car node for a variant (Lada red/white, the RYU-32 coupe or a Car
 ## Factory GLB car wearing its saved cosmetics: same node in garage + race).
-static func make(variant: String) -> Node3D:
+static func make(variant: String, remote_choice: Variant = null) -> Node3D:
     var v: String = valid(variant)
     if uses_factory_test_model(v):
         var fm: Dictionary = factory_model(v)
@@ -232,12 +232,14 @@ static func make(variant: String) -> Node3D:
         # Cars with presets wear the player's saved look; the others (AI test
         # body, baked paint) the look from their model file.
         var chosen: Dictionary = COSMETICS.current(v,cprof) if COSMETICS.supported(cprof) else (fm["look"] as Dictionary)
+        if remote_choice is Dictionary and COSMETICS.supported(cprof):
+            chosen = COSMETICS.sanitize(remote_choice,cprof)
         return FACTORY_CAR.new().setup(v,{"model":fm["model"]},visual_choice(v,chosen))
     if v == "blue" or v == "flame":      # "flame" without its GLB falls back to the coupe
         return COUPE.new()
     if bool(info(v).get("factory",false)):
         var prof: Dictionary = profile(v)
-        return FACTORY_CAR.new().setup(v,prof,COSMETICS.current(v,prof))
+        return FACTORY_CAR.new().setup(v,prof,COSMETICS.sanitize(remote_choice,prof) if remote_choice is Dictionary else COSMETICS.current(v,prof))
     var lada: NitroLadaLowPoly = LADA.new()
     lada.paint_variant = v
     return lada
