@@ -1,5 +1,9 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## Park vehicle contacts and bumpers
+
+The [damage handoff](dev/handoffs/park-vehicle-damage.md) records the two-process ENet matrix, scene regressions, renderer samples and physical-phone procedure.
+
 ## Interactive Park stunt preview
 
 | Coverage | Evidence |

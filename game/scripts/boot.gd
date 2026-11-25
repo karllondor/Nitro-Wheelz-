@@ -93,6 +93,9 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-workshop.once"):
         DirAccess.remove_absolute("user://qa-workshop.once")
         get_tree().root.add_child.call_deferred(preload("res://tests/android_workshop_capture.gd").new())
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-damage.once"):
+        DirAccess.remove_absolute("user://qa-damage.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/park_damage_capture.gd").new())
     # #33 on-device integration check (multiplayer + node editor + terrain drive), same explicit adb marker mechanism.
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-integration.once"):
         DirAccess.remove_absolute("user://qa-integration.once")
@@ -266,6 +269,11 @@ func _settings_page() -> void:
 
 func _dev_page() -> void:
     _title("DEVELOPER")
+    if OS.has_feature("debug") and OS.has_feature("android"):
+        _small("PARK DAMAGE FRAME TEST",func():
+            var probe = load("res://tests/park_damage_capture.gd").new()
+            probe.interactive = true
+            get_tree().root.add_child(probe))
     _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
     # v0.1.38 (owner decision 2026-11-22, #25): the physics mode used by the NEXT race. ARCADE_PLUS
     # (default) = the approved arcade handling with credible top speeds; REAL_POWER_TEST = a power-curve

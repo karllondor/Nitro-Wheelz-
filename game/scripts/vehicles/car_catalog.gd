@@ -224,10 +224,14 @@ static func info(variant: String) -> Dictionary:
 
 ## New car node for a variant (Lada red/white, the RYU-32 coupe or a Car
 ## Factory GLB car wearing its saved cosmetics: same node in garage + race).
-static func make(variant: String, remote_choice: Variant = null) -> Node3D:
+static func make(variant: String, remote_choice: Variant = null, park_parts := false) -> Node3D:
     var v: String = valid(variant)
-    if uses_factory_test_model(v):
+    var split_bumpers := park_parts and v == "white"
+    if split_bumpers or uses_factory_test_model(v):
         var fm: Dictionary = factory_model(v)
+        if split_bumpers:
+            fm = fm.duplicate(true)
+            fm.model.glb = "res://assets/cars/park_damage/white_lada.gltf"
         var cprof: Dictionary = cosmetic_profile(v)
         # Cars with presets wear the player's saved look; the others (AI test
         # body, baked paint) the look from their model file.

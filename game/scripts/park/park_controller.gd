@@ -16,6 +16,7 @@ const PROGRESS = preload("res://scripts/park/park_progress.gd")
 const GHOST = preload("res://scripts/park/park_ghost.gd")
 const AIR = preload("res://scripts/park/park_air.gd")
 const STUNTS = preload("res://scripts/park/park_stunt_world.gd")
+const DAMAGE = preload("res://scripts/park/park_vehicle_damage.gd")
 const NET_TRAINING = preload("res://scripts/net/net_park_training.gd")
 const GUIDE = preload("res://scripts/park/park_guide.gd")
 
@@ -24,13 +25,14 @@ const SETTING_MODE: String = "nitro/park_mode"
 ## RESTART TUTORIAL from the menu: forget the saved progress before starting.
 const SETTING_RESET: String = "nitro/park_reset"
 
-## Hook for a future Park-only repair system.
+## Emitted once per stopped visit to the service bay.
 signal repair_requested
 
 var race: Node3D
 var room: NitroNetSession
 var shared_training: Node
 var air = AIR.new()
+var damage: Node
 var stunts: Node
 var _previous_stunt_car := Vector3.INF
 var _jump_shadow: MeshInstance3D
@@ -70,7 +72,11 @@ func setup(race_node: Node3D, park_room: NitroNetSession = null) -> void:
     cones.cone_hit.connect(_on_cone_hit)
     stunts = STUNTS.new()
     add_child(stunts)
+    damage = DAMAGE.new()
+    add_child(damage)
+    damage.setup(self)
     stunts.setup(room)
+    stunts.object_impact.connect(damage.prop_impact)
     _make_jump_shadow()
     if room != null:
         shared_training = NET_TRAINING.new()
@@ -321,8 +327,11 @@ func _service_step(dt: float, model: NitroDriveModel) -> void:
     _repair_wait += dt
     if _repair_wait >= SITE.STOP_SECONDS:
         _repair_serviced = true
+        var slot: int = damage.local_slot*2
+        var pristine: bool = damage.mounts[slot]==3 and damage.mounts[slot+1]==3
+        if pristine and (_notice_left<=0 or not _site_notice.text.contains("REPAIRED")):
+            _show_site_notice("SERVICE COMPLETE")
         repair_requested.emit()
-        _show_site_notice("SERVICE COMPLETE")
 
 func _make_site_notice() -> void:
     var layer := CanvasLayer.new()

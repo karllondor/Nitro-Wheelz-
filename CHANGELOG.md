@@ -1,5 +1,9 @@
 ## Multiplayer reliability v2 (review branch)
 
+## Park vehicle interaction experiment
+
+Added optional host-resolved LAN Park contacts, independent cosmetic bumpers on the pearl-white Lada and free synchronized workshop repairs.
+
 ## Interactive stunt playground preview
 
 - Opens three Park 2.0 ramps with Park-only airborne motion and adds pooled cardboard and barriers. The LAN host synchronizes jumps, prop movement and resets.

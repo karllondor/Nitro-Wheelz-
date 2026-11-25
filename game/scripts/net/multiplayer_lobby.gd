@@ -484,6 +484,12 @@ func _player_card(role: String, who: String, car: String, ready: bool) -> void:
 
 ## Host: TRACK < name >; the joiner only reads it (the host decides, both must press READY again after a change).
 func _track_row() -> void:
+    if session.is_park():
+        var caption := "VEHICLE COLLISIONS: "+("ON" if session.vehicle_collisions else "OFF")
+        if session.is_host:
+            _big(caption,func(): session.set_park_collisions(not session.vehicle_collisions)).name = "Vehicle collisions"
+        else:
+            _label(caption,18,STYLE.WHITE)
     var name_text: String = "PARK FREE ROAM" if session.is_park() else str(P.TRACK_NAMES.get(session.track_path,"TRACK"))
     if session.is_host:
         var row := HBoxContainer.new()

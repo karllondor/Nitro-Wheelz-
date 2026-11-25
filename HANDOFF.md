@@ -1,5 +1,9 @@
 ## LAN reliability and Park multiplayer
 
+## Park vehicle damage preview
+
+The [vehicle damage handoff](docs/dev/handoffs/park-vehicle-damage.md) covers host contacts, the white Lada, free service, test evidence and the two-phone checklist.
+
 ## Interactive stunt playground preview
 
 See the [stunt handoff](docs/dev/handoffs/park-stunt-physics.md) for ramp physics, object and collision interfaces, benchmark evidence and the owner playtest.

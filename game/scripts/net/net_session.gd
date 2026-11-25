@@ -68,6 +68,8 @@ var fingerprint_override: String = ""
 var countdown_announced_usec: int = 0
 
 var round_id: int = 0
+var vehicle_collisions := false
+var bumper_mounts := PackedByteArray([3,3,3,3]) # front/rear for host, then guest
 var park_revision := 0
 var park_host_position := Vector2(-5.0,30.0)
 var returning_to_lobby := false
@@ -187,7 +189,7 @@ func _info_message() -> Dictionary:
     for field in CARS.COSMETICS.SAVE_FIELDS:
         if saved.has(field):
             look[field] = saved[field]
-    return {"look":look,"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":track_fp}
+    return {"collisions":vehicle_collisions,"look":look,"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":track_fp}
 
 # --------------------------------------------------------------------- lobby API
 
@@ -205,7 +207,16 @@ func set_car(car: String) -> void:
             _send(_info_message(),_peer_target())
         roster_changed.emit()
 
-## Host only: the circuit of this session. Both players have to confirm READY again.
+## The Park host selects contact mode before entering the scene.
+func set_park_collisions(enabled: bool) -> void:
+    if not is_host or not is_park() or state not in [State.HOSTING,State.LOBBY]:
+        return
+    vehicle_collisions = enabled
+    if other_id != 0:
+        _send(_info_message(),other_id)
+    roster_changed.emit()
+
+## Both players confirm READY again after a circuit change.
 func choose_track(path: String) -> void:
     if not is_host or not P.track_allowed(path) or (state != State.HOSTING and state != State.LOBBY):
         return
@@ -227,6 +238,7 @@ func start_race() -> bool:
         return false
     _prepare_round(round_id+1)
     park_revision = 0
+    bumper_mounts.fill(3)
     _send_start()
     _set_state(State.STARTING)
     start_requested.emit(track_path)
@@ -302,7 +314,7 @@ func _maybe_open_drive() -> void:
         return
     if is_park():
         if state in [State.STARTING,State.PARK] and other_id != 0:
-            _send({"t":P.Msg.PARK_OPEN,"round":round_id,"revision":park_revision,"host_at":park_host_position},other_id)
+            _send({"t":P.Msg.PARK_OPEN,"round":round_id,"revision":park_revision,"host_at":park_host_position,"mounts":bumper_mounts,"collisions":vehicle_collisions},other_id)
             _set_state(State.PARK)
             park_peer_ready.emit()
             park_cones_sync_requested.emit()
@@ -451,6 +463,8 @@ func _lose(reason: String) -> void:
     _go_usec = 0
     last_error = reason
     if keep_park_open:
+        bumper_mounts[2] = 3
+        bumper_mounts[3] = 3
         _loaded_other = false
         _last_snap_seq = -1
         _set_state(State.PARK)
@@ -602,6 +616,8 @@ func _on_control(m: Dictionary) -> void:
             if not is_host and is_park() and state == State.STARTING and m.round == round_id:
                 park_revision = m.revision
                 park_host_position = m.host_at
+                vehicle_collisions = m.collisions
+                bumper_mounts = m.mounts
                 _set_state(State.PARK)
                 park_peer_ready.emit()
         P.Msg.PARK_EVENT:
@@ -641,7 +657,7 @@ func _on_hello(m: Dictionary) -> void:
         return
     other = {"name":P.clean_name(str(m["name"])),"car":str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red","ready":false,"fp_ok":false}
     _hello_deadline = 0
-    _send({"t":P.Msg.WELCOME,"idx":1,"name":me["name"],"car":me["car"],"track":track_path,"fp":(fingerprint_override if fingerprint_override != "" else track_fp)},other_id)
+    _send({"t":P.Msg.WELCOME,"collisions":vehicle_collisions,"idx":1,"name":me["name"],"car":me["car"],"track":track_path,"fp":(fingerprint_override if fingerprint_override != "" else track_fp)},other_id)
     if state == State.PARK:
         round_id += 1
         _loaded_other = false
@@ -668,6 +684,7 @@ func _on_welcome(m: Dictionary) -> void:
         return
     track_path = str(m["track"])
     track_fp = str(m["fp"])
+    vehicle_collisions = m.collisions
     other = {"name":P.clean_name(str(m["name"])),"car":str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red","ready":false,"fp_ok":true}
     _hello_deadline = 0
     _set_state(State.LOBBY)
@@ -678,6 +695,8 @@ func _on_welcome(m: Dictionary) -> void:
 func _on_info(m: Dictionary) -> void:
     if other.is_empty() or (state != State.LOBBY and not (is_host and state == State.PARK and not _loaded_other)):
         return
+    if not is_host:
+        vehicle_collisions = m.collisions
     other["look"] = m.look
     other["name"] = P.clean_name(str(m["name"]))
     other["car"] = str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red"
