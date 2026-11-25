@@ -119,7 +119,18 @@ class RuntimeChecks:
 
     def resume(self):
         self.select("RESUME")
-        self.expect("CAMERA")
+        if self.capture().width >= 1280:
+            self.expect("CAMERA")
+            return
+        # The small Web canvas can render CAMERA below reliable OCR size.
+        # PAUSED is a large, unambiguous indicator that the modal is still open.
+        stop = time.monotonic() + 12
+        while time.monotonic() < stop:
+            if not list(text_points(self.capture(), "PAUSED")):
+                return
+            time.sleep(.25)
+        self.capture("failure")
+        raise AssertionError("RESUME did not close the pause menu in the narrow canvas")
 
     def pause_option(self, label, options, vertical):
         self.pause()
