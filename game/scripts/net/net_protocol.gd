@@ -8,9 +8,9 @@ class_name NitroNetProtocol
 ##                 bytes_to_var (no object decoding), with validated fields (validate_control).
 ##   KIND_SNAPSHOT (2) + 43 bytes: the sender's own car, UNRELIABLE ORDERED, 20 Hz.
 ##   KIND_PARK_CONES (3): bounded host object state, unreliable in motion and reliable when settled.
-## Remote positions are CLIENT-REPORTED: they are for the other player's eyes only. They are never trusted for
-## ranking, records or stars (prototype, collisionless).
-const PROTOCOL_VERSION: int = 4
+## Peers report their own driving pose. The Park host resolves optional contacts.
+## Competitive races keep remote cars visual-only.
+const PROTOCOL_VERSION: int = 5
 const DEFAULT_PORT: int = 47821
 const MAX_PLAYERS: int = 2
 const SNAPSHOT_HZ: float = 20.0
@@ -109,12 +109,14 @@ static func validate_control(m: Dictionary) -> String:
             if not (m.get("proto",null) is int) or not _is_str(m,"ver",24) or not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16):
                 return "HELLO fields"
         Msg.WELCOME:
+            if not (m.get("collisions") is bool): return "collision mode"
             if not _is_str(m,"track",96) or not _is_str(m,"fp",80) or not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16) or not (m.get("idx",null) is int):
                 return "WELCOME fields"
         Msg.REJECT:
             if not _is_str(m,"code",24) or not _is_str(m,"text",160):
                 return "REJECT fields"
         Msg.INFO:
+            if not (m.get("collisions") is bool): return "collision mode"
             if not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16) or not (m.get("ready",null) is bool) or not _is_str(m,"fp",80):
                 return "INFO fields"
             if not (m.get("look") is Dictionary) or m.look.size() > 5:
@@ -142,19 +144,45 @@ static func validate_control(m: Dictionary) -> String:
             if not (m.get("time_ms") is int) or m.time_ms < 0 or m.time_ms > 0x7fffffff:
                 return "finish time"
         Msg.PARK_OPEN:
+            if not (m.get("collisions") is bool) or not (m.get("mounts") is PackedByteArray) or m.mounts.size()!=4:
+                return "Park car state"
+            for mask in m.mounts:
+                if mask > 3: return "Park mounts"
             var host_at: Variant = m.get("host_at")
             if not _valid_revision(m.get("revision")) or not (host_at is Vector2) or not host_at.is_finite() or not PARK_SITE.BOUNDS.has_point(host_at):
                 return "Park open state"
         Msg.PARK_EVENT:
             if not _valid_revision(m.get("revision")) or not (m.get("event") is int) or not (m.get("payload") is Dictionary):
                 return "Park event"
-            if m.event != ParkEvent.RESET_TRAINING or not m.payload.is_empty():
+            if not valid_park_event(m.event,m.payload):
                 return "Unsupported Park event"
         Msg.RESTART, Msg.LOADED, Msg.LEAVE, Msg.PARK_LOBBY:
             pass
         _:
             return "unknown type %d" % int(m["t"])
     return ""
+
+static func valid_park_event(kind: int, data: Dictionary) -> bool:
+    match kind:
+        ParkEvent.RESET_TRAINING:
+            return data.is_empty()
+        ParkEvent.PLAYER_CONTACT:
+            # delta and separation are applied once, with opposite signs for the two slots.
+            return data.get("dv") is Vector2 and data.dv.is_finite() and data.dv.length() <= 12.01 \
+                and data.get("shift") is Vector2 and data.shift.is_finite() and data.shift.length() <= 0.51 \
+                and data.get("guest_at") is Vector2 and PARK_SITE.BOUNDS.has_point(data.guest_at)
+        ParkEvent.SERVICE_REPAIR:
+            return data.get("slot") is int and data.slot in [0,1]
+        ParkEvent.BUMPER_DAMAGE, ParkEvent.DETACH_COMPONENT:
+            if not (data.get("slot") is int and data.slot in [0,1] and data.get("part") is int and data.part in [0,1]):
+                return false
+            if kind == ParkEvent.BUMPER_DAMAGE:
+                return data.get("mask") is int and data.mask in [1,2]
+            return data.get("at") is Vector3 and data.at.is_finite() and absf(data.at.y)<25.0 \
+                and PARK_SITE.BOUNDS.grow(4.0).has_point(Vector2(data.at.x,data.at.z)) \
+                and data.get("angle") is float and is_finite(data.angle) and data.get("velocity") is Vector2 \
+                and data.velocity.is_finite() and data.velocity.length() <= 18.01
+    return false
 
 static func _valid_revision(value: Variant) -> bool:
     return value is int and value >= 0 and value <= 0xffffffff

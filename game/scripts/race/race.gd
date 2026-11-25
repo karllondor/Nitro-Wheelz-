@@ -252,7 +252,7 @@ func _elevation_tick(info: Dictionary, delta: float) -> void:
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
     var variant: String = CARS.selected()
-    car_root = CARS.make(variant)
+    car_root = CARS.make(variant,null,track is NitroParkTrack)
     car_root.name = "Nitro Wheelz "+str(CARS.info(variant)["name"])
     car_root.scale = Vector3.ONE*RACE_CAR_SCALE
     add_child(car_root)
@@ -510,6 +510,8 @@ func _physics_process(delta: float) -> void:
         model.slide_hold = 0.0
         model.rear_traction = maxf(model.rear_traction,0.80)
         had_skid = false
+        if park != null:
+            park.damage.wall_impact(collision)
         if float(collision["impact_speed"]) > 1.2:
             _wall_feedback(float(collision["impact_speed"]))
         scorer.wall_hit(float(collision["impact_speed"]))

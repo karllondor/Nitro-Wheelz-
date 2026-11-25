@@ -20,9 +20,9 @@ def play(host_driver, directory, scenario="race"):
             role = "host" if driver == host_driver else "guest"
             profile = directory / driver
             profile.mkdir()
-            script = "net_park_peer" if scenario == "park" else "net_round_peer"
+            script = {"park": "net_park_peer", "race": "net_round_peer"}.get(scenario, "net_damage_peer")
             command = [os.getenv("GODOT_BIN", "godot"), "--headless", "--path", str(ROOT / "game"),
-                       "--script", f"res://tests/{script}.gd", "--", role, driver, port, str(directory)]
+                       "--script", f"res://tests/{script}.gd", "--", role, driver, port, str(directory), scenario]
             with (profile / "game.log").open("w") as log:
                 peers[driver] = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                                  env={**os.environ, "XDG_DATA_HOME": str(profile)})
@@ -43,7 +43,7 @@ def play(host_driver, directory, scenario="race"):
         if proc.returncode or "PASS:" not in log or "ERROR:" in log:
             raise RuntimeError(f"{driver} failed with {proc.returncode}")
         clocks.append(dict(re.findall(r"GO_OBS (\d+) (\d+)", log)))
-    if scenario == "park":
+    if scenario != "race":
         return
     if any(set(clock) != {"1","2","3"} for clock in clocks):
         raise RuntimeError("Each game must observe three GO transitions")
@@ -54,7 +54,8 @@ def play(host_driver, directory, scenario="race"):
 
 if __name__ == "__main__":
     scenario = "park" if "--park" in sys.argv else "race"
-    for host in ("KARLL", "KEVIN"):
-        with tempfile.TemporaryDirectory() as temp:
-            play(host, Path(temp), scenario)
+    for mode in (("ghost", "damage") if "--damage" in sys.argv else (scenario,)):
+        for host in ("KARLL", "KEVIN"):
+            with tempfile.TemporaryDirectory() as temp:
+                play(host, Path(temp), mode)
     print("PASS: two independent games, both host roles")

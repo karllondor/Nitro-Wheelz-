@@ -447,6 +447,17 @@ func _solid(rect: Rect2) -> void:
                 _solids[key] = []
             _solids[key].append(rect)
 
+func impact_point(pos: Vector2, normal: Vector2) -> Vector2:
+    var nearest := pos-normal*2.35
+    var distance := INF
+    for rect: Rect2 in _solids.get(_cell(pos), []):
+        var point := pos.clamp(rect.position,rect.end)
+        var offset := point-pos
+        if offset.dot(normal)<0 and offset.length_squared()<distance:
+            nearest = point
+            distance = offset.length_squared()
+    return nearest
+
 func resolve_contact(pos: Vector2, heading: float, half_width: float, half_length: float,
         open_deck := -1, vehicle_height := 0.0) -> Vector2:
     var contacts: Array = _solids.get(_cell(pos), [])

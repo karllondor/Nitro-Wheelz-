@@ -97,7 +97,7 @@ func _make_remote_car() -> void:
     var h: float = race.track.start_heading()
     _remote_identity = [session.other.get("car","red"),session.other.get("look",{}),session.other.get("name","PLAYER")]
     var rcar: String = str(session.other.get("car","red"))
-    remote_car = CARS.make(rcar,session.other.get("look",{}))
+    remote_car = CARS.make(rcar,session.other.get("look",{}),session.is_park())
     remote_car.name = "Remote player car"
     remote_car.scale = Vector3.ONE*CAR_SCALE
     race.add_child(remote_car)
@@ -130,6 +130,8 @@ func _make_remote_car() -> void:
     ring.position.y = 0.13
     ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     remote_car.add_child(ring)
+    if session.is_park():
+        race.park.damage.bind_car(1-session.local_index,remote_car)
 func _on_park_partner() -> void:
     lost_reason = ""
     _park_toast_until = 0
