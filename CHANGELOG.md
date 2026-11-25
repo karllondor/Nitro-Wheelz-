@@ -1,5 +1,9 @@
 ## Multiplayer reliability v2 (review branch)
 
+## Park multiplayer preview
+
+- Adds two-player Park 2.0 free roam, tandem and shared drift practice over LAN. The host owns cone motion and reset, and a guest can reconnect to an active Park. Competitive racing retains its separate countdown and results.
+
 Host restarts both cars on a shared countdown. LAN results compare both drivers by points and time. The remote car carries its own livery and a cyan marker.
 
 ## [0.1.45] — UNIFIED DEVELOPMENT PREVIEW 3: smoother remote car + HOTSPOT guide for local multiplayer (DEV package, TEST BUILD)

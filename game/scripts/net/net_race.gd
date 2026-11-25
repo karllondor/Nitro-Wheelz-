@@ -42,11 +42,15 @@ var _toast: Label = null
 var _go_until_msec: int = 0
 var _last_render_pos: Vector2 = Vector2.ZERO
 var _remote_fade: float = 1.0
+var _park_recovery_sends := 0
+var _park_last_reset_ms := -10000
+var _park_toast_until := 0
+var _remote_identity: Array = []
 
 ## True while a session is on its way into a race (solo play: false, nothing is created).
 static func should_attach() -> bool:
     var s: NitroNetSession = SESSION.current
-    return s != null and (s.state == NitroNetSession.State.STARTING or s.state == NitroNetSession.State.COUNTDOWN or s.state == NitroNetSession.State.RACING or (s.state == NitroNetSession.State.LOST and s.round_id > 0))
+    return s != null and (s.state == NitroNetSession.State.STARTING or s.state == NitroNetSession.State.COUNTDOWN or s.state == NitroNetSession.State.RACING or s.state == NitroNetSession.State.PARK or (s.state == NitroNetSession.State.LOST and s.round_id > 0))
 
 ## Start position of a slot (0 = host, 1 = joiner): side by side on the start line, 2.6 m left / right of the centre line.
 static func spawn_position(base: Vector2, heading: float, slot: int) -> Vector2:
@@ -58,17 +62,46 @@ func setup(race_node: Node3D) -> void:
     name = "Local multiplayer"
     session = SESSION.current
     session.in_race = true
-    var base: Vector2 = race.track.start_position()
     var h: float = race.track.start_heading()
-    race.model.reset(spawn_position(base,h,session.local_index),h)
+    race.model.reset(_spawn(session.local_index),h)
     _last_sent_pos = race.model.position
-    var other_slot: int = 1-session.local_index
+    _make_remote_car()
+    session.round_restarted.connect(_on_round_restarted)
+    session.remote_snapshot.connect(_on_snapshot)
+    session.peer_lost.connect(_on_lost)
+    session.state_changed.connect(_on_state)
+    if session.is_park():
+        session.park_peer_ready.connect(_on_park_partner)
+        session.park_lobby_returned.connect(_back_to_lobby)
+    _build_ui()
+    if session.state == SESSION.State.LOST or (session.is_park() and session.other.is_empty()):
+        _on_lost(session.last_error)
+
+func _spawn(slot: int) -> Vector2:
+    var base: Vector2 = race.track.start_position()
+    if session.is_park():
+        return base+Vector2(-5.0 if slot == 0 else 5.0,0.0)
+    return spawn_position(base,race.track.start_heading(),slot)
+
+func park_recovery_spawn() -> Vector2:
+    var pos := _spawn(session.local_index)
+    return _park_clear_spawn(pos,_last_render_pos) if session.park_peer_loaded() else pos
+
+static func _park_clear_spawn(pos: Vector2, occupied: Vector2) -> Vector2:
+    return pos+Vector2(0,15) if pos.distance_to(occupied) < 7.0 else pos
+
+func mark_recovered() -> void:
+    _park_recovery_sends = 3
+
+func _make_remote_car() -> void:
+    var h: float = race.track.start_heading()
+    _remote_identity = [session.other.get("car","red"),session.other.get("look",{}),session.other.get("name","PLAYER")]
     var rcar: String = str(session.other.get("car","red"))
     remote_car = CARS.make(rcar,session.other.get("look",{}))
     remote_car.name = "Remote player car"
     remote_car.scale = Vector3.ONE*CAR_SCALE
     race.add_child(remote_car)
-    var rp: Vector2 = spawn_position(base,h,other_slot)
+    var rp := _spawn(1-session.local_index)
     _place_remote(rp,h,0.0,0.0,0.0)
     remote_label = Label3D.new()
     remote_label.name = "Remote player name"
@@ -97,13 +130,39 @@ func setup(race_node: Node3D) -> void:
     ring.position.y = 0.13
     ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     remote_car.add_child(ring)
-    session.round_restarted.connect(_on_round_restarted)
-    session.remote_snapshot.connect(_on_snapshot)
-    session.peer_lost.connect(_on_lost)
-    session.state_changed.connect(_on_state)
-    _build_ui()
-    if session.state == SESSION.State.LOST:
-        _on_lost(session.last_error)
+func _on_park_partner() -> void:
+    lost_reason = ""
+    _park_toast_until = 0
+    _toast.hide()
+    _toast.text = ""
+    _next_ui_ms = 0
+    if _remote_identity != [session.other.get("car","red"),session.other.get("look",{}),session.other.get("name","PLAYER")]:
+        remote_car.hide()
+        remote_car.queue_free()
+        _make_remote_car()
+    var peer_spawn := _spawn(1-session.local_index)
+    if session.is_host:
+        peer_spawn = _park_clear_spawn(peer_spawn,session.park_host_position)
+    else:
+        peer_spawn = session.park_host_position
+        var safe_spawn := _park_clear_spawn(_spawn(session.local_index),peer_spawn)
+        if safe_spawn != race.model.position:
+            race.model.reset(safe_spawn,race.track.start_heading())
+            race._snap_cameras()
+            race._update_visuals()
+    _place_remote(peer_spawn,race.track.start_heading(),0.0,0.0,0.0)
+    remote_car.show()
+    _remote_fade = 1.0
+    remote_paused = false
+    remote_view.reset()
+    _park_last_reset_ms = -10000
+
+func leave_park() -> void:
+    if not session.return_park_lobby():
+        _back_to_lobby()
+
+func _back_to_lobby() -> void:
+    get_tree().call_deferred("change_scene_to_file","res://scenes/multiplayer_lobby.tscn")
 
 func report_scene_ready() -> void:
     # Let the first visible frame submit both liveries, wheels, labels and track before countdown.
@@ -161,7 +220,13 @@ func _on_lost(reason: String) -> void:
     lost_reason = reason
     _score.text = ""
     remote_paused = false
-    if _toast != null:
+    if session.is_park():
+        remote_car.hide()
+        remote_view.reset()
+        var instructions := "THE ROOM IS OPEN FOR A PLAYER TO REJOIN." if session.is_host else "PAUSE > RETURN TO LOBBY TO RECONNECT."
+        _toast_text("%s\n\n%s" % [reason,instructions])
+        _park_toast_until = Time.get_ticks_msec()+4500
+    elif _toast != null:
         _toast.text = "%s\n\nYOU CAN KEEP DRIVING. PAUSE > GARAGE / MENU LEAVES THE GAME." % reason
         _toast.visible = true
 
@@ -172,6 +237,9 @@ func _refresh_ui() -> void:
     if session == null or _count == null:
         return
     var st: int = session.state
+    if session.is_park():
+        _refresh_park_ui(st)
+        return
     var count_text := ""
     var now := Time.get_ticks_msec()
     if st == SESSION.State.COUNTDOWN:
@@ -199,11 +267,28 @@ func _refresh_ui() -> void:
         else:
             _score.text = ""
 
+func _refresh_park_ui(st: int) -> void:
+    var now := Time.get_ticks_msec()
+    if now < _next_ui_ms:
+        return
+    _next_ui_ms = now+100
+    _status.text = "OPENING PARK…" if st == SESSION.State.STARTING else ""
+    if session.park_peer_loaded():
+        var who: String = session.other.get("name","PLAYER")
+        _score.text = "%s%s%s" % [who,"  (PAUSED)" if remote_paused else "",
+            "  LINK "+remote_view.quality() if remote_view.has_data() else ""]
+    elif session.is_host and st == SESSION.State.PARK:
+        _score.text = "PARK ROOM OPEN  •  WAITING FOR PLAYER"
+    else:
+        _score.text = ""
+
 # ---------------------------------------------------------------- local snapshots
 
 func _physics_process(_delta: float) -> void:
     if session == null or race == null or race.model == null:
         return
+    if session.is_host and session.is_park() and P.PARK_SITE.BOUNDS.has_point(race.model.position):
+        session.park_host_position = race.model.position
     _tick += 1
     if _tick%SEND_EVERY_TICKS != 0 or not session.connected():
         return
@@ -213,12 +298,13 @@ func _physics_process(_delta: float) -> void:
         flags |= 1
     if bool(race.get("paused")):
         flags |= 2
-    if m.position.distance_to(_last_sent_pos) > 15.0:
-        flags |= 4                                # a restart: the other phone snaps instead of gliding
+    if _park_recovery_sends > 0 or m.position.distance_to(_last_sent_pos) > 15.0:
+        flags |= 4
+        _park_recovery_sends = maxi(0,_park_recovery_sends-1)                                # a restart: the other phone snaps instead of gliding
     _last_sent_pos = m.position
     var scorer: Variant = race.get("scorer")
     var pts: int = 0
-    if scorer != null:
+    if scorer != null and not session.is_park():
         pts = maxi(0,int(scorer.total)+int(scorer.chain_score()))
     # stamped with SIMULATION time (tick x tick length): the wall-clock time of the frame a tick happened to run in is
     # uneven on a phone (30-60 fps, hitches) and made the other phone see an uneven car speed
@@ -233,11 +319,17 @@ func _on_snapshot(s: Dictionary) -> void:
     remote_paused = (flags&2) != 0
     remote_score = int(s["score"])
     if (flags&4) != 0:
-        remote_view.reset()                      # a deliberate jump (restart): no gliding across the map
+        var at: int = s.recv_ms
+        if not session.is_park() or at-_park_last_reset_ms > 210:
+            remote_view.reset()
+        _park_last_reset_ms = at                      # a deliberate jump (restart): no gliding across the map
     if not remote_view.feed(s,float(s["recv_ms"])):
         dropped_jumps += 1                       # impossible at drift speeds: this packet is ignored
 
 func _process(delta: float) -> void:
+    if _park_toast_until != 0 and Time.get_ticks_msec() >= _park_toast_until:
+        _park_toast_until = 0
+        _toast.hide()
     _refresh_ui()
     if remote_car == null or session == null:
         return
@@ -301,7 +393,12 @@ func _exit_tree() -> void:
             session.peer_lost.disconnect(_on_lost)
         if session.state_changed.is_connected(_on_state):
             session.state_changed.disconnect(_on_state)
+        for pair in [[session.round_restarted,_on_round_restarted],[session.park_peer_ready,_on_park_partner],
+                [session.park_lobby_returned,_back_to_lobby]]:
+            if pair[0].is_connected(pair[1]):
+                pair[0].disconnect(pair[1])
         session.in_race = false
-        session.leave()
-        session.queue_free()
+        if not session.returning_to_lobby:
+            session.leave()
+            session.queue_free()
     session = null

@@ -143,8 +143,11 @@ func blocks_presses() -> bool:
 
 ## Start the tutorial at lesson `from_index`. Starting at the very first lesson shows the
 ## full-size welcome card first (controls + how the lessons work).
+var persist_progress := true
+
 func start(from_index: int = 0) -> void:
-    PROGRESS.set_seen()
+    if persist_progress:
+        PROGRESS.set_seen()
     if from_index >= LESSONS.size():
         phase = "finished"
         tutorial_finished.emit()
@@ -254,7 +257,8 @@ func update(dt: float, st: Dictionary) -> void:
     else:
         wrong_way_clock = 0.0
     if done:
-        PROGRESS.mark_completed(str(lesson()["id"]))
+        if persist_progress:
+            PROGRESS.mark_completed(str(lesson()["id"]))
         _success_pick = (lesson_index)%SUCCESS_TEXT.size()
         phase = "success"
         phase_time = 0.0

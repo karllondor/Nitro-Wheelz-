@@ -4,12 +4,13 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
-def play(host_driver, directory):
+def play(host_driver, directory, scenario="race"):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
         probe.bind(("127.0.0.1", 0))
         port = str(probe.getsockname()[1])
@@ -19,8 +20,9 @@ def play(host_driver, directory):
             role = "host" if driver == host_driver else "guest"
             profile = directory / driver
             profile.mkdir()
+            script = "net_park_peer" if scenario == "park" else "net_round_peer"
             command = [os.getenv("GODOT_BIN", "godot"), "--headless", "--path", str(ROOT / "game"),
-                       "--script", "res://tests/net_round_peer.gd", "--", role, driver, port, str(directory)]
+                       "--script", f"res://tests/{script}.gd", "--", role, driver, port, str(directory)]
             with (profile / "game.log").open("w") as log:
                 peers[driver] = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                                  env={**os.environ, "XDG_DATA_HOME": str(profile)})
@@ -41,6 +43,8 @@ def play(host_driver, directory):
         if proc.returncode or "PASS:" not in log or "ERROR:" in log:
             raise RuntimeError(f"{driver} failed with {proc.returncode}")
         clocks.append(dict(re.findall(r"GO_OBS (\d+) (\d+)", log)))
+    if scenario == "park":
+        return
     if any(set(clock) != {"1","2","3"} for clock in clocks):
         raise RuntimeError("Each game must observe three GO transitions")
     gaps = [abs(int(clocks[0][key])-int(clocks[1][key])) for key in ("1","2","3")]
@@ -49,7 +53,8 @@ def play(host_driver, directory):
         raise RuntimeError("GO skew exceeded 150 ms on loopback")
 
 if __name__ == "__main__":
+    scenario = "park" if "--park" in sys.argv else "race"
     for host in ("KARLL", "KEVIN"):
         with tempfile.TemporaryDirectory() as temp:
-            play(host, Path(temp))
+            play(host, Path(temp), scenario)
     print("PASS: two independent games, both host roles")

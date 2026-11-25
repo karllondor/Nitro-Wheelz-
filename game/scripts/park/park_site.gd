@@ -1,5 +1,7 @@
 extends RefCounted
 ## Provisional Park 2.0 masterplan. x east, z south, metres.
+## Bump if changing solid scenery or another LAN-relevant layout input outside this data file.
+const LAN_LAYOUT_REVISION := 1
 const BOUNDS := Rect2(-354, -545, 716, 705)
 const CIRCUIT_WIDTH := 14.0
 const ENTRANCE := Vector2(-233, -193)

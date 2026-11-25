@@ -1,5 +1,9 @@
 # LOCAL MULTIPLAYER (offline, two Android phones) — v0.1.41 prototype, v0.1.45 receiver + hotspot guide
 
+## Protocol 3 Park review
+
+Choose **LOCAL MULTIPLAYER → HOST PARK** for shared free roam. Both phones need the same review APK. See the [Park multiplayer handoff](dev/handoffs/park-multiplayer.md) for reconnect behaviour, training ownership and the owner checklist. The protocol 2 handoff and v0.1.45 notes below describe earlier builds.
+
 ## Protocol 2 review build
 
 The [round lifecycle and owner test checklist](dev/handoffs/issue-31-multiplayer-reliability-v2.md) cover host restarts, peer liveries and comparative results. The prototype history below describes protocol 1.

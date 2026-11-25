@@ -65,6 +65,12 @@ func _ready() -> void:
     stamp.add_theme_font_size_override("font_size",int(14*ui_unit))
     stamp.add_theme_color_override("font_color",STYLE.DIM)
     column.add_child(stamp)
+    var waiting := SESSION.current
+    if waiting != null and waiting.returning_to_lobby:
+        session = waiting
+        session.returning_to_lobby = false
+        mode = "host" if session.is_host else "join"
+        _connect_signals()
     _refresh()
 
 # ------------------------------------------------------------------------ helpers
@@ -167,11 +173,14 @@ func _new_session() -> NitroNetSession:
     session = SESSION.new()
     session.name = "Local multiplayer session"
     get_tree().root.add_child(session)
+    _connect_signals()
+    return session
+
+func _connect_signals() -> void:
     session.state_changed.connect(_on_state)
     session.roster_changed.connect(_refresh)
     session.error_raised.connect(_on_error)
     session.start_requested.connect(_on_start)
-    return session
 
 func _disconnect_signals() -> void:
     if session == null or not is_instance_valid(session):
@@ -239,10 +248,10 @@ func _go(scene: String) -> void:
 
 # ------------------------------------------------------------------------ actions
 
-func host_game() -> void:
+func host_game(track: String = P.TRACKS[0], port: int = P.DEFAULT_PORT) -> void:
     mode = "host"
     var s: NitroNetSession = _new_session()
-    var err: int = s.host(P.DEFAULT_PORT,_my_name(),CARS.selected(),P.TRACKS[0])
+    var err: int = s.host(port,_my_name(),CARS.selected(),track)
     if err != OK:
         var why: String = s.last_error
         _drop_session()
@@ -296,8 +305,10 @@ func start_game() -> void:
 func cycle_track(step: int) -> void:
     if session == null or not is_instance_valid(session) or not session.is_host:
         return
-    var i: int = P.TRACKS.find(session.track_path)
-    session.choose_track(P.TRACKS[(i+step+P.TRACKS.size())%P.TRACKS.size()])
+    var choices: Array[String] = P.TRACKS.duplicate()
+    choices.append(P.PARK_PATH)
+    var i: int = choices.find(session.track_path)
+    session.choose_track(choices[posmod(i+step,choices.size())])
 
 func back_to_menu() -> void:
     _drop_session()
@@ -344,6 +355,7 @@ func _menu_page() -> void:
     _label("NO WI-FI? NO PROBLEM.\nONE PHONE'S HOTSPOT IS ENOUGH.",22,STYLE.GOLD_LIGHT,true).name = "Hotspot hint"
     _label("YOU DRIVE:  %s\nPLAYER:  %s" % [car_text(CARS.selected()),_my_name()],18,STYLE.WHITE)
     _big("HOST GAME",host_game,true)
+    _big("HOST PARK",host_game.bind(P.PARK_PATH))
     _big("JOIN GAME",join_game)
     _big("NO WI-FI? HOTSPOT HOW-TO",show_howto)
     _big("BACK",back_to_menu)
@@ -424,7 +436,7 @@ func _connecting_page() -> void:
     _big("CANCEL",leave_session)
 
 func _lobby_page() -> void:
-    _title("READY ROOM")
+    _title("PARK FREE ROAM" if session.is_park() else "READY ROOM")
     var other_name: String = str(session.other.get("name","PLAYER"))
     _player_card("YOU  •  %s" % ("HOST" if session.is_host else "GUEST"),str(session.me["name"]),str(session.me["car"]),bool(session.me["ready"]))
     _player_card("OTHER PLAYER",other_name,str(session.other.get("car","red")),bool(session.other.get("ready",false)))
@@ -435,7 +447,7 @@ func _lobby_page() -> void:
     var ready_caption: String = "NOT READY" if bool(session.me["ready"]) else "READY"
     _big(ready_caption,ready_toggle,not bool(session.me["ready"])).name = "READY"
     if session.is_host:
-        var start: Button = _big("START",start_game,true)
+        var start: Button = _big("OPEN PARK" if session.is_park() else "START",start_game,true)
         start.disabled = not session.can_start()
         if start.disabled:
             _label("START IS ENABLED WHEN BOTH PLAYERS ARE READY",14,STYLE.DIM)
@@ -472,7 +484,7 @@ func _player_card(role: String, who: String, car: String, ready: bool) -> void:
 
 ## Host: TRACK < name >; the joiner only reads it (the host decides, both must press READY again after a change).
 func _track_row() -> void:
-    var name_text: String = str(P.TRACK_NAMES.get(session.track_path,"TRACK"))
+    var name_text: String = "PARK FREE ROAM" if session.is_park() else str(P.TRACK_NAMES.get(session.track_path,"TRACK"))
     if session.is_host:
         var row := HBoxContainer.new()
         row.alignment = BoxContainer.ALIGNMENT_CENTER

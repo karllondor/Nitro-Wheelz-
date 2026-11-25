@@ -275,3 +275,11 @@ Issue 19 footprint regression (Godot 4.7.2, Ojców 621727). Original narrow rout
 | Service speed, repeat-trigger gating and visible fence contact | Godot `park_site_test` on Linux |
 | Chase and Top-down rendering, including portrait preview | Engine captures in the Park 2.0 evidence package |
 | Handset driving FPS and touch | NOT RUN |
+
+## Park multiplayer preview
+
+| Coverage | Evidence |
+| --- | --- |
+| Both LAN host roles, full Park driving, local recovery, host-owned cones, reconnect and return to ready room | `python3 tools/test_net_rounds.py --park` |
+| Competitive rematches and results, solo Park guide and progression | Existing Godot suites and `python3 tools/test_net_rounds.py` |
+| Physical Android pair, hotspot and radio latency | Owner QA pending |

@@ -32,6 +32,17 @@ func _until(cond: Callable, seconds: float = 6.0) -> bool:
     return cond.call()
 
 func _run() -> void:
+    var cone := P.pack_park_cones(3,2,65535,[{"index":79,"pos":Vector2(-82,67),"tilt":0.7,"angle":0.8}])
+    var pose: Dictionary = P.unpack_park_cones(cone)
+    if pose.is_empty() or pose.round != 3 or pose.revision != 2 or pose.seq != 65535 or pose.poses[0].index != 79 \
+            or pose.poses[0].pos != Vector2(-82,67) or absf(pose.poses[0].tilt-0.7) > 0.007 \
+            or not P.unpack_park_cones(cone.slice(0,-1)).is_empty():
+        _fail("Park cone pose did not round-trip or a partial record was accepted")
+        return
+    cone.encode_float(P.PARK_CONE_HEADER+1,NAN)
+    if not P.unpack_park_cones(cone).is_empty() or P.track_fingerprint(P.PARK_PATH).length() != 64:
+        _fail("Park pose finite-position guard or layout fingerprint failed")
+        return
     # ------------------------------------------------------------------ protocol
     var snap: Dictionary = {"flags":5,"seq":65535,"ms":123456789,"x":-120.5,"z":33.25,"heading":-1.5,"vx":12.0,"vz":-3.5,"yaw":0.7,"steer":-0.3,"score":8450}
     var bytes: PackedByteArray = P.pack_snapshot(snap)

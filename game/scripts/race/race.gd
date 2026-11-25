@@ -155,11 +155,12 @@ func _ready() -> void:
     _make_ui()
     if hud != null:
         hud.lap_limit = laps_total
+    var use_network := NET_RACE.should_attach()
     if track.has_method("is_park") and track.is_park():
         park = PARK.new()
         add_child(park)
-        park.setup(self)
-    if NET_RACE.should_attach():
+        park.setup(self,NitroNetSession.current if use_network else null)
+    if use_network:
         net = NET_RACE.new()
         add_child(net)
         net.setup(self)
@@ -474,8 +475,11 @@ func _physics_process(delta: float) -> void:
         braking = maxf(braking,touch.brake)
         handbrake = maxf(handbrake,touch.handbrake)
 
-    # A LAN time includes local pauses and starts at the shared GO. Solo starts on GAS.
-    if net != null and net.session.round_start_usec > 0:
+    var shared_park := park != null and net != null
+    # Scored LAN rounds start at GO. Shared Park deliberately has no run clock.
+    if shared_park:
+        race_started = gas > 0.05 or race_started
+    elif net != null and net.session.round_start_usec > 0:
         race_started = true
         time_elapsed = maxf(0.0,float(Time.get_ticks_usec()-net.session.round_start_usec)/1000000.0)
     else:
@@ -519,6 +523,10 @@ func _physics_process(delta: float) -> void:
 
     _elevation_tick(info,delta)
     _update_chase_occlusion()
+    if shared_park:
+        _record_marks(delta)
+        _update_visuals()
+        return
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     if track.event_mode in ["club","pro"]:
         var bonus: float = 0.0
@@ -970,12 +978,19 @@ func _toggle_pause() -> void:
         add_child(pause_layer)
         var panel: NitroPauseMenu = PAUSE_VIEW.new()
         pause_layer.add_child(panel)
-        var restart_action := Callable(self,"_restart") if net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
+        var shared_park := park != null and net != null
+        var restart_action := Callable(self,"_restart") if shared_park or net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
+        var leave_action := Callable(net,"leave_park") if shared_park else Callable(self,"_leave_to_menu")
+        var park_options := {}
+        if shared_park:
+            park_options = {"restart":"RECOVER VEHICLE","leave":"RETURN TO LOBBY"}
+            if net.session.is_host and net.session.state == net.session.State.PARK:
+                park_options["reset"] = Callable(self,"_reset_shared_training")
         panel.show_pause(Callable(self,"_toggle_pause"),restart_action,
-            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
+            leave_action,
             _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable(),
             Callable(self,"_park_toggle_tutorial") if park != null else Callable(),
-            park.pause_label() if park != null else "")
+            park.pause_label() if park != null else "",park_options)
     else:
         if pause_layer != null:
             pause_layer.queue_free()
@@ -985,6 +1000,14 @@ func _toggle_pause() -> void:
             touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
     _update_visuals()
 
+func _leave_to_menu() -> void:
+    get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+func _reset_shared_training() -> void:
+    const PROTOCOL = preload("res://scripts/net/net_protocol.gd")
+    if net.session.host_park_event(PROTOCOL.ParkEvent.RESET_TRAINING):
+        _toggle_pause()
+
 ## Pause menu of the Park: switch the tutorial on / off, then back to driving. Paint
 ## and cones stay exactly as they are.
 func _park_toggle_tutorial() -> void:
@@ -993,6 +1016,12 @@ func _park_toggle_tutorial() -> void:
     _toggle_pause()
 
 func _restart() -> void:
+    if park != null and net != null:
+        park.recover_vehicle()
+        if paused:
+            _toggle_pause()
+        _update_visuals()
+        return
     if net != null:
         net.session.restart_race()
         return

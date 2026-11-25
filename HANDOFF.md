@@ -1,5 +1,9 @@
 ## LAN reliability and Park multiplayer
 
+## Park multiplayer review
+
+See the [Park multiplayer handoff](docs/dev/handoffs/park-multiplayer.md) for the combined baseline, reusable world-event interfaces, automated evidence and the two-phone checklist.
+
 The two-game regression, protocol changes, performance measurements and two-phone checklist are in the [multiplayer handoff](docs/dev/handoffs/issue-31-multiplayer-reliability-v2.md).
 
 # Nitro Wheelz — v0.1.33 AI-body test car (RYU-32 FLAME) on top of the mobile QA fixes (v0.1.32) and the Car Factory migration (v0.1.29–31)

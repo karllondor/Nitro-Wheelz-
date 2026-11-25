@@ -14,6 +14,7 @@ const CONES = preload("res://scripts/park/park_cones.gd")
 const TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const PROGRESS = preload("res://scripts/park/park_progress.gd")
 const GHOST = preload("res://scripts/park/park_ghost.gd")
+const NET_TRAINING = preload("res://scripts/net/net_park_training.gd")
 const GUIDE = preload("res://scripts/park/park_guide.gd")
 
 ## nitro/park_mode: "free" (FREE DRIVE = SKIP TUTORIAL) or "tutorial".
@@ -25,6 +26,8 @@ const SETTING_RESET: String = "nitro/park_reset"
 signal repair_requested
 
 var race: Node3D
+var room: NitroNetSession
+var shared_training: Node
 var mode: String = "free"
 var cones: NitroParkCones
 var tutorial: NitroParkTutorial = null
@@ -44,19 +47,25 @@ var _repair_serviced := false
 var _site_notice: Label
 var _notice_left := 0.0
 
-func setup(race_node: Node3D) -> void:
+func setup(race_node: Node3D, park_room: NitroNetSession = null) -> void:
     race = race_node
+    room = park_room
     name = "Nitro Wheelz Park controller"
-    mode = str(ProjectSettings.get_setting(SETTING_MODE,"free"))
+    mode = str(ProjectSettings.get_setting(SETTING_MODE,"free")) if room == null else "free"
     ProjectSettings.set_setting(SETTING_MODE,"free")           # consumed
     if bool(ProjectSettings.get_setting(SETTING_RESET,false)):
-        PROGRESS.reset()
+        if room == null:
+            PROGRESS.reset()
         ProjectSettings.set_setting(SETTING_RESET,false)
     cones = CONES.new()
     cones.name = "Park cones"
     race.add_child(cones)
     cones.build(LAYOUT.cones())
     cones.cone_hit.connect(_on_cone_hit)
+    if room != null:
+        shared_training = NET_TRAINING.new()
+        add_child(shared_training)
+        shared_training.setup(room,cones)
     ghost = GHOST.new()
     race.add_child(ghost)
     var hud: Variant = race.get("hud")
@@ -71,6 +80,7 @@ func setup(race_node: Node3D) -> void:
 func _start_tutorial() -> void:
     if tutorial == null:
         tutorial = TUTORIAL.new()
+        tutorial.persist_progress = room == null
         tutorial.lesson_started.connect(_on_lesson_started)
         tutorial.lesson_completed.connect(_on_lesson_completed)
         tutorial.hint_shown.connect(func(t: String): _toast(t,"hint",4.5))
@@ -87,13 +97,14 @@ func _start_tutorial() -> void:
             guide.touch.press_blocker = func() -> bool: return tutorial != null and tutorial.blocks_presses()
         guide.controller = self
         layer.add_child(guide)
-    var start_at: int = PROGRESS.first_open(TUTORIAL.lesson_ids())
+    var start_at: int = PROGRESS.first_open(TUTORIAL.lesson_ids()) if room == null else TUTORIAL.lesson_ids().find("donut_left")
     if start_at >= TUTORIAL.LESSONS.size():
         start_at = 0          # everything done before: replay from the beginning
     tutorial.start(start_at)
 
 func _on_lesson_started(index: int) -> void:
-    cones.reset_all()                       # owner suggestion: cones return for every lesson
+    if room == null:
+        cones.reset_all()              # Shared cones only reset through the host event.
     var l: Dictionary = TUTORIAL.LESSONS[index]
     _place_beacon(l)
     _place_markers(l)
@@ -152,6 +163,8 @@ func toggle_tutorial() -> void:
         _start_tutorial()
 
 func pause_label() -> String:
+    if room != null:
+        return "STOP DRILL GUIDE" if tutorial != null and tutorial.is_active() else "DONUT & FIGURE-EIGHT GUIDE"
     if tutorial != null and tutorial.is_active():
         return "TUTORIAL: ON  •  TAP TO SKIP"
     return "TUTORIAL: OFF  •  TAP TO START"
@@ -162,7 +175,8 @@ func freezes() -> bool:
 ## RESTART (pause menu): car back to the start (done by race.gd), cones back, the
 ## current lesson starts again. Paint is paint: nothing to reset.
 func restart() -> void:
-    cones.reset_all()
+    if room == null:
+        cones.reset_all()
     _reset_visit()
     _notice_left = 0.0
     _site_notice.hide()
@@ -200,7 +214,10 @@ func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: 
     var track: NitroDriftTrack = race.get("track")
     if _recover_if_outside(model):
         return
-    cones.step(dt,model.position,model.heading,model.velocity,track.body_half_length,track.body_half_width)
+    if shared_training == null:
+        cones.step(dt,model.position,model.heading,model.velocity,track.body_half_length,track.body_half_width)
+    else:
+        shared_training.local_contact(model,track)
     _service_step(dt, model)
     if tutorial != null:
         tutorial.update(dt,{"pos":model.position,"speed_kmh":model.speed_kmh(),"drift_angle":model.drift_angle,
@@ -219,12 +236,18 @@ func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: 
 func _recover_if_outside(model: NitroDriveModel) -> bool:
     if model.position.is_finite() and SITE.BOUNDS.has_point(model.position):
         return false
-    model.reset(LAYOUT.START_POS, LAYOUT.START_HEADING)
+    recover_vehicle()
+    return true
+
+func recover_vehicle() -> void:
+    var destination: Vector2 = LAYOUT.START_POS if room == null else race.net.park_recovery_spawn()
+    race.model.reset(destination, LAYOUT.START_HEADING)
+    if room != null:
+        race.net.mark_recovered()
     race.had_skid = false
     race._snap_cameras()
     _reset_visit()
     _show_site_notice("BACK ON THE PLAZA")
-    return true
 
 func _reset_visit() -> void:
     _repair_wait = 0.0
