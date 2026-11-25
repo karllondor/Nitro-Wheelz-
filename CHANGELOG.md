@@ -1,5 +1,9 @@
 ## Multiplayer reliability v2 (review branch)
 
+## Interactive stunt playground preview
+
+- Opens three Park 2.0 ramps with Park-only airborne motion and adds pooled cardboard and barriers. The LAN host synchronizes jumps, prop movement and resets.
+
 ## Park multiplayer preview
 
 - Adds two-player Park 2.0 free roam, tandem and shared drift practice over LAN. The host owns cone motion and reset, and a guest can reconnect to an active Park. Competitive racing retains its separate countdown and results.

@@ -492,8 +492,12 @@ func _physics_process(delta: float) -> void:
     # the model substeps; ZERO on flat tracks.
     model.external_accel = grade_accel if race_started else Vector2.ZERO
     # Fixed 120 Hz Godot tick and two internal model substeps (240 Hz).
-    model.step(delta*0.5,steer,gas,braking,handbrake)
-    model.step(delta*0.5,steer,gas,braking,handbrake)
+    var previous_position := model.position
+    if park == null or not park.air.advance(model,delta):
+        model.step(delta*0.5,steer,gas,braking,handbrake)
+        model.step(delta*0.5,steer,gas,braking,handbrake)
+    if park != null:
+        park.stunt_ground_step(previous_position)
 
     # Resolve physical contact against the SAME raised wall shown on screen.
     # Never drive through the wall into sand and then teleport back.
@@ -522,6 +526,9 @@ func _physics_process(delta: float) -> void:
         sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
 
     _elevation_tick(info,delta)
+    if park != null:
+        car_y = park.air.height
+        car_y_vel = 0.0
     _update_chase_occlusion()
     if shared_park:
         _record_marks(delta)
@@ -691,6 +698,9 @@ func _drift_scoring(dt: float, edge_distance: float) -> void:
     combo = scorer.multiplier
 
 func _record_marks(dt: float) -> void:
+    if park != null and park.air.height > 0.04:
+        had_skid = false
+        return
     skid_clock += dt
     if skid_clock < 0.07:
         return
@@ -745,7 +755,7 @@ func _update_visuals() -> void:
         return
     # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
     var dt: float = get_physics_process_delta_time()
-    var target_pitch: float = atan(heading_grade)
+    var target_pitch: float = park.air.pitch if park != null else atan(heading_grade)
     var target_roll: float = 0.0
     var target_heave: float = 0.0
     if bool(dev.get("suspension",false)):
@@ -759,7 +769,7 @@ func _update_visuals() -> void:
     heave = lerpf(heave,target_heave,pose_k)
     car_root.position = Vector3(model.position.x,car_y+heave,model.position.y)
     car_root.rotation = Vector3(body_pitch,-model.heading,body_roll)
-    var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished
+    var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished and (park == null or park.air.height < 0.05)
     for smoke in tyre_smoke:
         smoke.emitting = smoking
     if car_root.has_method("set_motion"):
@@ -982,6 +992,8 @@ func _toggle_pause() -> void:
         var restart_action := Callable(self,"_restart") if shared_park or net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
         var leave_action := Callable(net,"leave_park") if shared_park else Callable(self,"_leave_to_menu")
         var park_options := {}
+        if park != null and net == null:
+            park_options["reset"] = Callable(self,"_reset_shared_training")
         if shared_park:
             park_options = {"restart":"RECOVER VEHICLE","leave":"RETURN TO LOBBY"}
             if net.session.is_host and net.session.state == net.session.State.PARK:
@@ -1005,7 +1017,10 @@ func _leave_to_menu() -> void:
 
 func _reset_shared_training() -> void:
     const PROTOCOL = preload("res://scripts/net/net_protocol.gd")
-    if net.session.host_park_event(PROTOCOL.ParkEvent.RESET_TRAINING):
+    if net == null:
+        park.reset_objects()
+        _toggle_pause()
+    elif net.session.host_park_event(PROTOCOL.ParkEvent.RESET_TRAINING):
         _toggle_pause()
 
 ## Pause menu of the Park: switch the tutorial on / off, then back to driving. Paint

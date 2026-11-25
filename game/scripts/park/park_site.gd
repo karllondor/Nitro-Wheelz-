@@ -1,7 +1,7 @@
 extends RefCounted
 ## Provisional Park 2.0 masterplan. x east, z south, metres.
 ## Bump if changing solid scenery or another LAN-relevant layout input outside this data file.
-const LAN_LAYOUT_REVISION := 1
+const LAN_LAYOUT_REVISION := 2
 const BOUNDS := Rect2(-354, -545, 716, 705)
 const CIRCUIT_WIDTH := 14.0
 const ENTRANCE := Vector2(-233, -193)
@@ -41,6 +41,29 @@ const RAMPS := [
     {"id": "large", "start": Vector2(30, -449), "width": 10.0, "run": 14.0, "rise": 3.8,
         "approach": Rect2(16, -449, 28, 98), "landing": Rect2(14, -516, 32, 49)},
 ]
+
+const STUNT_PROP_CAP := 36
+const BOX_SIZE := Vector3(0.84, 0.72, 0.78)
+const BARRIER_SIZE := Vector3(1.65, 0.53, 0.40)
+
+## Stable array indices are the network IDs. Layer heights use one common carton.
+static func stunt_props() -> Array[Dictionary]:
+    var props: Array[Dictionary] = []
+    for x in [-94.0, -92.0, -90.0]:
+        props.append({"at":Vector3(x,0.41,-464),"group":-1,"barrier":false})
+    for layer in 2:
+        for row in 2:
+            for lane in 2:
+                props.append({"at":Vector3(-40.42+lane*0.85,0.41+layer*0.72,-468+row*0.79),"group":1,"barrier":false})
+    for layer in 2:
+        for lane in 5:
+            props.append({"at":Vector3(28.3+lane*0.85,0.41+layer*0.72,-477),"group":2,"barrier":false})
+    for layer in 3:
+        for lane in 5-layer*2:
+            props.append({"at":Vector3(103.3+(lane+layer)*0.85,0.41+layer*0.72,-431),"group":3,"barrier":false})
+    for x in [98.0, 106.0, 115.0]:
+        props.append({"at":Vector3(x,0.315,-411),"group":-1,"barrier":true})
+    return props
 
 static func road(points: Array, closed := false) -> PackedVector2Array:
     var curve := Curve2D.new()

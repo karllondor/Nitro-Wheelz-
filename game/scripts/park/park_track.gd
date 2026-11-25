@@ -5,6 +5,8 @@ const LAYOUT = preload("res://scripts/park/park_layout.gd")
 const SITE_ENVIRONMENT = preload("res://scripts/park/park_environment.gd")
 const VERGE_SHADER = preload("res://assets/shaders/park_verge.gdshader")
 var site: Node3D
+var stunt_deck := -1
+var stunt_height := 0.0
 const LOGO_TEXTURE = preload("res://assets/brand/nitro_wheelz_logo_pavement.png")
 const PAINT_SHADER = preload("res://assets/shaders/pavement_paint.gdshader")
 
@@ -89,7 +91,7 @@ func sample_info(pos: Vector2) -> Dictionary:
 func resolve_body(pos: Vector2, heading: float, travel_velocity: Vector2) -> Dictionary:
     var correction := Vector2.ZERO
     if site != null and pos.is_finite():
-        correction = site.resolve_contact(pos, heading, body_half_width, body_half_length)
+        correction = site.resolve_contact(pos, heading, body_half_width, body_half_length, stunt_deck, stunt_height)
     if correction == Vector2.ZERO:
         return {"hit": false, "position": pos, "velocity": travel_velocity,
             "impact_speed": 0.0, "normal": Vector2.ZERO, "yaw_impulse": 0.0}

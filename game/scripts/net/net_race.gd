@@ -296,8 +296,11 @@ func _physics_process(_delta: float) -> void:
     var flags: int = 0
     if m.is_drifting():
         flags |= 1
-    if bool(race.get("paused")):
+    var park: Node = race.get("park")
+    var paused_in_park: bool = park != null and (bool(race.get("paused")) or park.freezes())
+    if bool(race.get("paused")) or paused_in_park:
         flags |= 2
+    var velocity := Vector2.ZERO if paused_in_park else m.velocity
     if _park_recovery_sends > 0 or m.position.distance_to(_last_sent_pos) > 15.0:
         flags |= 4
         _park_recovery_sends = maxi(0,_park_recovery_sends-1)                                # a restart: the other phone snaps instead of gliding
@@ -310,7 +313,8 @@ func _physics_process(_delta: float) -> void:
     # uneven on a phone (30-60 fps, hitches) and made the other phone see an uneven car speed
     var sim_ms: int = int(round(float(_tick)*1000.0/float(maxi(1,Engine.physics_ticks_per_second))))
     session.send_snapshot({"flags":flags,"ms":sim_ms,"x":m.position.x,"z":m.position.y,"heading":m.heading,
-        "vx":m.velocity.x,"vz":m.velocity.y,"yaw":m.yaw_rate,"steer":m.steering_angle,"score":pts})
+        "vx":velocity.x,"vz":velocity.y,"yaw":0.0 if paused_in_park else m.yaw_rate,"steer":m.steering_angle,"score":pts,
+        "height":park.air.height if park != null else 0.0,"pitch":park.air.pitch if park != null else 0.0})
 
 # --------------------------------------------------------------- remote snapshots
 
@@ -341,18 +345,18 @@ func _process(delta: float) -> void:
     var pose: Dictionary = remote_view.step(float(SESSION.now_ms()),delta)
     if pose.is_empty():
         return
-    _place_remote(Vector2(float(pose["x"]),float(pose["z"])),float(pose["heading"]),float(pose["steer"]),float(pose["speed"]),delta)
+    _place_remote(Vector2(float(pose["x"]),float(pose["z"])),float(pose["heading"]),float(pose["steer"]),float(pose["speed"]),delta,pose.height,pose.pitch)
 
 ## Kept for the #31 tests: the interpolation itself lives in NitroNetRemoteView.
 static func interpolate(buf: Array[Dictionary], render_ms: float) -> Dictionary:
     return VIEW.interpolate(buf,render_ms)
 
-func _place_remote(p: Vector2, heading: float, steer: float, speed: float, dt: float) -> void:
+func _place_remote(p: Vector2, heading: float, steer: float, speed: float, dt: float, jump_height := 0.0, jump_pitch := 0.0) -> void:
     var y: float = 0.0
     if race != null and race.track != null:
         y = race.track.road_height_at(p)
-    remote_car.position = Vector3(p.x,y,p.y)
-    remote_car.rotation = Vector3(0.0,-heading,0.0)
+    remote_car.position = Vector3(p.x,y+jump_height,p.y)
+    remote_car.rotation = Vector3(jump_pitch,-heading,0.0)
     _last_render_pos = p
     if remote_car.has_method("set_motion"):
         remote_car.call("set_motion",steer,speed,dt)

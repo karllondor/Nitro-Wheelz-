@@ -1,5 +1,9 @@
 ## LAN reliability and Park multiplayer
 
+## Interactive stunt playground preview
+
+See the [stunt handoff](docs/dev/handoffs/park-stunt-physics.md) for ramp physics, object and collision interfaces, benchmark evidence and the owner playtest.
+
 ## Park multiplayer review
 
 See the [Park multiplayer handoff](docs/dev/handoffs/park-multiplayer.md) for the combined baseline, reusable world-event interfaces, automated evidence and the two-phone checklist.

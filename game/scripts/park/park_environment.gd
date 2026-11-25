@@ -86,7 +86,7 @@ func _stunts() -> void:
         for dist in [18.0, 41.0, 67.0]:
             _arrow(paint, at - SITE.RAMP_DIR * dist, SITE.RAMP_DIR, WHITE)
         _text_on_ground(zone, at + Vector2(0, 13), str(ramp.id).to_upper(), YELLOW, 2.2)
-        _text_on_ground(zone, at + Vector2(0, 7.0), "DECK CLOSED", WHITE, 1.1)
+        _text_on_ground(zone, at + Vector2(0, 7.0), "JUMP", WHITE, 1.1)
         var lower := Vector3(at.x - width * 0.5, 0.09, at.y)
         var upper := lower + Vector3(0, rise, -run)
         var base := lower + Vector3(0, 0, -run)
@@ -98,18 +98,12 @@ func _stunts() -> void:
         decks.triangle(lower + span, base + span, upper + span, Vector3.RIGHT, PURPLE)
         decks.box(upper + Vector3(width * 0.5, -rise * 0.5, 0.0), Vector3(width, rise, 0.16), PURPLE)
         decks.box(upper + Vector3(width * 0.5, 0.05, 0.21), Vector3(width, 0.12, 0.30), YELLOW)
-        _solid(Rect2(at.x - width * 0.5, at.y - run, width, run))
-        var barrier := Rect2(at.x - width * 0.5 - 0.3, at.y + 2.55, width + 0.6, 0.55)
-        _solid_box(signs, barrier, 0.88, BLACK)
-        for i in range(floori(width / 0.90)):
-            signs.box(Vector3(barrier.position.x + 0.64 + i * 0.90, 0.51, at.y + 2.82),
-                Vector3(0.44, 0.32, 0.57), YELLOW, Basis(Vector3.BACK, -0.24))
     _outline(paint, SITE.CARDBOARD, PINK, 0.32)
     _text_on_ground(zone, SITE.CARDBOARD.get_center(), "OBSTACLE PAD", PINK, 2.25)
     _text_on_ground(zone, Vector2(-32, -504), "LANDING ZONES", YELLOW, 2.4)
-    _board(zone, signs, Vector2(74, -365), "STUNT AREA   /   RUN-UPS OPEN", YELLOW, 14.5)
+    _board(zone, signs, Vector2(74, -365), "STUNT AREA   /   THREE JUMP LANES", YELLOW, 14.5)
     decks.commit(zone, "Modular ramp decks")
-    signs.commit(zone, "Visible deck closures")
+    signs.commit(zone, "Stunt signs")
     paint.commit(zone, "Approach and landing paint", null, false)
 
 func _parking() -> void:
@@ -453,15 +447,24 @@ func _solid(rect: Rect2) -> void:
                 _solids[key] = []
             _solids[key].append(rect)
 
-func resolve_contact(pos: Vector2, heading: float, half_width: float, half_length: float) -> Vector2:
+func resolve_contact(pos: Vector2, heading: float, half_width: float, half_length: float,
+        open_deck := -1, vehicle_height := 0.0) -> Vector2:
     var contacts: Array = _solids.get(_cell(pos), [])
-    if contacts.is_empty():
+    var near_decks := SITE.STUNT.grow(4.0).has_point(pos)
+    if contacts.is_empty() and not near_decks:
         return Vector2.ZERO
     var forward := Vector2(sin(heading), -cos(heading))
     var right := Vector2(-forward.y, forward.x)
     var correction := Vector2.ZERO
     for obstacle: Rect2 in contacts:
         correction += _separate(pos + correction, forward, right, half_width, half_length, obstacle)
+    if near_decks:
+        for i in SITE.RAMPS.size():
+            var ramp: Dictionary = SITE.RAMPS[i]
+            if i == open_deck or vehicle_height > float(ramp.rise) + 0.1:
+                continue
+            var rect := Rect2(ramp.start.x-ramp.width*0.5,ramp.start.y-ramp.run,ramp.width,ramp.run)
+            correction += _separate(pos+correction, forward, right, half_width, half_length, rect)
     return correction
 
 static func _separate(pos: Vector2, forward: Vector2, right: Vector2,

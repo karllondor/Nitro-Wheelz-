@@ -14,6 +14,8 @@ const CONES = preload("res://scripts/park/park_cones.gd")
 const TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const PROGRESS = preload("res://scripts/park/park_progress.gd")
 const GHOST = preload("res://scripts/park/park_ghost.gd")
+const AIR = preload("res://scripts/park/park_air.gd")
+const STUNTS = preload("res://scripts/park/park_stunt_world.gd")
 const NET_TRAINING = preload("res://scripts/net/net_park_training.gd")
 const GUIDE = preload("res://scripts/park/park_guide.gd")
 
@@ -28,6 +30,10 @@ signal repair_requested
 var race: Node3D
 var room: NitroNetSession
 var shared_training: Node
+var air = AIR.new()
+var stunts: Node
+var _previous_stunt_car := Vector3.INF
+var _jump_shadow: MeshInstance3D
 var mode: String = "free"
 var cones: NitroParkCones
 var tutorial: NitroParkTutorial = null
@@ -62,6 +68,10 @@ func setup(race_node: Node3D, park_room: NitroNetSession = null) -> void:
     race.add_child(cones)
     cones.build(LAYOUT.cones())
     cones.cone_hit.connect(_on_cone_hit)
+    stunts = STUNTS.new()
+    add_child(stunts)
+    stunts.setup(room)
+    _make_jump_shadow()
     if room != null:
         shared_training = NET_TRAINING.new()
         add_child(shared_training)
@@ -175,8 +185,9 @@ func freezes() -> bool:
 ## RESTART (pause menu): car back to the start (done by race.gd), cones back, the
 ## current lesson starts again. Paint is paint: nothing to reset.
 func restart() -> void:
+    _reset_air()
     if room == null:
-        cones.reset_all()
+        reset_objects()
     _reset_visit()
     _notice_left = 0.0
     _site_notice.hide()
@@ -207,6 +218,41 @@ func _process(delta: float) -> void:
 
 # --------------------------------------------------------------------- per tick
 
+func stunt_ground_step(previous: Vector2) -> void:
+    var track := race.track as NitroParkTrack
+    air.ground_step(previous,race.model)
+    track.stunt_deck = air.deck
+    track.stunt_height = air.height
+    _jump_shadow.visible = air.airborne
+    if air.airborne:
+        _jump_shadow.position = Vector3(race.model.position.x,0.112,race.model.position.y)
+        _jump_shadow.rotation.y = -race.model.heading
+
+func _make_jump_shadow() -> void:
+    _jump_shadow = MeshInstance3D.new()
+    _jump_shadow.name = "Park jump ground shadow"
+    var plane := PlaneMesh.new()
+    plane.size = Vector2(3.6,5.8)
+    _jump_shadow.mesh = plane
+    var material := ShaderMaterial.new()
+    material.shader = preload("res://assets/shaders/park_jump_shadow.gdshader")
+    _jump_shadow.material_override = material
+    _jump_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(_jump_shadow)
+    _jump_shadow.hide()
+
+func reset_objects() -> void:
+    cones.reset_all()
+    stunts.reset()
+
+func _reset_air() -> void:
+    air.reset()
+    var track := race.track as NitroParkTrack
+    track.stunt_deck = -1
+    track.stunt_height = 0.0
+    _previous_stunt_car = Vector3.INF
+    _jump_shadow.hide()
+
 func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: float) -> void:
     _clock += dt
     _cone_hint_clock += dt
@@ -218,6 +264,13 @@ func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: 
         cones.step(dt,model.position,model.heading,model.velocity,track.body_half_length,track.body_half_width)
     else:
         shared_training.local_contact(model,track)
+    var at := Vector3(model.position.x,air.height,model.position.y)
+    var from := _previous_stunt_car
+    _previous_stunt_car = at
+    if not from.is_finite() or from.distance_to(at) > 4.2:
+        from = at
+    var slot := room.local_index if room != null else -1
+    stunts.contact(from,at,model.heading,model.velocity,Vector2(track.body_half_length,track.body_half_width),slot)
     _service_step(dt, model)
     if tutorial != null:
         tutorial.update(dt,{"pos":model.position,"speed_kmh":model.speed_kmh(),"drift_angle":model.drift_angle,
@@ -240,6 +293,9 @@ func _recover_if_outside(model: NitroDriveModel) -> bool:
     return true
 
 func recover_vehicle() -> void:
+    _reset_air()
+    race.car_y = 0.0
+    race.car_y_vel = 0.0
     var destination: Vector2 = LAYOUT.START_POS if room == null else race.net.park_recovery_spawn()
     race.model.reset(destination, LAYOUT.START_HEADING)
     if room != null:

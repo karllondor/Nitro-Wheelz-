@@ -10,13 +10,16 @@ class_name NitroNetProtocol
 ##   KIND_PARK_CONES (3): bounded host object state, unreliable in motion and reliable when settled.
 ## Remote positions are CLIENT-REPORTED: they are for the other player's eyes only. They are never trusted for
 ## ranking, records or stars (prototype, collisionless).
-const PROTOCOL_VERSION: int = 3
+const PROTOCOL_VERSION: int = 4
 const DEFAULT_PORT: int = 47821
 const MAX_PLAYERS: int = 2
 const SNAPSHOT_HZ: float = 20.0
 const KIND_CONTROL: int = 1
 const KIND_SNAPSHOT: int = 2
 const KIND_PARK_CONES: int = 3
+const KIND_PARK_OBJECTS: int = 4
+const PARK_OBJECT_BYTES := 13
+const PARK_CAR_BYTES := 52
 const PARK_CONE_HEADER := 11
 const PARK_CONE_BYTES := 11
 const MAX_PARK_CONES := 80
@@ -55,7 +58,7 @@ static func track_fingerprint(path: String) -> String:
     if path == PARK_PATH:
         var layout_bytes := var_to_bytes([PARK_SITE.LAN_LAYOUT_REVISION, PARK_SITE.BOUNDS,
             PARK_SITE.LOOP, PARK_SITE.ENTRY_LANE, PARK_SITE.EXIT_LANE, PARK_SITE.STUNT_ACCESS,
-            PARK_SITE.PAVED, PARK_SITE.RAMPS, PARK_SITE.REPAIR, PARK_LAYOUT.cones()])
+            PARK_SITE.PAVED, PARK_SITE.RAMPS, PARK_SITE.REPAIR, PARK_LAYOUT.cones(), PARK_SITE.stunt_props()])
         var hash_context := HashingContext.new()
         hash_context.start(HashingContext.HASH_SHA256)
         hash_context.update(FileAccess.get_file_as_bytes(path))
@@ -193,14 +196,51 @@ static func unpack_park_cones(b: PackedByteArray) -> Dictionary:
             "angle":float(b[offset+10])*TAU/256.0})
     return {"round":b.decode_u32(1),"revision":b.decode_u32(5),"seq":b.decode_u16(9),"poses":poses}
 
+## Sparse positions use 2.5 cm steps and signed 16-bit Euler angles.
+static func pack_park_objects(round_id: int, revision: int, seq: int, poses: Array) -> PackedByteArray:
+    var b := PackedByteArray()
+    b.resize(PARK_CONE_HEADER+PARK_OBJECT_BYTES*poses.size())
+    b[0] = KIND_PARK_OBJECTS
+    b.encode_u32(1,round_id)
+    b.encode_u32(5,revision)
+    b.encode_u16(9,seq)
+    var at := PARK_CONE_HEADER
+    for pose in poses:
+        b[at] = pose.id
+        for axis in 3:
+            b.encode_s16(at+1+axis*2,roundi(float(pose.position[axis])*40.0))
+            b.encode_s16(at+7+axis*2,roundi(wrapf(float(pose.rotation[axis]),-PI,PI)*8192.0))
+        at += PARK_OBJECT_BYTES
+    return b
+
+static func unpack_park_objects(b: PackedByteArray) -> Dictionary:
+    if b.size() < PARK_CONE_HEADER or b[0] != KIND_PARK_OBJECTS:
+        return {}
+    var bytes := b.size()-PARK_CONE_HEADER
+    if bytes % PARK_OBJECT_BYTES != 0 or bytes > PARK_SITE.STUNT_PROP_CAP*PARK_OBJECT_BYTES:
+        return {}
+    var poses := []
+    var seen := {}
+    for at in range(PARK_CONE_HEADER,b.size(),PARK_OBJECT_BYTES):
+        var id := int(b[at])
+        var pos := Vector3(b.decode_s16(at+1),b.decode_s16(at+3),b.decode_s16(at+5))/40.0
+        var rot := Vector3(b.decode_s16(at+7),b.decode_s16(at+9),b.decode_s16(at+11))/8192.0
+        if id >= PARK_SITE.STUNT_PROP_CAP or seen.has(id) or maxf(absf(rot.x),maxf(absf(rot.y),absf(rot.z))) > PI+0.001:
+            return {}
+        if pos != Vector3(0,-8,0) and (pos.y < -0.55 or pos.y > 28.0 or not PARK_SITE.STUNT.grow(16.0).has_point(Vector2(pos.x,pos.z))):
+            return {}
+        seen[id] = true
+        poses.append({"id":id,"position":pos,"rotation":rot})
+    return {"round":b.decode_u32(1),"revision":b.decode_u32(5),"seq":b.decode_u16(9),"poses":poses}
+
 # ---------------------------------------------------------------- snapshot packets
 
 ## Layout (little endian, 44 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
 ## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score, [40] u32 round.
 ## flags: 1 drifting, 2 paused, 4 reset (a deliberate jump: restart), 8 handbrake.
-static func pack_snapshot(s: Dictionary) -> PackedByteArray:
+static func pack_snapshot(s: Dictionary, park := false) -> PackedByteArray:
     var b := PackedByteArray()
-    b.resize(SNAPSHOT_SIZE)
+    b.resize(PARK_CAR_BYTES if park else SNAPSHOT_SIZE)
     b[0] = KIND_SNAPSHOT
     b[1] = int(s.get("flags",0)) & 0xFF
     b.encode_u16(2,int(s.get("seq",0)) & 0xFFFF)
@@ -214,11 +254,14 @@ static func pack_snapshot(s: Dictionary) -> PackedByteArray:
     b.encode_float(32,float(s.get("steer",0.0)))
     b.encode_s32(36,int(s.get("score",0)))
     b.encode_u32(40,int(s.get("round",0)))
+    if park:
+        b.encode_float(44,float(s.get("height",0.0)))
+        b.encode_float(48,float(s.get("pitch",0.0)))
     return b
 
 ## {} for anything malformed: wrong size / kind, NaN / infinity, absurd position / speed / angle / score.
 static func unpack_snapshot(b: PackedByteArray) -> Dictionary:
-    if b.size() != SNAPSHOT_SIZE or b[0] != KIND_SNAPSHOT:
+    if b.size() not in [SNAPSHOT_SIZE,PARK_CAR_BYTES] or b[0] != KIND_SNAPSHOT:
         return {}
     var s: Dictionary = {"round":b.decode_u32(40),"flags":int(b[1]),"seq":b.decode_u16(2),"ms":b.decode_u32(4),"x":b.decode_float(8),"z":b.decode_float(12),
         "heading":b.decode_float(16),"vx":b.decode_float(20),"vz":b.decode_float(24),"yaw":b.decode_float(28),
@@ -233,6 +276,13 @@ static func unpack_snapshot(b: PackedByteArray) -> Dictionary:
         return {}
     if int(s["score"]) < 0 or int(s["score"]) > 100000000:
         return {}
+    if b.size() == PARK_CAR_BYTES:
+        var height := b.decode_float(44)
+        var pitch := b.decode_float(48)
+        if not is_finite(height) or not is_finite(pitch) or height < 0.0 or height > 7.0 or absf(pitch) > 0.40:
+            return {}
+        s["height"] = height
+        s["pitch"] = pitch
     return s
 
 ## u16 sequence "a is newer than b" with wrap-around.

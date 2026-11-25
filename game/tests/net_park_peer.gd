@@ -122,6 +122,12 @@ func _run() -> void:
             race.time_elapsed == 0.0 and room.standings().is_empty(),"independent recovery and no clock/standings"):
         return
 
+    if not await _jump_together():
+        return
+    race._restart()
+    if not await _sync("stunt_end"):
+        return
+
     var cone_home: Vector2 = race.park.cones.homes[0]
     if host:
         if not _check(room.host_park_event(P.ParkEvent.RESET_TRAINING),"host training reset"):
@@ -131,6 +137,9 @@ func _run() -> void:
         if not await _until(func(): return _marked("cones-ready") and room.park_revision == 1,"host reset replicated"):
             return
         if not _check(not room.host_park_event(P.ParkEvent.RESET_TRAINING),"guest lacks reset authority"):
+            return
+        var props: Node = race.park.stunts
+        if not _check(props.visuals[13].position == props.fixtures[13].at,"host reset restored cardboard on guest"):
             return
         race.model.reset(cone_home,0.0)
     if not await _until(func(): return race.park.cones.positions[0].distance_to(cone_home)>0.18,"guest contact moved authoritative cone on this peer"):
@@ -164,6 +173,9 @@ func _run() -> void:
         race = current_scene
         if not await _until(func(): return race.park.cones.positions[0].distance_to(cone_home)>0.18,"late join received displaced cone state"):
             return
+        if not await _until(func(): return race.park.stunts.visuals[13].position.distance_to(race.park.stunts.fixtures[13].at)>0.3,
+                "late join receives current stunt prop transforms"):
+            return
         if not _check(room.round_id == 2 and not race.net.freezes() and race.model.position.distance_to(Vector2(5,45)) < 0.5,
                 "reconnect avoids the occupied nominal spawn without a countdown"):
             return
@@ -175,6 +187,11 @@ func _run() -> void:
             return
         race.model.reset(Vector2(5,30),0.0)
         if not await _until(func(): return room.park_host_position == Vector2(5,30),"host occupies the nominal guest spawn"):
+            return
+        var parked_world: Node = race.park.stunts
+        var hit_at: Vector3 = parked_world.fixtures[13].at
+        parked_world.contact(hit_at,hit_at,0.0,Vector2(0,-13),Vector2(2.6,1.1))
+        if not await _until(func(): return parked_world.visuals[13].position.distance_to(hit_at)>0.4,"solo host displaces cardboard while room stays open"):
             return
         _mark("host-open")
         if not await _until(func(): return _marked("guest-back") and room.park_peer_loaded() and race.net.remote_car.visible,"host saw reconnect"):
@@ -188,6 +205,9 @@ func _run() -> void:
             [race.park.shared_training.packets_sent,race.park.shared_training.payload_bytes_sent])
         _pause_button("RESET TRAINING OBJECTS")
     if not await _until(func(): return room.park_revision == 2 and race.park.cones.displaced_count() == 0,"host pause command reset both cone sets"):
+        return
+    if not _check(race.park.stunts.visuals[13].position==race.park.stunts.fixtures[13].at,
+            "host reset reached the reconnected player's props"):
         return
     if not _check(_progress_unchanged() and race.time_elapsed == 0.0 and race.lap == 1 and not race.finished,
             "Park did not write progress, scores or race timers"):
@@ -222,6 +242,30 @@ func _run() -> void:
     await process_frame
     print("PASS: Park LAN ",driver," ",("host" if host else "guest")," drives every zone, rendezvous, sees shared cones, and returns to competitive play")
     quit(0)
+
+func _jump_together() -> bool:
+    var world: Node = race.park.stunts
+    var ramp: Dictionary = SITE.RAMPS[1 if host else 2]
+    var own := 0.0
+    var other := 0.0
+    race.park._reset_air()
+    race.model.reset(ramp.start+Vector2(0,7),0.0)
+    race.model.velocity = Vector2(0,-8.5)
+    if not await _sync("stunt_start"):
+        return false
+    var until_ms := Time.get_ticks_msec()+5500
+    while Time.get_ticks_msec() < until_ms:
+        Input.action_press("throttle",clampf(0.30+(8.5-race.model.speed_mps())*0.19,0.0,1.0))
+        own = maxf(own,race.car_y)
+        other = maxf(other,race.net.remote_car.position.y)
+        await process_frame
+    Input.action_release("throttle")
+    var moved := func(id: int) -> bool: return world.visuals[id].position.distance_to(world.fixtures[id].at) > 0.18
+    if not await _until(func(): return moved.call(3) and moved.call(13),"both simultaneous cardboard hits resolved on this peer"):
+        return false
+    print("STUNT_LAN %s own_apex=%.2f m remote_apex=%.2f m sent=%d payload_bytes=%d bodies_peak=%d" %
+        [driver,own,other,world.packets,world.payload_bytes,world.peak_active])
+    return _check(own>1.9 and other>1.9 and (host or world.pool.is_empty()),"remote height interpolates and only the host owns rigid bodies")
 
 func _pause_button(label: String) -> void:
     race._toggle_pause()

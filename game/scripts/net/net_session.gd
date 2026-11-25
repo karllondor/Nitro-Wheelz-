@@ -33,6 +33,7 @@ signal park_peer_ready
 signal park_lobby_returned
 signal park_event_received(kind: int, revision: int, payload: Dictionary)
 signal park_cones_received(poses: Array)
+signal park_objects_received(poses: Array)
 signal park_cones_sync_requested
 
 const HANDSHAKE_TIMEOUT_MS: int = 5000
@@ -72,6 +73,8 @@ var park_host_position := Vector2(-5.0,30.0)
 var returning_to_lobby := false
 var _park_cone_seq := 0
 var _last_park_cone_seq := -1
+var _park_object_seq := 0
+var _last_park_object_seq := -1
 var drivers: Array[Dictionary] = []        # Stable host/join slots, retained after disconnect
 var _host_offset_ms: float = 0.0
 var _best_ping_ms: float = INF
@@ -240,6 +243,7 @@ func _prepare_round(id: int) -> void:
     go_local_usec = 0
     drivers.clear()
     _last_park_cone_seq = -1
+    _last_park_object_seq = -1
     if is_park():
         return
     for slot in 2:
@@ -332,7 +336,7 @@ func send_snapshot(s: Dictionary) -> void:
     var transfer := MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED
     if is_park() and (int(s.get("flags",0)) & 4) != 0:
         transfer = MultiplayerPeer.TRANSFER_MODE_RELIABLE
-    api.send_bytes(P.pack_snapshot(s),_peer_target(),transfer,0)
+    api.send_bytes(P.pack_snapshot(s,is_park()),_peer_target(),transfer,0)
 
 func _send_start() -> void:
     _send({"round":round_id,"t":P.Msg.START,"track":track_path,"fp":track_fp},other_id)
@@ -358,6 +362,16 @@ func send_park_cones(poses: Array, reliable: bool) -> int:
     if api.send_bytes(packet,other_id,transfer,0) != OK:
         return 0
     _park_cone_seq = (_park_cone_seq+1) & 0xffff
+    return packet.size()
+
+func send_park_objects(poses: Array, reliable: bool) -> int:
+    if not is_host or not park_peer_loaded() or poses.size() > P.PARK_SITE.STUNT_PROP_CAP:
+        return 0
+    var packet := P.pack_park_objects(round_id,park_revision,_park_object_seq,poses)
+    var transfer := MultiplayerPeer.TRANSFER_MODE_RELIABLE if reliable else MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED
+    if api.send_bytes(packet,other_id,transfer,0) != OK:
+        return 0
+    _park_object_seq = (_park_object_seq+1) & 0xffff
     return packet.size()
 
 func return_park_lobby() -> bool:
@@ -484,8 +498,8 @@ func _on_packet(id: int, bytes: PackedByteArray) -> void:
         return
     if (is_host and id != other_id) or (not is_host and id != 1):
         return                                       # not the phone this session talks to
-    if bytes[0] == P.KIND_PARK_CONES:
-        _on_park_cones(bytes)
+    if bytes[0] == P.KIND_PARK_CONES or bytes[0] == P.KIND_PARK_OBJECTS:
+        _on_park_world(bytes)
         return
     _last_rx_msec = now_ms()
     if bytes[0] == P.KIND_SNAPSHOT:
@@ -499,7 +513,7 @@ func _on_packet(id: int, bytes: PackedByteArray) -> void:
 
 func _on_snapshot(bytes: PackedByteArray) -> void:
     var s: Dictionary = P.unpack_snapshot(bytes)
-    if s.is_empty():
+    if s.is_empty() or is_park() != s.has("height"):
         dropped_packets += 1
         return
     var driving := park_peer_loaded() if is_park() else state in [State.STARTING,State.COUNTDOWN,State.RACING]
@@ -517,20 +531,26 @@ func _on_snapshot(bytes: PackedByteArray) -> void:
     _live_points(1-local_index,int(s.score))
     remote_snapshot.emit(s)
 
-func _on_park_cones(bytes: PackedByteArray) -> void:
+func _on_park_world(bytes: PackedByteArray) -> void:
     if is_host or state != State.PARK:
         return
-    var state_packet := P.unpack_park_cones(bytes)
+    var cones := bytes[0] == P.KIND_PARK_CONES
+    var state_packet := P.unpack_park_cones(bytes) if cones else P.unpack_park_objects(bytes)
     if state_packet.is_empty():
         dropped_packets += 1
         return
     if state_packet.round != round_id or state_packet.revision != park_revision:
         return
-    if _last_park_cone_seq >= 0 and not P.seq_newer(state_packet.seq,_last_park_cone_seq):
+    var previous := _last_park_cone_seq if cones else _last_park_object_seq
+    if previous >= 0 and not P.seq_newer(state_packet.seq,previous):
         return
-    _last_park_cone_seq = state_packet.seq
     _last_rx_msec = now_ms()
-    park_cones_received.emit(state_packet.poses)
+    if cones:
+        _last_park_cone_seq = state_packet.seq
+        park_cones_received.emit(state_packet.poses)
+    else:
+        _last_park_object_seq = state_packet.seq
+        park_objects_received.emit(state_packet.poses)
 
 func _on_control(m: Dictionary) -> void:
     match int(m["t"]):

@@ -50,9 +50,9 @@ func _run() -> void:
     for ramp in SITE.RAMPS:
         var landing: Rect2 = ramp.landing
         var approach: Rect2 = ramp.approach
-        var stop: Vector2 = ramp.start + Vector2(0, 2.8)
-        if approach.size.y < 80.0 or landing.size.y < 45.0 or not track.resolve_body(stop, 0.0, Vector2.ZERO).hit:
-            _fail("Ramp interface or visible closure invalid: " + str(ramp.id))
+        var touch_lip: Vector2 = ramp.start + Vector2(0, -float(ramp.run) - 1.0)
+        if approach.size.y < 80.0 or landing.size.y < 45.0 or not track.resolve_body(touch_lip, PI, Vector2.ZERO).hit:
+            _fail("Ramp interface or exposed rear lip invalid: " + str(ramp.id))
             return
         for point in [landing.get_center(), landing.position + Vector2(4, 4), landing.end - Vector2(4, 4),
                 approach.get_center(), Vector2(approach.get_center().x, approach.end.y - 3.0)]:

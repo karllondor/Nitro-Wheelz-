@@ -94,7 +94,7 @@ func _build() -> void:
     if reset_action.is_valid():
         var reset: Button = _menu_button(stack,"RESET TRAINING OBJECTS",Callable(),sc,60.0,19.0)
         reset.name = "RESET TRAINING OBJECTS"
-        reset.pressed.connect(_confirm.bind(reset,"TAP AGAIN TO RESET CONES",reset_action))
+        reset.pressed.connect(_confirm.bind(reset,"TAP AGAIN TO RESET OBJECTS",reset_action))
     var leave_label: String = _park_options.get("leave","GARAGE / MENU")
     var gb: Button = _menu_button(stack,leave_label,Callable(),sc,60.0,21.0)
     gb.name = leave_label

@@ -1,5 +1,13 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## Interactive Park stunt preview
+
+| Coverage | Evidence |
+| --- | --- |
+| All three ramps, low and high approach speeds, both cameras, box and barrier contact, pool, reset and recovery | Godot `park_stunt_test` |
+| Two simultaneous jumps and impacts, host authority, reconnect and shared reset | `python3 tools/test_net_rounds.py --park` |
+| Physical Android frame timing and two-handset Wi-Fi / hotspot | Owner QA pending |
+
 ## Multiplayer reliability v2
 
 Two isolated games exchanged ENet traffic through three rounds per host role. Countdown, restarts, results, livery and disconnect assertions passed. Physical Android Wi-Fi and hotspot QA are pending. [Measurements and checklist](dev/handoffs/issue-31-multiplayer-reliability-v2.md).
