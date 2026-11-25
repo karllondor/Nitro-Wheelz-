@@ -7,6 +7,8 @@ class_name NitroMultiplayerLobby
 ##   join  -> address field, CONNECT (retry after an error), roster, READY, LEAVE
 ## The session node lives under the SceneTree root (not under this scene) so it survives the change to the race scene;
 ## NitroNetRace ends it when the race scene is left. The main menu has exactly one line that opens this scene.
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LIGHTING_SELECTOR = preload("res://scripts/ui/lighting_selector.gd")
 const P = preload("res://scripts/net/net_protocol.gd")
 const SESSION = preload("res://scripts/net/net_session.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
@@ -441,6 +443,10 @@ func _lobby_page() -> void:
     _player_card("YOU  •  %s" % ("HOST" if session.is_host else "GUEST"),str(session.me["name"]),str(session.me["car"]),bool(session.me["ready"]))
     _player_card("OTHER PLAYER",other_name,str(session.other.get("car","red")),bool(session.other.get("ready",false)))
     _track_row()
+    var selector := LIGHTING_SELECTOR.new()
+    selector.name = "Time of day"
+    page.add_child(selector)
+    selector.configure(TIME.LABELS, session.time_of_day, session.set_time_of_day if session.is_host else Callable(), ui_unit, true)
     var fp_ok: bool = bool(session.other.get("fp_ok",false)) if session.is_host else true
     if session.is_host and not fp_ok:
         _label("THE OTHER PHONE HAS NOT CONFIRMED THIS TRACK YET",15,Color(1.0,0.78,0.4))

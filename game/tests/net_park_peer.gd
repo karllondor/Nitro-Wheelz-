@@ -1,5 +1,7 @@
 extends SceneTree
 ## Normal lobby and gameplay scenes, driven by tools/test_net_rounds.py in two processes.
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LAMPS = preload("res://scripts/lighting/car_lamps.gd")
 const P = preload("res://scripts/net/net_protocol.gd")
 const S = preload("res://scripts/net/net_session.gd")
 const SITE = preload("res://scripts/park/park_site.gd")
@@ -70,6 +72,7 @@ func _run() -> void:
         room = current_scene.session
         if not _check(room != null and room.state == S.State.HOSTING,"host Park from lobby"):
             return
+        room.set_time_of_day(TIME.Preset.DAWN)
         _mark("listening")
     else:
         if not await _until(func(): return _marked("listening"),"host port ready"):
@@ -93,6 +96,36 @@ func _run() -> void:
             race.net.remote_car.has_node("Opponent marker") and room.round_start_usec == 0 and countdown[0] == 0,
             "independent spawns, visible remote car, no GO countdown"):
         return
+    if not _check(race.time_of_day == TIME.Preset.DAWN and race.lamps.spots[0].visible,
+            "lobby preset at start"):
+        return
+    if not host:
+        room.set_time_of_day(TIME.Preset.GOLDEN_HOUR)
+        if not _check(room.time_of_day == TIME.Preset.DAWN,"guest cannot change shared time"):
+            return
+    if not await _sync("lighting_ready"):
+        return
+    if host:
+        race._toggle_pause()
+        var selector: Node = race.pause_menu.find_child("TIME OF DAY",true,false)
+        selector.get_node("NIGHT").pressed.emit()
+        race._toggle_pause()
+    if not await _until(func(): return race.time_of_day == TIME.Preset.NIGHT,"host Park pause updates both scenes live"):
+        return
+    race._set_lamp_mode(LAMPS.Mode.ON if host else LAMPS.Mode.OFF)
+    Input.action_press("handbrake")
+    var expected := LAMPS.BRAKING if host else (LAMPS.POSITION | LAMPS.BRAKING)
+    if not await _until(func(): return race.net.remote_lamps.bits == expected,"other peer lamp and handbrake state"):
+        return
+    if not await _sync("lighting_brake"):
+        return
+    Input.action_release("handbrake")
+    race._set_lamp_mode(LAMPS.Mode.AUTO)
+    if not await _until(func(): return race.net.remote_lamps.bits == LAMPS.POSITION,"release restores shared tail state"):
+        return
+    if not await _sync("lighting_release"):
+        return
+    print("PARK_LIGHTING ",driver," host=",host," start=DAWN live=NIGHT lamp=ON/OFF brake=SYNCED")
     var received: Array[int] = []
     var sample := func(s: Dictionary): received.append(s.recv_ms)
     room.remote_snapshot.connect(sample)
@@ -171,6 +204,9 @@ func _run() -> void:
         if not await _until(_in_park,"guest rejoined directly into living Park"):
             return
         race = current_scene
+        if not await _until(func(): return race.time_of_day == TIME.Preset.GOLDEN_HOUR and race.net.remote_lamps.bits == LAMPS.POSITION,
+                "late join receives current preset and host override"):
+            return
         if not await _until(func(): return race.park.cones.positions[0].distance_to(cone_home)>0.18,"late join received displaced cone state"):
             return
         if not await _until(func(): return race.park.stunts.visuals[13].position.distance_to(race.park.stunts.fixtures[13].at)>0.3,
@@ -193,6 +229,8 @@ func _run() -> void:
         parked_world.contact(hit_at,hit_at,0.0,Vector2(0,-13),Vector2(2.6,1.1))
         if not await _until(func(): return parked_world.visuals[13].position.distance_to(hit_at)>0.4,"solo host displaces cardboard while room stays open"):
             return
+        room.set_time_of_day(TIME.Preset.GOLDEN_HOUR)
+        race._set_lamp_mode(LAMPS.Mode.ON)
         _mark("host-open")
         if not await _until(func(): return _marked("guest-back") and room.park_peer_loaded() and race.net.remote_car.visible,"host saw reconnect"):
             return
@@ -234,6 +272,9 @@ func _run() -> void:
             return
         current_scene.start_game()
     if not await _until(func(): return room.state == S.State.COUNTDOWN,"competitive countdown still scheduled"):
+        return
+    room.set_time_of_day(TIME.Preset.NIGHT)
+    if not _check(current_scene.time_of_day == TIME.Preset.GOLDEN_HOUR,"competitive environment starts shared and stays fixed"):
         return
     if not await _sync("end"):
         return

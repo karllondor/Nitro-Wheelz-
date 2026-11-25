@@ -1,3 +1,7 @@
+# v0.1.47 — Production lighting review
+
+- Added DAY, DAWN, GOLDEN HOUR and NIGHT to race setup, LAN and live Park. Added calibrated headlights, independent position and STOP states, and AUTO / ON / OFF in pause. Full calibration and owner checklist in [Production lighting](docs/dev/handoffs/production-lighting-20261125.md).
+
 ## Multiplayer reliability v2 (review branch)
 
 ## Park vehicle interaction experiment

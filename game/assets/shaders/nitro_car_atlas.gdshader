@@ -13,8 +13,14 @@ render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 // collapse to a point here, so variants share one GLB / mesh / draw call.
 // Meshes without UV2 (E30, wheels) read 0 = always visible.
 uniform float variant_slot = 0.0;
+uniform bool road_lights_enabled = false;
+uniform vec2 road_lamp_limits = vec2(-1.88, 1.82);
+uniform vec2 road_lamp_levels = vec2(0.0);
+uniform float road_reflection = 1.0;
+varying vec3 part_position;
 
 void vertex() {
+	part_position = VERTEX;
 	if (UV2.x > 0.5 && abs(UV2.x - variant_slot) > 0.25) {
 		VERTEX = vec3(0.0);
 	}
@@ -60,7 +66,21 @@ void fragment() {
 	ROUGHNESS = rough;
 	METALLIC = metal * 0.6;
 	SPECULAR = 0.5;
-	EMISSION = env * tint * shine * mix(fres, 1.0, 0.18 + metal * 0.55)
-		+ studio.rgb * pow(1.0 - ndv, 3.0) * rim * 0.22 * (1.0 - rough)
-		+ texture(emission_tex, UV).rgb * emission_energy;
+	vec3 baked = texture(emission_tex, UV).rgb;
+	vec3 fixture = baked * emission_energy;
+	if (road_lights_enabled && abs(part_position.x) > 0.25) {
+		if (part_position.z < road_lamp_limits.x && part_position.y > 0.37 && part_position.y < 0.78) {
+			float lens = smoothstep(0.019, 0.14, min(baked.r, min(baked.g, baked.b)));
+			fixture = mix(fixture, vec3(1.0, 0.91, 0.74) * lens * road_lamp_levels.x, step(0.004, lens));
+		}
+		if (part_position.z > road_lamp_limits.y && part_position.y > 0.38 && part_position.y < 0.79) {
+			float lens = smoothstep(0.004, 0.053, baked.r - max(baked.g, baked.b) * 1.65);
+			vec3 lamp = vec3(0.85, 0.022, 0.032) * road_lamp_levels.y;
+			lamp.gb += vec2(0.085, 0.065) * smoothstep(0.25, 1.0, road_lamp_levels.y);
+			fixture = mix(fixture, lamp * lens, step(0.004, lens));
+		}
+	}
+	EMISSION = (env * tint * shine * mix(fres, 1.0, 0.18 + metal * 0.55)
+		+ studio.rgb * pow(1.0 - ndv, 3.0) * rim * 0.22 * (1.0 - rough)) * road_reflection
+		+ fixture;
 }

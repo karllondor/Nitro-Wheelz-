@@ -1,3 +1,7 @@
+## v0.1.47 production lighting review
+
+The [production-lighting handoff](docs/dev/handoffs/production-lighting-20261125.md) records calibration, runtime controls, LAN, measurements and Android acceptance.
+
 ## LAN reliability and Park multiplayer
 
 ## Park vehicle damage preview

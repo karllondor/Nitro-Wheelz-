@@ -1,5 +1,9 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## Production lighting, v0.1.47
+
+See [calibration, visual capture and handset checklist](dev/handoffs/production-lighting-20261125.md). Godot scene tests cover Park state preservation, four presets and all brake/mode combinations. Real two-process LAN tests cover host authority, brake flags, reconnect and competitive transitions. Physical Android visual acceptance is pending.
+
 ## Park vehicle contacts and bumpers
 
 The [damage handoff](dev/handoffs/park-vehicle-damage.md) records the two-process ENet matrix, scene regressions, renderer samples and physical-phone procedure.

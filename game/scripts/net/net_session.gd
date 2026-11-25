@@ -9,6 +9,7 @@ class_name NitroNetSession
 ## LOADED) -> COUNTDOWN (host announces seconds, the joiner subtracts half its measured round trip) -> RACING.
 ## Everything that can go wrong ends in a readable message (error_raised / peer_lost), never a crash.
 const P = preload("res://scripts/net/net_protocol.gd")
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
 
 ## The session that is in use by the app (set by the lobby, cleared by leave()); null in solo play.
@@ -68,6 +69,8 @@ var fingerprint_override: String = ""
 var countdown_announced_usec: int = 0
 
 var round_id: int = 0
+signal time_of_day_changed(preset: int)
+var time_of_day := TIME.Preset.DAY
 var vehicle_collisions := false
 var bumper_mounts := PackedByteArray([3,3,3,3]) # front/rear for host, then guest
 var park_revision := 0
@@ -189,7 +192,7 @@ func _info_message() -> Dictionary:
     for field in CARS.COSMETICS.SAVE_FIELDS:
         if saved.has(field):
             look[field] = saved[field]
-    return {"collisions":vehicle_collisions,"look":look,"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":track_fp}
+    return {"tod":time_of_day,"collisions":vehicle_collisions,"look":look,"t":P.Msg.INFO,"name":me["name"],"car":me["car"],"ready":bool(me["ready"]),"fp":track_fp}
 
 # --------------------------------------------------------------------- lobby API
 
@@ -215,6 +218,23 @@ func set_park_collisions(enabled: bool) -> void:
     if other_id != 0:
         _send(_info_message(),other_id)
     roster_changed.emit()
+
+## Track selection is fixed at START. The Park host can also change it live.
+func set_time_of_day(value: int) -> void:
+    if not is_host or not TIME.valid(value) or time_of_day == value:
+        return
+    if state in [State.HOSTING, State.LOBBY]:
+        time_of_day = value
+        _send(_info_message(),_peer_target())
+        roster_changed.emit()
+    elif state == State.PARK and is_park():
+        _apply_time_of_day(value)
+        _send({"t":P.Msg.PARK_TIME,"round":round_id,"tod":value},other_id)
+
+func _apply_time_of_day(value: int) -> void:
+    if time_of_day != value:
+        time_of_day = value
+        time_of_day_changed.emit(value)
 
 ## Both players confirm READY again after a circuit change.
 func choose_track(path: String) -> void:
@@ -314,7 +334,7 @@ func _maybe_open_drive() -> void:
         return
     if is_park():
         if state in [State.STARTING,State.PARK] and other_id != 0:
-            _send({"t":P.Msg.PARK_OPEN,"round":round_id,"revision":park_revision,"host_at":park_host_position,"mounts":bumper_mounts,"collisions":vehicle_collisions},other_id)
+            _send({"t":P.Msg.PARK_OPEN,"round":round_id,"revision":park_revision,"tod":time_of_day,"host_at":park_host_position,"mounts":bumper_mounts,"collisions":vehicle_collisions},other_id)
             _set_state(State.PARK)
             park_peer_ready.emit()
             park_cones_sync_requested.emit()
@@ -351,7 +371,7 @@ func send_snapshot(s: Dictionary) -> void:
     api.send_bytes(P.pack_snapshot(s,is_park()),_peer_target(),transfer,0)
 
 func _send_start() -> void:
-    _send({"round":round_id,"t":P.Msg.START,"track":track_path,"fp":track_fp},other_id)
+    _send({"round":round_id,"t":P.Msg.START,"track":track_path,"fp":track_fp,"tod":time_of_day},other_id)
 
 ## Shared Park state can only be committed by the host. Events are ephemeral.
 func host_park_event(kind: int, payload: Dictionary = {}) -> bool:
@@ -585,6 +605,7 @@ func _on_control(m: Dictionary) -> void:
         P.Msg.START:
             if not is_host and state == State.LOBBY and m.round > round_id and str(m.track) == track_path:
                 if _track_matches(str(m["track"]),str(m["fp"])):
+                    _apply_time_of_day(m.tod)
                     _prepare_round(m.round)
                     me["ready"] = true
                     _set_state(State.STARTING)
@@ -614,12 +635,16 @@ func _on_control(m: Dictionary) -> void:
                 countdown_started.emit(secs)
         P.Msg.PARK_OPEN:
             if not is_host and is_park() and state == State.STARTING and m.round == round_id:
+                _apply_time_of_day(m.tod)
                 park_revision = m.revision
                 park_host_position = m.host_at
                 vehicle_collisions = m.collisions
                 bumper_mounts = m.mounts
                 _set_state(State.PARK)
                 park_peer_ready.emit()
+        P.Msg.PARK_TIME:
+            if not is_host and is_park() and state == State.PARK and m.round == round_id:
+                _apply_time_of_day(m.tod)
         P.Msg.PARK_EVENT:
             if not is_host and is_park() and state == State.PARK and m.round == round_id and m.revision == park_revision+1:
                 park_revision = m.revision
@@ -657,7 +682,7 @@ func _on_hello(m: Dictionary) -> void:
         return
     other = {"name":P.clean_name(str(m["name"])),"car":str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red","ready":false,"fp_ok":false}
     _hello_deadline = 0
-    _send({"t":P.Msg.WELCOME,"collisions":vehicle_collisions,"idx":1,"name":me["name"],"car":me["car"],"track":track_path,"fp":(fingerprint_override if fingerprint_override != "" else track_fp)},other_id)
+    _send({"t":P.Msg.WELCOME,"tod":time_of_day,"collisions":vehicle_collisions,"idx":1,"name":me["name"],"car":me["car"],"track":track_path,"fp":(fingerprint_override if fingerprint_override != "" else track_fp)},other_id)
     if state == State.PARK:
         round_id += 1
         _loaded_other = false
@@ -685,6 +710,7 @@ func _on_welcome(m: Dictionary) -> void:
     track_path = str(m["track"])
     track_fp = str(m["fp"])
     vehicle_collisions = m.collisions
+    _apply_time_of_day(m.tod)
     other = {"name":P.clean_name(str(m["name"])),"car":str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red","ready":false,"fp_ok":true}
     _hello_deadline = 0
     _set_state(State.LOBBY)
@@ -697,6 +723,7 @@ func _on_info(m: Dictionary) -> void:
         return
     if not is_host:
         vehicle_collisions = m.collisions
+        _apply_time_of_day(m.tod)
     other["look"] = m.look
     other["name"] = P.clean_name(str(m["name"]))
     other["car"] = str(m["car"]) if CARS.CARS.has(str(m["car"])) else "red"

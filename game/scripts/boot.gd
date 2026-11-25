@@ -1,4 +1,6 @@
 extends Control
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LIGHTING_SELECTOR = preload("res://scripts/ui/lighting_selector.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const DNA = preload("res://scripts/world/track_dna.gd")
@@ -521,6 +523,10 @@ func _setup_page() -> void:
     var cinfo: Dictionary = CARS.info(car)
     var car_b: Button = _big("CAR  ▸  %s\n%s • TAP TO CHANGE" % [str(cinfo["short"]),str(cinfo["paint"])],func(): _open_garage("setup"))
     car_b.name = "Setup car"
+    var selector := LIGHTING_SELECTOR.new()
+    selector.name = "Time of day"
+    page.add_child(selector)
+    selector.configure(TIME.LABELS, TIME.selected(), TIME.select, ui_unit, true)
     var go: Button = _big("DRIVE",_race.bind(path),true)
     go.name = "Setup drive"
     _small("◀  BACK",func(): show_page("main")).name = "Back"

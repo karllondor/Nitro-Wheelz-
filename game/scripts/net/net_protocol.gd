@@ -10,7 +10,10 @@ class_name NitroNetProtocol
 ##   KIND_PARK_CONES (3): bounded host object state, unreliable in motion and reliable when settled.
 ## Peers report their own driving pose. The Park host resolves optional contacts.
 ## Competitive races keep remote cars visual-only.
-const PROTOCOL_VERSION: int = 5
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const PROTOCOL_VERSION: int = 6
+const LAMP_POSITION_BIT := 16
+const LAMP_BRAKE_BIT := 32
 const DEFAULT_PORT: int = 47821
 const MAX_PLAYERS: int = 2
 const SNAPSHOT_HZ: float = 20.0
@@ -30,7 +33,7 @@ const SNAPSHOT_SIZE: int = 44
 const MAX_CONTROL_BYTES: int = 1024
 const MAX_NAME_CHARS: int = 16
 
-enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12, RESTART = 13, FINISH = 14, PARK_OPEN = 15, PARK_EVENT = 16, PARK_LOBBY = 17 }
+enum Msg { HELLO = 1, WELCOME = 2, REJECT = 3, INFO = 4, START = 5, LOADED = 6, COUNTDOWN = 7, LEAVE = 8, PING = 10, PONG = 11, TRACK = 12, RESTART = 13, FINISH = 14, PARK_OPEN = 15, PARK_EVENT = 16, PARK_LOBBY = 17, PARK_TIME = 18 }
 
 ## Reserved event IDs become valid only when their implementation and validator ship.
 enum ParkEvent { RESET_TRAINING = 1, OBJECT_IMPULSE, PLAYER_CONTACT, BUMPER_DAMAGE, DETACH_COMPONENT, SERVICE_REPAIR }
@@ -101,9 +104,11 @@ static func _is_str(d: Dictionary, key: String, max_len: int) -> bool:
 
 ## "" when the message is well-formed, else the reason (the packet is dropped and counted, never executed).
 static func validate_control(m: Dictionary) -> String:
-    if m["t"] in [Msg.START, Msg.RESTART, Msg.LOADED, Msg.COUNTDOWN, Msg.FINISH, Msg.PARK_OPEN, Msg.PARK_EVENT, Msg.PARK_LOBBY]:
+    if m["t"] in [Msg.START, Msg.RESTART, Msg.LOADED, Msg.COUNTDOWN, Msg.FINISH, Msg.PARK_OPEN, Msg.PARK_EVENT, Msg.PARK_LOBBY, Msg.PARK_TIME]:
         if not (m.get("round") is int) or m.round < 1 or m.round > 0xffffffff:
             return "round"
+    if m["t"] in [Msg.WELCOME, Msg.INFO, Msg.START, Msg.PARK_OPEN, Msg.PARK_TIME] and not TIME.valid(m.get("tod")):
+        return "time of day"
     match int(m["t"]):
         Msg.HELLO:
             if not (m.get("proto",null) is int) or not _is_str(m,"ver",24) or not _is_str(m,"name",MAX_NAME_CHARS+4) or not _is_str(m,"car",16):
@@ -156,7 +161,7 @@ static func validate_control(m: Dictionary) -> String:
                 return "Park event"
             if not valid_park_event(m.event,m.payload):
                 return "Unsupported Park event"
-        Msg.RESTART, Msg.LOADED, Msg.LEAVE, Msg.PARK_LOBBY:
+        Msg.RESTART, Msg.LOADED, Msg.LEAVE, Msg.PARK_LOBBY, Msg.PARK_TIME:
             pass
         _:
             return "unknown type %d" % int(m["t"])
@@ -265,7 +270,7 @@ static func unpack_park_objects(b: PackedByteArray) -> Dictionary:
 
 ## Layout (little endian, 44 bytes): [0] kind=2, [1] flags, [2..3] u16 seq, [4..7] u32 sender ms,
 ## [8] x, [12] z, [16] heading, [20] vx, [24] vz, [28] yaw rate, [32] steering angle (f32), [36] s32 score, [40] u32 round.
-## flags: 1 drifting, 2 paused, 4 reset (a deliberate jump: restart), 8 handbrake.
+## flags: 1 drifting, 2 paused, 4 reset, 16 position/headlights, 32 brake lamps.
 static func pack_snapshot(s: Dictionary, park := false) -> PackedByteArray:
     var b := PackedByteArray()
     b.resize(PARK_CAR_BYTES if park else SNAPSHOT_SIZE)

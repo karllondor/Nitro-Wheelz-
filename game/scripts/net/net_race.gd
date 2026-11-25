@@ -12,6 +12,8 @@ class_name NitroNetRace
 ##   * live opponent points and session-only standings,
 ##   * lost connection / leaving: a readable message, the local drive is never interrupted.
 ## Remote data is client-reported and untrusted: nothing here writes records, stars or scores.
+const ENVIRONMENT = preload("res://scripts/lighting/race_environment.gd")
+const LAMPS = preload("res://scripts/lighting/car_lamps.gd")
 const P = preload("res://scripts/net/net_protocol.gd")
 const SESSION = preload("res://scripts/net/net_session.gd")
 const CARS = preload("res://scripts/vehicles/car_catalog.gd")
@@ -93,6 +95,15 @@ static func _park_clear_spawn(pos: Vector2, occupied: Vector2) -> Vector2:
 func mark_recovered() -> void:
     _park_recovery_sends = 3
 
+var remote_lamps
+
+func update_remote_reflection() -> void:
+    if remote_lamps != null:
+        remote_lamps.set_reflection(ENVIRONMENT.reflection(race.time_of_day))
+
+func remote_headlights_on() -> bool:
+    return remote_lamps != null and (remote_lamps.bits & LAMPS.POSITION) != 0
+
 func _make_remote_car() -> void:
     var h: float = race.track.start_heading()
     _remote_identity = [session.other.get("car","red"),session.other.get("look",{}),session.other.get("name","PLAYER")]
@@ -101,6 +112,9 @@ func _make_remote_car() -> void:
     remote_car.name = "Remote player car"
     remote_car.scale = Vector3.ONE*CAR_SCALE
     race.add_child(remote_car)
+    remote_lamps = LAMPS.new()
+    remote_lamps.setup(remote_car,rcar)
+    update_remote_reflection()
     var rp := _spawn(1-session.local_index)
     _place_remote(rp,h,0.0,0.0,0.0)
     remote_label = Label3D.new()
@@ -154,6 +168,8 @@ func _on_park_partner() -> void:
             race._update_visuals()
     _place_remote(peer_spawn,race.track.start_heading(),0.0,0.0,0.0)
     remote_car.show()
+    remote_lamps.set_remote(0)
+    race.refresh_road_lighting()
     _remote_fade = 1.0
     remote_paused = false
     remote_view.reset()
@@ -219,6 +235,8 @@ func _on_state(st: int) -> void:
         _go_until_msec = Time.get_ticks_msec()+900
 
 func _on_lost(reason: String) -> void:
+    if remote_lamps != null and remote_lamps.set_remote(0):
+        race.refresh_road_lighting()
     lost_reason = reason
     _score.text = ""
     remote_paused = false
@@ -298,6 +316,10 @@ func _physics_process(_delta: float) -> void:
     var flags: int = 0
     if m.is_drifting():
         flags |= 1
+    if (race.lamps.bits & LAMPS.POSITION) != 0:
+        flags |= P.LAMP_POSITION_BIT
+    if (race.lamps.bits & LAMPS.BRAKING) != 0:
+        flags |= P.LAMP_BRAKE_BIT
     var park: Node = race.get("park")
     var paused_in_park: bool = park != null and (bool(race.get("paused")) or park.freezes())
     if bool(race.get("paused")) or paused_in_park:
@@ -322,6 +344,9 @@ func _physics_process(_delta: float) -> void:
 
 func _on_snapshot(s: Dictionary) -> void:
     var flags: int = int(s["flags"])
+    var lamp_state := (LAMPS.POSITION if (flags & P.LAMP_POSITION_BIT) != 0 else 0) | (LAMPS.BRAKING if (flags & P.LAMP_BRAKE_BIT) != 0 else 0)
+    if remote_lamps != null and remote_lamps.set_remote(lamp_state):
+        race.refresh_road_lighting()
     remote_paused = (flags&2) != 0
     remote_score = int(s["score"])
     if (flags&4) != 0:

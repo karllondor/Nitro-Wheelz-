@@ -2,6 +2,9 @@ extends Node3D
 ## Nitro Wheelz v0.1 driving laboratory: one original Japanese-style circuit.
 ## Authoritative vehicle state is planar; camera/visuals never modify the physics.
 
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const ENVIRONMENT = preload("res://scripts/lighting/race_environment.gd")
+const LAMPS = preload("res://scripts/lighting/car_lamps.gd")
 const TRACK = preload("res://scripts/world/drift_track.gd")
 const PARK_TRACK = preload("res://scripts/park/park_track.gd")
 const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
@@ -32,6 +35,10 @@ var park: Node = null
 ## LOCAL MULTIPLAYER (issue #31): exists only while a multiplayer session starts a race; solo play never creates it.
 var net: Node = null
 var car_root: Node3D
+var lamps = LAMPS.new()
+var race_environment = ENVIRONMENT.new()
+var time_of_day := TIME.Preset.DAY
+var pause_menu: NitroPauseMenu
 var front_wheels: Array[Node3D] = []
 var overhead: Camera3D
 var chase: Camera3D
@@ -161,9 +168,16 @@ func _ready() -> void:
         add_child(park)
         park.setup(self,NitroNetSession.current if use_network else null)
     if use_network:
+        var room := NitroNetSession.current
+        time_of_day = room.time_of_day
+        room.time_of_day_changed.connect(_apply_time_of_day)
         net = NET_RACE.new()
         add_child(net)
         net.setup(self)
+    else:
+        time_of_day = TIME.selected()
+    race_environment.bind(track)
+    _apply_time_of_day(time_of_day)
     _make_telemetry()
     var info0: Dictionary = track.sample_info(model.position)
     last_progress = float(info0["progress"])
@@ -203,6 +217,8 @@ func _load_terrain() -> void:
     await load("res://scripts/world/step_runner.gd").run_sliced(track.build_terrain_steps(desc),get_tree(),35.0,
         func(f: float): b.set_progress(f))
     track.pending_terrain = {}
+    race_environment.bind(track)
+    refresh_road_lighting()
     var info1: Dictionary = track.sample_info(model.position)
     road_y = track.height_from_info(info1)
     car_y = road_y
@@ -256,6 +272,7 @@ func _make_car() -> void:
     car_root.name = "Nitro Wheelz "+str(CARS.info(variant)["name"])
     car_root.scale = Vector3.ONE*RACE_CAR_SCALE
     add_child(car_root)
+    lamps.setup(car_root,variant)
     # Wall footprint follows the chosen car's size at race scale.
     var info: Dictionary = CARS.info(variant)
     track.body_half_length = float(info["length"])*RACE_CAR_SCALE*0.5-0.095
@@ -456,6 +473,7 @@ func _make_ui() -> void:
     touch.menu_requested.connect(func():get_tree().change_scene_to_file("res://scenes/boot.tscn"))
 
 func _physics_process(delta: float) -> void:
+    _read_lamps()
     if paused or finished:
         return
     if park != null and park.freezes():
@@ -988,8 +1006,8 @@ func _toggle_pause() -> void:
         pause_layer.name = "Exclusive Pause Menu"
         pause_layer.layer = 24
         add_child(pause_layer)
-        var panel: NitroPauseMenu = PAUSE_VIEW.new()
-        pause_layer.add_child(panel)
+        pause_menu = PAUSE_VIEW.new()
+        pause_layer.add_child(pause_menu)
         var shared_park := park != null and net != null
         var restart_action := Callable(self,"_restart") if shared_park or net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
         var leave_action := Callable(net,"leave_park") if shared_park else Callable(self,"_leave_to_menu")
@@ -1000,19 +1018,61 @@ func _toggle_pause() -> void:
             park_options = {"restart":"RECOVER VEHICLE","leave":"RETURN TO LOBBY"}
             if net.session.is_host and net.session.state == net.session.State.PARK:
                 park_options["reset"] = Callable(self,"_reset_shared_training")
-        panel.show_pause(Callable(self,"_toggle_pause"),restart_action,
+        var lighting := {"mode": lamps.mode, "set_mode": _set_lamp_mode}
+        if park != null:
+            lighting["time"] = time_of_day
+            if net == null or net.session.is_host:
+                lighting["set_time"] = _request_park_time_of_day
+        pause_menu.show_pause(Callable(self,"_toggle_pause"),restart_action,
             leave_action,
             _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable(),
             Callable(self,"_park_toggle_tutorial") if park != null else Callable(),
-            park.pause_label() if park != null else "",park_options)
+            park.pause_label() if park != null else "",park_options,lighting)
     else:
         if pause_layer != null:
             pause_layer.queue_free()
             pause_layer = null
+            pause_menu = null
         if touch != null:
             touch.set_process_input(true)
             touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+    _read_lamps()
     _update_visuals()
+
+func _read_lamps() -> void:
+    var brake_on := not paused and not finished and Input.get_action_strength("brake") > 0.1
+    var handbrake_on := not paused and not finished and Input.get_action_strength("handbrake") > 0.1
+    if not paused and not finished and touch != null and touch.visible:
+        brake_on = brake_on or touch.brake > 0.1
+        handbrake_on = handbrake_on or touch.handbrake > 0.1
+    if lamps.set_local(time_of_day,brake_on,handbrake_on):
+        refresh_road_lighting()
+
+func _set_lamp_mode(mode: int) -> void:
+    lamps.mode = mode
+    _read_lamps()
+
+func _request_park_time_of_day(value: int) -> void:
+    if park == null or not TIME.valid(value):
+        return
+    if net == null:
+        _apply_time_of_day(value)
+    else:
+        net.session.set_time_of_day(value)
+
+func _apply_time_of_day(value: int) -> void:
+    time_of_day = value
+    lamps.set_reflection(ENVIRONMENT.reflection(value))
+    _read_lamps()
+    if net != null:
+        net.update_remote_reflection()
+    refresh_road_lighting()
+    if is_instance_valid(pause_menu):
+        pause_menu.show_time_of_day(value)
+
+func refresh_road_lighting() -> void:
+    var remote_lit: bool = net != null and net.remote_headlights_on()
+    race_environment.apply(time_of_day,remote_lit or (lamps.bits & LAMPS.POSITION) != 0)
 
 func _leave_to_menu() -> void:
     get_tree().change_scene_to_file("res://scenes/boot.tscn")
