@@ -120,7 +120,7 @@ func step(now_ms: float, dt: float) -> Dictionary:
         eh = 0.0
     var k: float = exp(-dt/ERROR_TAU_S)
     _disp = {"x":float(pose["x"])+ex*k,"z":float(pose["z"])+ez*k,"heading":float(pose["heading"])+eh*k,
-        "steer":float(pose["steer"]),"speed":float(pose["speed"])}
+        "steer":float(pose["steer"]),"speed":float(pose["speed"]),"height":pose.height,"pitch":pose.pitch}
     return _disp
 
 ## "GOOD" / "FAIR" / "POOR" from the peak age of the newest snapshot (shown next to the other player's score).
@@ -165,9 +165,12 @@ static func interpolate(b: Array[Dictionary], render_ms: float) -> Dictionary:
             out2["heading"] = float(a["heading"])+wrapf(float(c["heading"])-float(a["heading"]),-PI,PI)*t
             out2["steer"] = lerpf(float(a["steer"]),float(c["steer"]),t)
             out2["speed"] = lerpf(Vector2(float(a["vx"]),float(a["vz"])).length(),Vector2(float(c["vx"]),float(c["vz"])).length(),t)
+            out2["height"] = lerpf(float(a.get("height",0.0)),float(c.get("height",0.0)),t)
+            out2["pitch"] = lerpf(float(a.get("pitch",0.0)),float(c.get("pitch",0.0)),t)
             return out2
     return _pose(last)
 
 static func _pose(s: Dictionary) -> Dictionary:
     return {"x":float(s["x"]),"z":float(s["z"]),"heading":float(s["heading"]),"steer":float(s["steer"]),
-        "speed":Vector2(float(s["vx"]),float(s["vz"])).length()}
+        "speed":Vector2(float(s["vx"]),float(s["vz"])).length(),
+        "height":float(s.get("height",0.0)),"pitch":float(s.get("pitch",0.0))}

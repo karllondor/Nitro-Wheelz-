@@ -1,11 +1,12 @@
 extends "res://scripts/world/drift_track.gd"
 class_name NitroParkTrack
-## NITRO WHEELZ PARK as a track (issue #27): one large flat paved surface, NO
-## walls, kerbs or colliders, no finish line, painted guides, the full approved
-## logo flat in the middle. race.gd talks to it through the same interface as
-## to any circuit (`sample_info`, `resolve_body`, start pose ...), so nothing
-## else in the game changes. Layout numbers: park_layout.gd (PROVISIONAL).
+## The open training plaza and the surrounding Park 2 site share one scene.
 const LAYOUT = preload("res://scripts/park/park_layout.gd")
+const SITE_ENVIRONMENT = preload("res://scripts/park/park_environment.gd")
+const VERGE_SHADER = preload("res://assets/shaders/park_verge.gdshader")
+var site: Node3D
+var stunt_deck := -1
+var stunt_height := 0.0
 const LOGO_TEXTURE = preload("res://assets/brand/nitro_wheelz_logo_pavement.png")
 const PAINT_SHADER = preload("res://assets/shaders/pavement_paint.gdshader")
 
@@ -39,11 +40,38 @@ func build() -> void:
     heights = PackedFloat32Array()   # flat
     track_valid = true
     if with_environment:
-        _build_environment()         # sky, moonlight, the big grass plane outside
+        _build_site_environment()
     _build_pad()
     _build_guide_paint()
     _build_logo()
-    # (no cloud shadows on the Park: a flat training pad must read evenly everywhere)
+    if with_environment:
+        site = SITE_ENVIRONMENT.new()
+        add_child(site)
+        site.build()
+
+func _build_site_environment() -> void:
+    _build_environment()
+    var ground := get_node("Ground outside track") as MeshInstance3D
+    ground.mesh.size = Vector2(3000, 3000)
+    ground.position.z = -250.0
+    var verge := ShaderMaterial.new()
+    verge.shader = VERGE_SHADER
+    verge.set_shader_parameter("grass", GRASS)
+    ground.material_override = verge
+    var lighting := get_node("Moonlight") as DirectionalLight3D
+    lighting.light_color = Color("#fff0d9")
+    lighting.light_energy = 0.96
+    var world := find_children("*", "WorldEnvironment", false, false)[0] as WorldEnvironment
+    var environment := world.environment
+    var sky := ProceduralSkyMaterial.new()
+    sky.sky_top_color = Color("#4d627e")
+    sky.sky_horizon_color = Color("#ccb4bd")
+    sky.ground_horizon_color = Color("#ba9ba5")
+    sky.ground_bottom_color = Color("#7f8ba0")
+    sky.sun_angle_max = 15.0
+    environment.sky.sky_material = sky
+    environment.ambient_light_color = Color("#c9cbea")
+    environment.ambient_light_energy = 0.73
 
 # ----------------------------------------------------------------- interface
 
@@ -59,12 +87,18 @@ func sample_info(pos: Vector2) -> Dictionary:
     return {"distance":0.0,"point":pos,"index":0,"t":0.0,"width":100000.0,
         "progress":0.0,"tangent":Vector2(0,-1)}
 
-## NOTHING to collide with: no walls, no cones (they move out of the way and
-## never touch the car state), no barrier. The far soft edge is applied by the
-## Park controller silently.
-func resolve_body(pos: Vector2, _heading: float, travel_velocity: Vector2) -> Dictionary:
-    return {"hit":false,"position":pos,"velocity":travel_velocity,"impact_speed":0.0,
-        "normal":Vector2.ZERO,"yaw_impulse":0.0}
+## Only visibly solid scenery outside the training space blocks the car.
+func resolve_body(pos: Vector2, heading: float, travel_velocity: Vector2) -> Dictionary:
+    var correction := Vector2.ZERO
+    if site != null and pos.is_finite():
+        correction = site.resolve_contact(pos, heading, body_half_width, body_half_length, stunt_deck, stunt_height)
+    if correction == Vector2.ZERO:
+        return {"hit": false, "position": pos, "velocity": travel_velocity,
+            "impact_speed": 0.0, "normal": Vector2.ZERO, "yaw_impulse": 0.0}
+    var normal := correction.normalized()
+    var speed_into := maxf(0.0, -travel_velocity.dot(normal))
+    return {"hit": true, "position": pos + correction, "velocity": travel_velocity + normal * speed_into,
+        "impact_speed": speed_into, "normal": normal, "yaw_impulse": 0.0}
 
 func resolve_wall(pos: Vector2, travel_velocity: Vector2) -> Dictionary:
     return {"hit":false,"position":pos,"velocity":travel_velocity,"impact_speed":0.0,"normal":Vector2.ZERO}

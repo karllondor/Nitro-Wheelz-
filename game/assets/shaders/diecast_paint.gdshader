@@ -18,6 +18,8 @@ uniform float glow : hint_range(0.0, 8.0) = 0.0;
 uniform vec4 studio : source_color = vec4(1.0, 0.95, 0.98, 1.0);
 uniform vec4 floor_tint : source_color = vec4(0.10, 0.07, 0.14, 1.0);
 
+uniform vec4 road_lamp_emission : source_color = vec4(0.0);
+
 void fragment() {
 	vec3 n = normalize(NORMAL);
 	vec3 v = normalize(VIEW);
@@ -38,5 +40,5 @@ void fragment() {
 	SPECULAR = 0.55;
 	EMISSION = env * tint * gloss * mix(fres, 1.0, 0.18 + metallic * 0.55)
 		+ studio.rgb * pow(1.0 - ndv, 3.0) * rim * 0.22
-		+ paint.rgb * glow;
+		+ paint.rgb * glow + road_lamp_emission.rgb;
 }

@@ -6,6 +6,7 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
 uniform sampler2D logo : filter_linear_mipmap_anisotropic, repeat_disable;   // no source_color: the Compatibility renderer would darken the paint
+uniform vec4 time_of_day_tint : source_color = vec4(1.0);
 uniform vec2 size_m = vec2(40.0, 22.5);
 uniform float wear : hint_range(0.0, 0.5) = 0.16;
 uniform float paint_alpha : hint_range(0.0, 1.0) = 0.96;
@@ -27,6 +28,6 @@ void fragment() {
 	vec2 world = UV * size_m;
 	float n = value_noise(world * 2.3) * 0.6 + value_noise(world * 9.0) * 0.4;
 	float speck = smoothstep(0.64, 0.92, n);
-	ALBEDO = t.rgb * (1.0 - 0.12 * speck);
+	ALBEDO = t.rgb * time_of_day_tint.rgb * (1.0 - 0.12 * speck);
 	ALPHA = t.a * paint_alpha * (1.0 - speck * wear * 1.5);
 }

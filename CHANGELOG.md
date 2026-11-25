@@ -1,4 +1,33 @@
+# v0.1.48 — Unified platform review
+
+- Integrated the PC/Web HUD and native/Web runtime checks into the Park and production-lighting review. Android keeps the touch profile. See the [platform handoff](docs/dev/handoffs/platform-integration-20261125.md).
+
+# v0.1.47 — Production lighting review
+
+- Added DAY, DAWN, GOLDEN HOUR and NIGHT to race setup, LAN and live Park. Added calibrated headlights, independent position and STOP states, and AUTO / ON / OFF in pause. Full calibration and owner checklist in [Production lighting](docs/dev/handoffs/production-lighting-20261125.md).
+
+## Multiplayer reliability v2 (review branch)
+
+## Park vehicle interaction experiment
+
+Added optional host-resolved LAN Park contacts, independent cosmetic bumpers on the pearl-white Lada and free synchronized workshop repairs.
+
+## Interactive stunt playground preview
+
+- Opens three Park 2.0 ramps with Park-only airborne motion and adds pooled cardboard and barriers. The LAN host synchronizes jumps, prop movement and resets.
+
+## Park multiplayer preview
+
+- Adds two-player Park 2.0 free roam, tandem and shared drift practice over LAN. The host owns cone motion and reset, and a guest can reconnect to an active Park. Competitive racing retains its separate countdown and results.
+
+Host restarts both cars on a shared countdown. LAN results compare both drivers by points and time. The remote car carries its own livery and a cyan marker.
+
 ## [0.1.45] — UNIFIED DEVELOPMENT PREVIEW 3: smoother remote car + HOTSPOT guide for local multiplayer (DEV package, TEST BUILD)
+
+## Park 2.0 feature preview
+
+- Adds a connected Japanese drift playground around the existing training plaza. The provisional layout includes the technical loop, stunt approaches and landings, paddock, service bay, container yard and landscape.
+- Opens the large figure-eight to a 19 m lobe radius and adds visible free-roam wayfinding and safe recovery.
 Issue #33, canonical branch `integration/nitro-dev` (v0.1.44 + the owner's first real two-phone test of local multiplayer); manifest: docs/dev/INTEGRATION_MANIFEST.md. Multiplayer only: no change to driving, scoring, HUD, builders, events or saves.
 - Remote car: new receiver `NitroNetRemoteView` (steered render clock, jitter-adaptive 110–340 ms delay, discontinuity smoothing instead of a pop, clock-step re-sync). The sender stamps snapshots with simulation time instead of the wall clock of the frame. In a deterministic Wi-Fi / phone-hitch MODEL (same packets through the v0.1.44 receiver and the new one) the old receiver popped up to 4.6 m in one frame after a 0.4–0.6 s link stall and 13 times > 0.5 m on 30 fps phones; the new one never more than 0.35 m. NOT a Wi-Fi measurement; the real cause on the owner's phones is unconfirmed.
 - Lobby: "NO WI-FI? NO PROBLEM. ONE PHONE'S HOTSPOT IS ENOUGH." on the menu, a new **NO WI-FI? HOTSPOT HOW-TO** page (steps for both phones, "keep the connection" when Android says no internet), clearer texts for no address / not on a network / unreachable host.

@@ -7,6 +7,9 @@ extends Node
 ##  3. a Terrain Builder circuit (#29 Club event) opened in the node editor with its landscape, SET START, SAVE AS,
 ##     then DRIVE: the race builds the terrain, judges it as a Club event and starts on the chosen node.
 ## The host phone captures the visible screen at each "ready-<label>" marker. Verdict: user://integration-verdict.txt.
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LAMPS = preload("res://scripts/lighting/car_lamps.gd")
+const STYLE = preload("res://scripts/ui/hud_style.gd")
 const SESSION = preload("res://scripts/net/net_session.gd")
 const P = preload("res://scripts/net/net_protocol.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
@@ -201,6 +204,81 @@ func run() -> void:
     note(str(race2.track.event_mode) == "club" and not (race2.track.event_layout["zones"] as Array).is_empty(),"race judges it as a Club event (%d zones)" % (race2.track.event_layout["zones"] as Array).size())
     var k0: Array = (raw as Dictionary)["control_points"][0] if raw is Dictionary else [0,0]
     note(race2.track.start_position().distance_to(Vector2(float(k0[0]),float(k0[1]))) < 0.01,"race starts on the chosen node")
+    await _platform_hud()
     var out := FileAccess.open("user://integration-verdict.txt",FileAccess.WRITE)
     out.store_line("%s | %s | %s" % ["FAIL" if failed else "PASS",OS.get_name(),"; ".join(notes)])
     out.close()
+
+
+func _platform_hud() -> void:
+    var tree := get_tree()
+    ProjectSettings.set_setting("nitro/park_mode", "free")
+    ProjectSettings.set_setting("nitro/selected_track", P.PARK_PATH)
+    ProjectSettings.set_setting("nitro/car_variant", "white")
+    TIME.select(TIME.Preset.DAY)
+    tree.change_scene_to_file("res://scenes/race.tscn")
+    await tree.process_frame
+    await tree.process_frame
+    var park_loaded := await until(func():
+        return scene_is("res://scenes/race.tscn") and tree.current_scene.get("park") != null, 35.0)
+    note(park_loaded, "Park loaded for Android HUD and lighting checks")
+    if not park_loaded:
+        return
+    var race: Node = tree.current_scene
+    note(STYLE.platform_profile() == "mobile" and race.touch.visible and not race.desktop_actions.visible,
+        "mobile touch HUD chosen with no desktop action overlay")
+    var rects: Dictionary = race.touch._layout()
+    note(race.touch._zone_at(Rect2(rects.gas).get_center()) == "gas" and
+        race.touch._zone_at(Rect2(rects.brake).get_center()) == "brake" and
+        race.touch._zone_at(Rect2(rects.drift).get_center()) == "drift", "original pedal and drift hit boxes")
+    await snapshot("platform_hud_top_down")
+    var camera_before: int = race.camera_mode
+    _platform_touch(0, Rect2(rects.camera).get_center(), true)
+    _platform_touch(0, Rect2(rects.camera).get_center(), false)
+    await tree.process_frame
+    note(race.camera_mode != camera_before, "touch CAM selects Chase")
+    await snapshot("platform_hud_chase")
+    _platform_touch(0, Rect2(rects.pause).get_center(), true)
+    _platform_touch(0, Rect2(rects.pause).get_center(), false)
+    await tree.process_frame
+    note(race.paused and not race.touch.visible and not race.desktop_actions.visible, "touch PAUSE opens the exclusive menu")
+    if not race.paused:
+        return
+    var preset: Node = race.pause_menu.find_child("TIME OF DAY", true, false)
+    var lamp: Node = race.pause_menu.find_child("VEHICLE LIGHTS", true, false)
+    note(preset != null and lamp != null, "Park time and vehicle light controls in Android pause")
+    if preset == null or lamp == null:
+        return
+    (preset.get_node("NIGHT") as Button).pressed.emit()
+    await snapshot("platform_night_pause")
+    var resume: Button = race.pause_menu.find_child("RESUME", true, false) as Button
+    resume.pressed.emit()
+    await tree.process_frame
+    note(not race.paused and race.touch.visible and race.time_of_day == TIME.Preset.NIGHT and race.lamps.spots[0].visible,
+        "resume restores Android controls and keeps NIGHT / AUTO lights")
+    await snapshot("platform_night_auto")
+    var started := Time.get_ticks_usec()
+    for frame in 24:
+        await tree.process_frame
+    var frame_ms := float(Time.get_ticks_usec() - started) / 24000.0
+    note(true, "Android emulator NIGHT 24-frame average: %.2f ms (~%.1f FPS)" % [frame_ms, 1000.0 / maxf(frame_ms, 0.01)])
+    race.call("_set_lamp_mode", LAMPS.Mode.OFF)
+    var pedal: Vector2 = Rect2(rects.drift).get_center()
+    _platform_touch(1, pedal, true)
+    await tree.physics_frame
+    await tree.process_frame
+    note(race.touch.handbrake > 0.5 and not race.lamps.spots[0].visible and
+        (race.lamps.bits & LAMPS.BRAKING) != 0, "touch hand brake lights STOP in OFF mode")
+    await snapshot("platform_night_touch_stop")
+    _platform_touch(1, pedal, false)
+    await tree.physics_frame
+    await tree.process_frame
+    note(race.lamps.bits == 0, "release clears STOP without enabling headlights")
+
+func _platform_touch(index: int, at: Vector2, down: bool) -> void:
+    var event := InputEventScreenTouch.new()
+    event.index = index
+    event.position = get_tree().root.get_final_transform() * at
+    event.pressed = down
+    Input.parse_input_event(event)
+    Input.flush_buffered_events()

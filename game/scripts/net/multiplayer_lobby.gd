@@ -7,6 +7,8 @@ class_name NitroMultiplayerLobby
 ##   join  -> address field, CONNECT (retry after an error), roster, READY, LEAVE
 ## The session node lives under the SceneTree root (not under this scene) so it survives the change to the race scene;
 ## NitroNetRace ends it when the race scene is left. The main menu has exactly one line that opens this scene.
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LIGHTING_SELECTOR = preload("res://scripts/ui/lighting_selector.gd")
 const P = preload("res://scripts/net/net_protocol.gd")
 const SESSION = preload("res://scripts/net/net_session.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
@@ -23,6 +25,8 @@ var mode: String = "menu"
 var ip_input: LineEdit = null
 var ip_text: String = ""
 var starting: bool = false
+const RACE_PATH = "res://scenes/race.tscn"
+var _race_preload: bool = false
 ## Tests: do not really change scene; the request is recorded instead.
 var navigate_enabled: bool = true
 var last_scene: String = ""
@@ -63,6 +67,12 @@ func _ready() -> void:
     stamp.add_theme_font_size_override("font_size",int(14*ui_unit))
     stamp.add_theme_color_override("font_color",STYLE.DIM)
     column.add_child(stamp)
+    var waiting := SESSION.current
+    if waiting != null and waiting.returning_to_lobby:
+        session = waiting
+        session.returning_to_lobby = false
+        mode = "host" if session.is_host else "join"
+        _connect_signals()
     _refresh()
 
 # ------------------------------------------------------------------------ helpers
@@ -160,14 +170,19 @@ static func clean_address(raw: String) -> String:
 
 func _new_session() -> NitroNetSession:
     _drop_session()
+    if navigate_enabled and not _race_preload:
+        _race_preload = ResourceLoader.load_threaded_request(RACE_PATH) == OK
     session = SESSION.new()
     session.name = "Local multiplayer session"
     get_tree().root.add_child(session)
+    _connect_signals()
+    return session
+
+func _connect_signals() -> void:
     session.state_changed.connect(_on_state)
     session.roster_changed.connect(_refresh)
     session.error_raised.connect(_on_error)
     session.start_requested.connect(_on_start)
-    return session
 
 func _disconnect_signals() -> void:
     if session == null or not is_instance_valid(session):
@@ -197,6 +212,8 @@ func _on_state(st: int) -> void:
 func _after_end() -> void:
     if session == null or not is_instance_valid(session):
         return
+    if starting:
+        return # The race owns an in-flight disconnect once START has been accepted.
     var st: int = session.state
     if st != NitroNetSession.State.FAILED and st != NitroNetSession.State.LOST and st != NitroNetSession.State.CLOSED:
         return
@@ -221,14 +238,22 @@ func _go(scene: String) -> void:
         load("res://scripts/ui/busy_overlay.gd").open(self,"LOADING",false,true)
         await get_tree().process_frame
         await get_tree().process_frame
+    if scene == RACE_PATH and _race_preload:
+        while ResourceLoader.load_threaded_get_status(scene) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+            await get_tree().process_frame
+        if ResourceLoader.load_threaded_get_status(scene) == ResourceLoader.THREAD_LOAD_LOADED:
+            var packed: PackedScene = ResourceLoader.load_threaded_get(scene)
+            _race_preload = false
+            get_tree().change_scene_to_packed(packed)
+            return
     get_tree().change_scene_to_file(scene)
 
 # ------------------------------------------------------------------------ actions
 
-func host_game() -> void:
+func host_game(track: String = P.TRACKS[0], port: int = P.DEFAULT_PORT) -> void:
     mode = "host"
     var s: NitroNetSession = _new_session()
-    var err: int = s.host(P.DEFAULT_PORT,_my_name(),CARS.selected(),P.TRACKS[0])
+    var err: int = s.host(port,_my_name(),CARS.selected(),track)
     if err != OK:
         var why: String = s.last_error
         _drop_session()
@@ -282,8 +307,10 @@ func start_game() -> void:
 func cycle_track(step: int) -> void:
     if session == null or not is_instance_valid(session) or not session.is_host:
         return
-    var i: int = P.TRACKS.find(session.track_path)
-    session.choose_track(P.TRACKS[(i+step+P.TRACKS.size())%P.TRACKS.size()])
+    var choices: Array[String] = P.TRACKS.duplicate()
+    choices.append(P.PARK_PATH)
+    var i: int = choices.find(session.track_path)
+    session.choose_track(choices[posmod(i+step,choices.size())])
 
 func back_to_menu() -> void:
     _drop_session()
@@ -330,6 +357,7 @@ func _menu_page() -> void:
     _label("NO WI-FI? NO PROBLEM.\nONE PHONE'S HOTSPOT IS ENOUGH.",22,STYLE.GOLD_LIGHT,true).name = "Hotspot hint"
     _label("YOU DRIVE:  %s\nPLAYER:  %s" % [car_text(CARS.selected()),_my_name()],18,STYLE.WHITE)
     _big("HOST GAME",host_game,true)
+    _big("HOST PARK",host_game.bind(P.PARK_PATH))
     _big("JOIN GAME",join_game)
     _big("NO WI-FI? HOTSPOT HOW-TO",show_howto)
     _big("BACK",back_to_menu)
@@ -410,18 +438,22 @@ func _connecting_page() -> void:
     _big("CANCEL",leave_session)
 
 func _lobby_page() -> void:
-    _title("READY ROOM")
+    _title("PARK FREE ROAM" if session.is_park() else "READY ROOM")
     var other_name: String = str(session.other.get("name","PLAYER"))
     _player_card("YOU  •  %s" % ("HOST" if session.is_host else "GUEST"),str(session.me["name"]),str(session.me["car"]),bool(session.me["ready"]))
     _player_card("OTHER PLAYER",other_name,str(session.other.get("car","red")),bool(session.other.get("ready",false)))
     _track_row()
+    var selector := LIGHTING_SELECTOR.new()
+    selector.name = "Time of day"
+    page.add_child(selector)
+    selector.configure(TIME.LABELS, session.time_of_day, session.set_time_of_day if session.is_host else Callable(), ui_unit, true)
     var fp_ok: bool = bool(session.other.get("fp_ok",false)) if session.is_host else true
     if session.is_host and not fp_ok:
         _label("THE OTHER PHONE HAS NOT CONFIRMED THIS TRACK YET",15,Color(1.0,0.78,0.4))
     var ready_caption: String = "NOT READY" if bool(session.me["ready"]) else "READY"
     _big(ready_caption,ready_toggle,not bool(session.me["ready"])).name = "READY"
     if session.is_host:
-        var start: Button = _big("START",start_game,true)
+        var start: Button = _big("OPEN PARK" if session.is_park() else "START",start_game,true)
         start.disabled = not session.can_start()
         if start.disabled:
             _label("START IS ENABLED WHEN BOTH PLAYERS ARE READY",14,STYLE.DIM)
@@ -458,7 +490,13 @@ func _player_card(role: String, who: String, car: String, ready: bool) -> void:
 
 ## Host: TRACK < name >; the joiner only reads it (the host decides, both must press READY again after a change).
 func _track_row() -> void:
-    var name_text: String = str(P.TRACK_NAMES.get(session.track_path,"TRACK"))
+    if session.is_park():
+        var caption := "VEHICLE COLLISIONS: "+("ON" if session.vehicle_collisions else "OFF")
+        if session.is_host:
+            _big(caption,func(): session.set_park_collisions(not session.vehicle_collisions)).name = "Vehicle collisions"
+        else:
+            _label(caption,18,STYLE.WHITE)
+    var name_text: String = "PARK FREE ROAM" if session.is_park() else str(P.TRACK_NAMES.get(session.track_path,"TRACK"))
     if session.is_host:
         var row := HBoxContainer.new()
         row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -496,6 +534,8 @@ func _notification(what: int) -> void:
             leave_session()
 
 func _exit_tree() -> void:
+    if _race_preload:
+        ResourceLoader.load_threaded_get(RACE_PATH) # Release the unused request on lobby cancellation.
     # leaving this screen by any other way than START ends the session (nothing keeps listening on the port)
     if not starting and session != null and is_instance_valid(session):
         _disconnect_signals()

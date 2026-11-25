@@ -1,4 +1,6 @@
 extends Control
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const LIGHTING_SELECTOR = preload("res://scripts/ui/lighting_selector.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const DNA = preload("res://scripts/world/track_dna.gd")
@@ -93,6 +95,9 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-workshop.once"):
         DirAccess.remove_absolute("user://qa-workshop.once")
         get_tree().root.add_child.call_deferred(preload("res://tests/android_workshop_capture.gd").new())
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-damage.once"):
+        DirAccess.remove_absolute("user://qa-damage.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/park_damage_capture.gd").new())
     # #33 on-device integration check (multiplayer + node editor + terrain drive), same explicit adb marker mechanism.
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-integration.once"):
         DirAccess.remove_absolute("user://qa-integration.once")
@@ -266,6 +271,11 @@ func _settings_page() -> void:
 
 func _dev_page() -> void:
     _title("DEVELOPER")
+    if OS.has_feature("debug") and OS.has_feature("android"):
+        _small("PARK DAMAGE FRAME TEST",func():
+            var probe = load("res://tests/park_damage_capture.gd").new()
+            probe.interactive = true
+            get_tree().root.add_child(probe))
     _big("CONTROLLER DIAGNOSTICS",func(): _go("res://scenes/dev/input_monitor.tscn")).name = "Diagnostics"
     # v0.1.38 (owner decision 2026-11-22, #25): the physics mode used by the NEXT race. ARCADE_PLUS
     # (default) = the approved arcade handling with credible top speeds; REAL_POWER_TEST = a power-curve
@@ -513,6 +523,10 @@ func _setup_page() -> void:
     var cinfo: Dictionary = CARS.info(car)
     var car_b: Button = _big("CAR  ▸  %s\n%s • TAP TO CHANGE" % [str(cinfo["short"]),str(cinfo["paint"])],func(): _open_garage("setup"))
     car_b.name = "Setup car"
+    var selector := LIGHTING_SELECTOR.new()
+    selector.name = "Time of day"
+    page.add_child(selector)
+    selector.configure(TIME.LABELS, TIME.selected(), TIME.select, ui_unit, true)
     var go: Button = _big("DRIVE",_race.bind(path),true)
     go.name = "Setup drive"
     _small("◀  BACK",func(): show_page("main")).name = "Back"

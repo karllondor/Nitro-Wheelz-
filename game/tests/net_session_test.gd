@@ -32,11 +32,22 @@ func _until(cond: Callable, seconds: float = 6.0) -> bool:
     return cond.call()
 
 func _run() -> void:
+    var cone := P.pack_park_cones(3,2,65535,[{"index":79,"pos":Vector2(-82,67),"tilt":0.7,"angle":0.8}])
+    var pose: Dictionary = P.unpack_park_cones(cone)
+    if pose.is_empty() or pose.round != 3 or pose.revision != 2 or pose.seq != 65535 or pose.poses[0].index != 79 \
+            or pose.poses[0].pos != Vector2(-82,67) or absf(pose.poses[0].tilt-0.7) > 0.007 \
+            or not P.unpack_park_cones(cone.slice(0,-1)).is_empty():
+        _fail("Park cone pose did not round-trip or a partial record was accepted")
+        return
+    cone.encode_float(P.PARK_CONE_HEADER+1,NAN)
+    if not P.unpack_park_cones(cone).is_empty() or P.track_fingerprint(P.PARK_PATH).length() != 64:
+        _fail("Park pose finite-position guard or layout fingerprint failed")
+        return
     # ------------------------------------------------------------------ protocol
     var snap: Dictionary = {"flags":5,"seq":65535,"ms":123456789,"x":-120.5,"z":33.25,"heading":-1.5,"vx":12.0,"vz":-3.5,"yaw":0.7,"steer":-0.3,"score":8450}
     var bytes: PackedByteArray = P.pack_snapshot(snap)
     var back: Dictionary = P.unpack_snapshot(bytes)
-    if bytes.size() != 40 or back.is_empty() or absf(float(back["x"])+120.5) > 0.001 or int(back["score"]) != 8450 or int(back["seq"]) != 65535 or int(back["flags"]) != 5:
+    if bytes.size() != 44 or back.is_empty() or absf(float(back["x"])+120.5) > 0.001 or int(back["score"]) != 8450 or int(back["seq"]) != 65535 or int(back["flags"]) != 5:
         _fail("snapshot round trip: %s" % str(back))
         return
     var bad: Array = []
@@ -109,8 +120,8 @@ func _run() -> void:
         if P.track_fingerprint(t).length() != 64:
             _fail("no fingerprint for the built-in track "+t)
             return
-    if P.track_fingerprint("user://nitro_track_x.json") != "" or P.track_fingerprint("res://tracks/nitro_wheelz_park.json") != "":
-        _fail("only the whitelisted built-in circuits may be shared")
+    if P.track_fingerprint("user://nitro_track_x.json") != "" or P.track_fingerprint("res://tracks/event_workshop_29.json") != "":
+        _fail("LAN accepts only the whitelisted circuits and Park")
         return
     # --------------------------------------------------------- host + join + lobby
     var host: NitroNetSession = _make()
@@ -202,7 +213,7 @@ func _run() -> void:
         _fail("malformed packets were not dropped and counted (%d)" % (host.dropped_packets-before))
         return
     var count_before: int = got.size()
-    var dup: PackedByteArray = P.pack_snapshot({"seq":3,"x":1.0,"z":1.0})
+    var dup: PackedByteArray = P.pack_snapshot({"round":client.round_id,"seq":3,"x":1.0,"z":1.0})
     client.api.send_bytes(dup,1,MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED,0)
     for i in range(20):
         await process_frame
@@ -312,6 +323,6 @@ func _run() -> void:
     if SESSION.current != null:
         _fail("no session may stay registered after leaving")
         return
-    print("PASS: local multiplayer network layer on the loopback - protocol (40-byte snapshots, malformed / NaN / huge / stale / oversized / object packets dropped), host + join + roster + READY + START + LOADED + synchronized countdown (host and joiner GO %.1f ms apart on the loopback, NOT a Wi-Fi measurement), snapshot stream in order, leave / lost host / lost joiner / silence timeout, the room stays open after a leave, a third player refused (FULL), wrong version + wrong track layout + unreachable host + malformed IP all end in readable messages" % go_gap_ms)
+    print("PASS: local multiplayer network layer on the loopback - protocol (44-byte snapshots, malformed / NaN / huge / stale / oversized / object packets dropped), host + join + roster + READY + START + LOADED + synchronized countdown (host and joiner GO %.1f ms apart on the loopback, NOT a Wi-Fi measurement), snapshot stream in order, leave / lost host / lost joiner / silence timeout, the room stays open after a leave, a third player refused (FULL), wrong version + wrong track layout + unreachable host + malformed IP all end in readable messages" % go_gap_ms)
     print("NOT RUN: two real Android phones on Wi-Fi or a hotspot without Internet (owner QA)")
     quit(0)

@@ -1,4 +1,32 @@
+## v0.1.48 unified platform review
+
+The [platform handoff](docs/dev/handoffs/platform-integration-20261125.md) covers PRs #35 and #36 on the current Park branch, runtime checks, builds and owner playtest.
+
+## v0.1.47 production lighting review
+
+The [production-lighting handoff](docs/dev/handoffs/production-lighting-20261125.md) records calibration, runtime controls, LAN, measurements and Android acceptance.
+
+## LAN reliability and Park multiplayer
+
+## Park vehicle damage preview
+
+The [vehicle damage handoff](docs/dev/handoffs/park-vehicle-damage.md) covers host contacts, the white Lada, free service, test evidence and the two-phone checklist.
+
+## Interactive stunt playground preview
+
+See the [stunt handoff](docs/dev/handoffs/park-stunt-physics.md) for ramp physics, object and collision interfaces, benchmark evidence and the owner playtest.
+
+## Park multiplayer review
+
+See the [Park multiplayer handoff](docs/dev/handoffs/park-multiplayer.md) for the combined baseline, reusable world-event interfaces, automated evidence and the two-phone checklist.
+
+The two-game regression, protocol changes, performance measurements and two-phone checklist are in the [multiplayer handoff](docs/dev/handoffs/issue-31-multiplayer-reliability-v2.md).
+
 # Nitro Wheelz — v0.1.33 AI-body test car (RYU-32 FLAME) on top of the mobile QA fixes (v0.1.32) and the Car Factory migration (v0.1.29–31)
+
+## Park 2.0 feature preview
+
+See the [Park 2.0 handoff](docs/dev/handoffs/nitro-wheelz-park-v2.md) for the provisional zone layout, spawn, ramps, repair trigger and evidence.
 
 ## AI BODY TEST CAR (v0.1.33)
 - docs/car_factory/AI_BODY_PROTOTYPE.md. Fifth car FLAME = AI-generated body (free-plan asset, NOT FOR RELEASE) + wheel library wheels, RYU-32 physics / V8. Next if the owner likes it: buy the paid plan, regenerate, patch the roof, remove text / plate, make CLEAN + LIVERY, apply the same pipeline to the Lada.

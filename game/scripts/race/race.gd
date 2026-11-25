@@ -2,6 +2,9 @@ extends Node3D
 ## Nitro Wheelz v0.1 driving laboratory: one original Japanese-style circuit.
 ## Authoritative vehicle state is planar; camera/visuals never modify the physics.
 
+const TIME = preload("res://scripts/lighting/time_of_day.gd")
+const ENVIRONMENT = preload("res://scripts/lighting/race_environment.gd")
+const LAMPS = preload("res://scripts/lighting/car_lamps.gd")
 const TRACK = preload("res://scripts/world/drift_track.gd")
 const PARK_TRACK = preload("res://scripts/park/park_track.gd")
 const PARK_LAYOUT = preload("res://scripts/park/park_layout.gd")
@@ -11,6 +14,8 @@ const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const DRIVE = preload("res://scripts/driving/drive_model.gd")
 const HUD = preload("res://scripts/ui/race_hud.gd")
+const HUD_STYLE = preload("res://scripts/ui/hud_style.gd")
+const DESKTOP_ACTIONS = preload("res://scripts/ui/race_desktop_actions.gd")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const SKID_SHADER = preload("res://assets/shaders/skid_marks.gdshader")
 ## Half width of one tyre mark in metres (v0.1.35: 0.15, hard edged and dark).
@@ -32,10 +37,15 @@ var park: Node = null
 ## LOCAL MULTIPLAYER (issue #31): exists only while a multiplayer session starts a race; solo play never creates it.
 var net: Node = null
 var car_root: Node3D
+var lamps = LAMPS.new()
+var race_environment = ENVIRONMENT.new()
+var time_of_day := TIME.Preset.DAY
+var pause_menu: NitroPauseMenu
 var front_wheels: Array[Node3D] = []
 var overhead: Camera3D
 var chase: Camera3D
 var touch: NitroRaceTouch
+var desktop_actions: NitroRaceDesktopActions
 var hud: NitroRaceHUD
 var pause_layer: CanvasLayer
 var results_layer: CanvasLayer
@@ -155,14 +165,22 @@ func _ready() -> void:
     _make_ui()
     if hud != null:
         hud.lap_limit = laps_total
+    var use_network := NET_RACE.should_attach()
     if track.has_method("is_park") and track.is_park():
         park = PARK.new()
         add_child(park)
-        park.setup(self)
-    if NET_RACE.should_attach():
+        park.setup(self,NitroNetSession.current if use_network else null)
+    if use_network:
+        var room := NitroNetSession.current
+        time_of_day = room.time_of_day
+        room.time_of_day_changed.connect(_apply_time_of_day)
         net = NET_RACE.new()
         add_child(net)
         net.setup(self)
+    else:
+        time_of_day = TIME.selected()
+    race_environment.bind(track)
+    _apply_time_of_day(time_of_day)
     _make_telemetry()
     var info0: Dictionary = track.sample_info(model.position)
     last_progress = float(info0["progress"])
@@ -172,7 +190,9 @@ func _ready() -> void:
     _update_visuals()
     _snap_cameras()
     if not track.pending_terrain.is_empty():
-        _load_terrain()
+        await _load_terrain()
+    if net != null:
+        net.report_scene_ready()
 
 ## v0.1.32: both cameras start behind / above the car's start heading (the
 ## top-down view used to begin facing -Z and swing round in the first
@@ -200,6 +220,8 @@ func _load_terrain() -> void:
     await load("res://scripts/world/step_runner.gd").run_sliced(track.build_terrain_steps(desc),get_tree(),35.0,
         func(f: float): b.set_progress(f))
     track.pending_terrain = {}
+    race_environment.bind(track)
+    refresh_road_lighting()
     var info1: Dictionary = track.sample_info(model.position)
     road_y = track.height_from_info(info1)
     car_y = road_y
@@ -249,10 +271,11 @@ func _elevation_tick(info: Dictionary, delta: float) -> void:
 func _make_car() -> void:
     # Visual-only original low-poly car. The driving model owns physics.
     var variant: String = CARS.selected()
-    car_root = CARS.make(variant)
+    car_root = CARS.make(variant,null,track is NitroParkTrack)
     car_root.name = "Nitro Wheelz "+str(CARS.info(variant)["name"])
     car_root.scale = Vector3.ONE*RACE_CAR_SCALE
     add_child(car_root)
+    lamps.setup(car_root,variant)
     # Wall footprint follows the chosen car's size at race scale.
     var info: Dictionary = CARS.info(variant)
     track.body_half_length = float(info["length"])*RACE_CAR_SCALE*0.5-0.095
@@ -446,13 +469,25 @@ func _make_ui() -> void:
     touch.name = "Steering / Drift / Brake / Gas"
     touch_layer.add_child(touch)
     touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+    touch.visible = HUD_STYLE.platform_profile() == "mobile"
+    # Keep input processing active for synthetic touch / Park tutorials even
+    # on desktop. Visibility controls drawing, not touchscreen event routing.
     touch.camera_requested.connect(_toggle_camera)
     touch.pause_requested.connect(_toggle_pause)
     touch.restart_requested.connect(_restart)
     touch.menu_requested.connect(func():get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+    # On PC/Web the huge touch layer is intentionally absent. CAMERA and PAUSE
+    # have independent mouse targets at the same desktop HUD metric rectangles.
+    desktop_actions = DESKTOP_ACTIONS.new()
+    desktop_actions.name = "Desktop / Web CAMERA and PAUSE"
+    touch_layer.add_child(desktop_actions)
+    desktop_actions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
+    desktop_actions.camera_requested.connect(_toggle_camera)
+    desktop_actions.pause_requested.connect(_toggle_pause)
 
 func _physics_process(delta: float) -> void:
+    _read_lamps()
     if paused or finished:
         return
     if park != null and park.freezes():
@@ -472,18 +507,29 @@ func _physics_process(delta: float) -> void:
         braking = maxf(braking,touch.brake)
         handbrake = maxf(handbrake,touch.handbrake)
 
-    # Race clock starts only on the first throttle input.
-    if not race_started and gas > 0.05:
+    var shared_park := park != null and net != null
+    # Scored LAN rounds start at GO. Shared Park deliberately has no run clock.
+    if shared_park:
+        race_started = gas > 0.05 or race_started
+    elif net != null and net.session.round_start_usec > 0:
         race_started = true
-    if race_started:
-        time_elapsed += delta
+        time_elapsed = maxf(0.0,float(Time.get_ticks_usec()-net.session.round_start_usec)/1000000.0)
+    else:
+        if not race_started and gas > 0.05:
+            race_started = true
+        if race_started:
+            time_elapsed += delta
 
     # Terrain grade force (Developer Mode, 0 % default) integrated inside
     # the model substeps; ZERO on flat tracks.
     model.external_accel = grade_accel if race_started else Vector2.ZERO
     # Fixed 120 Hz Godot tick and two internal model substeps (240 Hz).
-    model.step(delta*0.5,steer,gas,braking,handbrake)
-    model.step(delta*0.5,steer,gas,braking,handbrake)
+    var previous_position := model.position
+    if park == null or not park.air.advance(model,delta):
+        model.step(delta*0.5,steer,gas,braking,handbrake)
+        model.step(delta*0.5,steer,gas,braking,handbrake)
+    if park != null:
+        park.stunt_ground_step(previous_position)
 
     # Resolve physical contact against the SAME raised wall shown on screen.
     # Never drive through the wall into sand and then teleport back.
@@ -496,6 +542,8 @@ func _physics_process(delta: float) -> void:
         model.slide_hold = 0.0
         model.rear_traction = maxf(model.rear_traction,0.80)
         had_skid = false
+        if park != null:
+            park.damage.wall_impact(collision)
         if float(collision["impact_speed"]) > 1.2:
             _wall_feedback(float(collision["impact_speed"]))
         scorer.wall_hit(float(collision["impact_speed"]))
@@ -512,7 +560,14 @@ func _physics_process(delta: float) -> void:
         sfx.drive_tick(model.speed_kmh(),model.drift_angle,gas,handbrake,offroad,delta)
 
     _elevation_tick(info,delta)
+    if park != null:
+        car_y = park.air.height
+        car_y_vel = 0.0
     _update_chase_occlusion()
+    if shared_park:
+        _record_marks(delta)
+        _update_visuals()
+        return
     _lap_logic(float(info["progress"]),Vector2(info["tangent"]),delta)
     if track.event_mode in ["club","pro"]:
         var bonus: float = 0.0
@@ -548,10 +603,19 @@ func _show_results() -> void:
         touch.release_all()
         touch.visible = false
         touch.set_process_input(false)
+    if desktop_actions != null:
+        desktop_actions.visible = false
     results_layer = CanvasLayer.new()
     results_layer.layer = 24
     results_layer.name = "Finish results and local leaderboard"
     add_child(results_layer)
+    if net != null:
+        net.session.finish_local(lap_score,roundi(time_elapsed*1000.0))
+        var board = preload("res://scripts/net/net_results.gd").new()
+        results_layer.add_child(board)
+        board.show_round(net.session,track.display_name,Callable(self,"_restart"),
+            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+        return
     if track.event_mode!="":
         _event_results()
         return
@@ -670,6 +734,9 @@ func _drift_scoring(dt: float, edge_distance: float) -> void:
     combo = scorer.multiplier
 
 func _record_marks(dt: float) -> void:
+    if park != null and park.air.height > 0.04:
+        had_skid = false
+        return
     skid_clock += dt
     if skid_clock < 0.07:
         return
@@ -724,7 +791,7 @@ func _update_visuals() -> void:
         return
     # Physics +heading turns toward +X; Godot +Y turns local -Z toward -X.
     var dt: float = get_physics_process_delta_time()
-    var target_pitch: float = atan(heading_grade)
+    var target_pitch: float = park.air.pitch if park != null else atan(heading_grade)
     var target_roll: float = 0.0
     var target_heave: float = 0.0
     if bool(dev.get("suspension",false)):
@@ -738,7 +805,7 @@ func _update_visuals() -> void:
     heave = lerpf(heave,target_heave,pose_k)
     car_root.position = Vector3(model.position.x,car_y+heave,model.position.y)
     car_root.rotation = Vector3(body_pitch,-model.heading,body_roll)
-    var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished
+    var smoking: bool = model.is_drifting() and model.speed_kmh() > 18.0 and not paused and not finished and (park == null or park.air.height < 0.05)
     for smoke in tyre_smoke:
         smoke.emitting = smoking
     if car_root.has_method("set_motion"):
@@ -748,6 +815,9 @@ func _update_visuals() -> void:
         hud.car_world_position = model.position
         hud.track_progress = float(track.sample_info(model.position)["progress"])
         hud.lap = lap
+        if HUD_STYLE.platform_profile() != "mobile":
+            hud.current_lap_time = maxf(0.0, time_elapsed - lap_started_at)
+            hud.last_lap_time = float(lap_splits.back().time) if not lap_splits.is_empty() else -1.0
         hud.speed = model.speed_kmh()
         hud.reversing = model.is_reversing()
         hud.drift_degrees = model.drift_angle
@@ -951,25 +1021,92 @@ func _toggle_pause() -> void:
             touch.release_all()
             touch.visible = false
             touch.set_process_input(false)
+        if desktop_actions != null:
+            desktop_actions.visible = false
         pause_layer = CanvasLayer.new()
         pause_layer.name = "Exclusive Pause Menu"
         pause_layer.layer = 24
         add_child(pause_layer)
-        var panel: NitroPauseMenu = PAUSE_VIEW.new()
-        pause_layer.add_child(panel)
-        panel.show_pause(Callable(self,"_toggle_pause"),Callable(self,"_restart"),
-            func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
+        pause_menu = PAUSE_VIEW.new()
+        pause_layer.add_child(pause_menu)
+        var shared_park := park != null and net != null
+        var restart_action := Callable(self,"_restart") if shared_park or net == null or (net.session.is_host and net.session.state == net.session.State.RACING) else Callable()
+        var leave_action := Callable(net,"leave_park") if shared_park else Callable(self,"_leave_to_menu")
+        var park_options := {}
+        if park != null and net == null:
+            park_options["reset"] = Callable(self,"_reset_shared_training")
+        if shared_park:
+            park_options = {"restart":"RECOVER VEHICLE","leave":"RETURN TO LOBBY"}
+            if net.session.is_host and net.session.state == net.session.State.PARK:
+                park_options["reset"] = Callable(self,"_reset_shared_training")
+        var lighting := {"mode": lamps.mode, "set_mode": _set_lamp_mode}
+        if park != null:
+            lighting["time"] = time_of_day
+            if net == null or net.session.is_host:
+                lighting["set_time"] = _request_park_time_of_day
+        pause_menu.show_pause(Callable(self,"_toggle_pause"),restart_action,
+            leave_action,
             _edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable(),
             Callable(self,"_park_toggle_tutorial") if park != null else Callable(),
-            park.pause_label() if park != null else "")
+            park.pause_label() if park != null else "",park_options,lighting)
     else:
         if pause_layer != null:
             pause_layer.queue_free()
             pause_layer = null
+            pause_menu = null
         if touch != null:
+            touch.visible = HUD_STYLE.platform_profile() == "mobile"
             touch.set_process_input(true)
-            touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+        if desktop_actions != null:
+            desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
+    _read_lamps()
     _update_visuals()
+
+func _read_lamps() -> void:
+    var brake_on := not paused and not finished and Input.get_action_strength("brake") > 0.1
+    var handbrake_on := not paused and not finished and Input.get_action_strength("handbrake") > 0.1
+    if not paused and not finished and touch != null and touch.visible:
+        brake_on = brake_on or touch.brake > 0.1
+        handbrake_on = handbrake_on or touch.handbrake > 0.1
+    if lamps.set_local(time_of_day,brake_on,handbrake_on):
+        refresh_road_lighting()
+
+func _set_lamp_mode(mode: int) -> void:
+    lamps.mode = mode
+    _read_lamps()
+
+func _request_park_time_of_day(value: int) -> void:
+    if park == null or not TIME.valid(value):
+        return
+    if net == null:
+        _apply_time_of_day(value)
+    else:
+        net.session.set_time_of_day(value)
+
+func _apply_time_of_day(value: int) -> void:
+    time_of_day = value
+    lamps.set_reflection(ENVIRONMENT.reflection(value))
+    _read_lamps()
+    if net != null:
+        net.update_remote_reflection()
+    refresh_road_lighting()
+    if is_instance_valid(pause_menu):
+        pause_menu.show_time_of_day(value)
+
+func refresh_road_lighting() -> void:
+    var remote_lit: bool = net != null and net.remote_headlights_on()
+    race_environment.apply(time_of_day,remote_lit or (lamps.bits & LAMPS.POSITION) != 0)
+
+func _leave_to_menu() -> void:
+    get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+func _reset_shared_training() -> void:
+    const PROTOCOL = preload("res://scripts/net/net_protocol.gd")
+    if net == null:
+        park.reset_objects()
+        _toggle_pause()
+    elif net.session.host_park_event(PROTOCOL.ParkEvent.RESET_TRAINING):
+        _toggle_pause()
 
 ## Pause menu of the Park: switch the tutorial on / off, then back to driving. Paint
 ## and cones stay exactly as they are.
@@ -979,6 +1116,18 @@ func _park_toggle_tutorial() -> void:
     _toggle_pause()
 
 func _restart() -> void:
+    if park != null and net != null:
+        park.recover_vehicle()
+        if paused:
+            _toggle_pause()
+        _update_visuals()
+        return
+    if net != null:
+        net.session.restart_race()
+        return
+    _reset_run()
+
+func _reset_run() -> void:
     if pause_layer != null:
         pause_layer.queue_free()
         pause_layer = null
@@ -989,8 +1138,10 @@ func _restart() -> void:
     if hud != null:
         hud.visible = true
     if touch != null:
+        touch.visible = HUD_STYLE.platform_profile() == "mobile"
         touch.set_process_input(true)
-        touch.visible = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+    if desktop_actions != null:
+        desktop_actions.visible = HUD_STYLE.platform_profile() != "mobile"
     model.reset(track.start_position(),track.start_heading())
     car_y = track.road_height_at(model.position)
     car_y_vel = 0.0
@@ -998,6 +1149,9 @@ func _restart() -> void:
         park.restart()
     if net != null:
         net.on_restart()
+        touch.release_all()
+        road_y = track.road_height_at(model.position)
+        car_y = road_y
     if sfx != null:
         sfx.reset()
     time_elapsed = 0.0

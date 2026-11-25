@@ -35,6 +35,7 @@ uniform float gloss : hint_range(0.0, 3.0) = 1.0;
 uniform float rim : hint_range(0.0, 3.0) = 0.6;
 uniform float glow : hint_range(0.0, 8.0) = 0.0;
 uniform vec4 studio : source_color = vec4(0.97, 0.97, 1.0, 1.0);
+uniform float road_reflection = 1.0;
 uniform vec4 floor_tint : source_color = vec4(0.11, 0.11, 0.13, 1.0);
 // 0 = flat colour; how much darker vertical / lower panels get.
 uniform float body_shade : hint_range(0.0, 1.0) = 0.27;
@@ -87,8 +88,8 @@ void fragment() {
 	ROUGHNESS = roughness;
 	METALLIC = metallic * 0.6;
 	SPECULAR = 0.5;
-	EMISSION = env * tint * gloss * mix(fres, 1.0, 0.095 + metallic * 0.50)
+	EMISSION = road_reflection * (env * tint * gloss * mix(fres, 1.0, 0.095 + metallic * 0.50)
 		+ studio.rgb * (key + strip) * gloss * 0.35
 		+ studio.rgb * pow(1.0 - ndv, 4.0) * rim * 0.14
-		+ pc * glow;
+		+ pc * glow);
 }

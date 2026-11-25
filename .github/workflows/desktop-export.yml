@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -31,19 +31,42 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/check_project.py
-          mkdir -p builds/desktop
+          version=$(cat VERSION)
+          echo "NW_VERSION=$version" >> "$GITHUB_ENV"
+          linux="Nitro-Wheelz_v${version}_Linux.x86_64"
+          windows="Nitro-Wheelz_v${version}_Windows.exe"
+          mkdir -p builds/linux builds/windows
           "$GODOT_BIN" --headless --editor --path game --import
-          "$GODOT_BIN" --headless --path game --export-release "Linux x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.45_Linux.x86_64"
-          "$GODOT_BIN" --headless --path game --export-release "Windows x86_64" "$PWD/builds/desktop/Nitro-Wheelz_v0.1.45_Windows.exe"
-          test -s builds/desktop/Nitro-Wheelz_v0.1.45_Linux.x86_64
-          test -s builds/desktop/Nitro-Wheelz_v0.1.45_Windows.exe
-          chmod +x builds/desktop/Nitro-Wheelz_v0.1.45_Linux.x86_64
-          file builds/desktop/*
-          sha256sum builds/desktop/* > builds/desktop/SHA256SUMS.txt
-          echo "BUILT: native desktop executables not interactively playtested."
+          "$GODOT_BIN" --headless --path game --export-release "Linux x86_64" "$PWD/builds/linux/$linux"
+          "$GODOT_BIN" --headless --path game --export-release "Windows x86_64" "$PWD/builds/windows/$windows"
+          test -s "builds/linux/$linux"
+          test -s "builds/windows/$windows"
+          chmod +x "builds/linux/$linux"
+          (cd builds/linux && sha256sum "$linux" > SHA256SUMS.txt)
+          (cd builds/windows && sha256sum "$windows" > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: Nitro-Wheelz_v0.1.45_Desktop_Linux_Windows
-          path: builds/desktop/*
+          name: Nitro-Wheelz_v${{ env.NW_VERSION }}_Linux
+          path: builds/linux/*
           if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nitro-Wheelz_v${{ env.NW_VERSION }}_Windows
+          path: builds/windows/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify the shipped Linux runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxtst6 tesseract-ocr
+          python3 -m pip install Pillow
+          xvfb-run -a -s "-screen 0 1280x720x24" python3 tools/qa_linux_runtime.py \
+            "builds/linux/Nitro-Wheelz_v${NW_VERSION}_Linux.x86_64" builds/qa-desktop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nitro-Wheelz_v${{ env.NW_VERSION }}_Linux-runtime
+          path: builds/qa-desktop/
+          if-no-files-found: warn
           retention-days: 30

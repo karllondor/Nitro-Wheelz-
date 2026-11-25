@@ -1,5 +1,29 @@
 # Nitro Wheelz QA evidence — 2026-11-17
 
+## Platform integration v0.1.48
+
+The [platform handoff](dev/handoffs/platform-integration-20261125.md) records runtime coverage, limitations and owner checks. See PR #44 for the final workflow evidence and versioned artifacts.
+
+## Production lighting, v0.1.47
+
+See [calibration, visual capture and handset checklist](dev/handoffs/production-lighting-20261125.md). Godot scene tests cover Park state preservation, four presets and all brake/mode combinations. Real two-process LAN tests cover host authority, brake flags, reconnect and competitive transitions. Physical Android visual acceptance is pending.
+
+## Park vehicle contacts and bumpers
+
+The [damage handoff](dev/handoffs/park-vehicle-damage.md) records the two-process ENet matrix, scene regressions, renderer samples and physical-phone procedure.
+
+## Interactive Park stunt preview
+
+| Coverage | Evidence |
+| --- | --- |
+| All three ramps, low and high approach speeds, both cameras, box and barrier contact, pool, reset and recovery | Godot `park_stunt_test` |
+| Two simultaneous jumps and impacts, host authority, reconnect and shared reset | `python3 tools/test_net_rounds.py --park` |
+| Physical Android frame timing and two-handset Wi-Fi / hotspot | Owner QA pending |
+
+## Multiplayer reliability v2
+
+Two isolated games exchanged ENet traffic through three rounds per host role. Countdown, restarts, results, livery and disconnect assertions passed. Physical Android Wi-Fi and hotspot QA are pending. [Measurements and checklist](dev/handoffs/issue-31-multiplayer-reliability-v2.md).
+
 PASS only when actually executed. BUILT does not mean played or installed.
 
 | Check | Platform | Status | Evidence |
@@ -261,3 +285,21 @@ Report: docs/terrain_builder/REFINEMENT_v0.1.27.md. Godot 4.7.2 headless + Xvfb/
 #29 workshop • Local Godot 4.7.2: PASS for mode switching, Builder/race save parity, E30 and RYU-32 real race ticks at opposite edges, points isolation while parked. Physical Android device, sustained touch handling and performance: owner QA pending. See Issue #29 for exact CI and artifact.
 
 Issue 19 footprint regression (Godot 4.7.2, Ojców 621727). Original narrow route and its reversed/shortened edit had 1.20 m minimum clearance. The circuit had -1.02 m. All three now reach at least 2.20 m to rounding at the intersecting triangles. Historical eight-loop water, slope, edit, clear and fresh-world checks also pass. Before/after Builder and race captures run in Android CI on the integration PR.
+
+## Park 2.0 feature preview
+
+| Coverage | Evidence |
+| --- | --- |
+| Connected zones, two uninterrupted laps, both circuit accesses, clear stunt run-ups and landings | Godot `park_site_test` on Linux |
+| Moving cones, approved logo and spawn recovery | Godot `park_layout_test` on Linux |
+| Service speed, repeat-trigger gating and visible fence contact | Godot `park_site_test` on Linux |
+| Chase and Top-down rendering, including portrait preview | Engine captures in the Park 2.0 evidence package |
+| Handset driving FPS and touch | NOT RUN |
+
+## Park multiplayer preview
+
+| Coverage | Evidence |
+| --- | --- |
+| Both LAN host roles, full Park driving, local recovery, host-owned cones, reconnect and return to ready room | `python3 tools/test_net_rounds.py --park` |
+| Competitive rematches and results, solo Park guide and progression | Existing Godot suites and `python3 tools/test_net_rounds.py` |
+| Physical Android pair, hotspot and radio latency | Owner QA pending |
