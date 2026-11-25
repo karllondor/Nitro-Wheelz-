@@ -54,8 +54,8 @@ def lamp_gain(enabled, disabled):
 
 def red_pixels(image):
     w, h = image.size
-    car_region = image.crop((int(w * .43), int(h * .50), int(w * .57), int(h * .79)))
-    return sum(1 for r, g, b in car_region.getdata() if r > 135 and r > 1.7 * max(g, b, 1))
+    car_region = image.crop((int(w * .43), int(h * .46), int(w * .57), int(h * .79)))
+    return sum(1 for r, g, b in car_region.getdata() if r > 225 and r > 1.7 * max(g, b, 1))
 
 
 class RuntimeChecks:
@@ -207,15 +207,15 @@ class RuntimeChecks:
         handbrake = self.capture("13-day-handbrake-off")
         self.driver.key("s", True)
         time.sleep(.22)
-        self.capture("14-day-combined-brakes-off")
+        combined = self.capture("14-day-combined-brakes-off")
         self.driver.key("Space", False)
         time.sleep(.21)
         brake = self.capture("15-day-brake-off")
         self.driver.key("s", False)
-        counts = [red_pixels(frame) for frame in (released, handbrake, brake)]
+        counts = [red_pixels(frame) for frame in (released, handbrake, combined, brake)]
         assert min(counts[1:]) > counts[0] + 3, f"Brake lamps did not stand out: {counts}"
         self.verdict.update(park_camera_delta=round(delta, 2), night_beam_pixels_gain=gain,
-                            red_pixels_released_handbrake_brake=counts)
+                            red_pixels_released_handbrake_combined_brake=counts)
 
     def run(self):
         self.official()

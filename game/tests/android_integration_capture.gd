@@ -257,6 +257,11 @@ func _platform_hud() -> void:
     note(not race.paused and race.touch.visible and race.time_of_day == TIME.Preset.NIGHT and race.lamps.spots[0].visible,
         "resume restores Android controls and keeps NIGHT / AUTO lights")
     await snapshot("platform_night_auto")
+    var started := Time.get_ticks_usec()
+    for frame in 24:
+        await tree.process_frame
+    var frame_ms := float(Time.get_ticks_usec() - started) / 24000.0
+    note(true, "Android emulator NIGHT 24-frame average: %.2f ms (~%.1f FPS)" % [frame_ms, 1000.0 / maxf(frame_ms, 0.01)])
     race.call("_set_lamp_mode", LAMPS.Mode.OFF)
     var pedal: Vector2 = Rect2(rects.drift).get_center()
     _platform_touch(1, pedal, true)
