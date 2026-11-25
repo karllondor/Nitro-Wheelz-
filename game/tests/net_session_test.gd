@@ -120,8 +120,8 @@ func _run() -> void:
         if P.track_fingerprint(t).length() != 64:
             _fail("no fingerprint for the built-in track "+t)
             return
-    if P.track_fingerprint("user://nitro_track_x.json") != "" or P.track_fingerprint("res://tracks/nitro_wheelz_park.json") != "":
-        _fail("only the whitelisted built-in circuits may be shared")
+    if P.track_fingerprint("user://nitro_track_x.json") != "" or P.track_fingerprint("res://tracks/event_workshop_29.json") != "":
+        _fail("LAN accepts only the whitelisted circuits and Park")
         return
     # --------------------------------------------------------- host + join + lobby
     var host: NitroNetSession = _make()
