@@ -5,10 +5,11 @@ class_name NitroParkController
 ##   freezes()   - the car stands still while a lesson schematic is up
 ##   after_step()- once per physics tick with the real input
 ##   restart()   - RESTART from the pause menu
-## Everything else (cones, soft edge, tutorial, ghost, guide, beacon) lives here, so
+## Cones, recovery, service and tutorial guidance live here, so
 ## the circuits and the drive model are untouched. FREE DRIVE = mode "free": no
 ## tutorial object, no guide, no ghost - just the pad, the paint and the cones.
 const LAYOUT = preload("res://scripts/park/park_layout.gd")
+const SITE = preload("res://scripts/park/park_site.gd")
 const CONES = preload("res://scripts/park/park_cones.gd")
 const TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const PROGRESS = preload("res://scripts/park/park_progress.gd")
@@ -19,6 +20,9 @@ const GUIDE = preload("res://scripts/park/park_guide.gd")
 const SETTING_MODE: String = "nitro/park_mode"
 ## RESTART TUTORIAL from the menu: forget the saved progress before starting.
 const SETTING_RESET: String = "nitro/park_reset"
+
+## Hook for a future Park-only repair system.
+signal repair_requested
 
 var race: Node3D
 var mode: String = "free"
@@ -35,6 +39,10 @@ var _ring_r: float = 10.0
 var _toast_clock: float = 0.0
 var _cone_hint_clock: float = 99.0
 var _clock: float = 0.0
+var _repair_wait := 0.0
+var _repair_serviced := false
+var _site_notice: Label
+var _notice_left := 0.0
 
 func setup(race_node: Node3D) -> void:
     race = race_node
@@ -54,6 +62,7 @@ func setup(race_node: Node3D) -> void:
     var hud: Variant = race.get("hud")
     if hud != null:
         hud.set("park_mode",true)
+    _make_site_notice()
     if mode == "tutorial":
         _start_tutorial()
 
@@ -154,6 +163,9 @@ func freezes() -> bool:
 ## current lesson starts again. Paint is paint: nothing to reset.
 func restart() -> void:
     cones.reset_all()
+    _reset_visit()
+    _notice_left = 0.0
+    _site_notice.hide()
     if tutorial != null and tutorial.is_active():
         tutorial.repeat_lesson()
     elif tutorial != null and tutorial.phase == "finished":
@@ -162,7 +174,17 @@ func restart() -> void:
 # --------------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
-    if tutorial == null or race == null:
+    if race == null:
+        return
+    var camera := race.get_viewport().get_camera_3d()
+    var track := race.get("track") as NitroParkTrack
+    if track.site != null and camera != null:
+        track.site.update_roofs(race.model.position, Vector2(camera.global_position.x, camera.global_position.z))
+    if _notice_left > 0.0 and not race.paused:
+        _notice_left = maxf(0.0, _notice_left - delta)
+        if _notice_left == 0.0:
+            _site_notice.hide()
+    if tutorial == null:
         return
     # The car is frozen while a card is up, so no physics tick runs: the card clock runs here.
     if tutorial.freezes_car() and not bool(race.get("paused")):
@@ -176,8 +198,10 @@ func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: 
     _cone_hint_clock += dt
     var model: NitroDriveModel = race.get("model")
     var track: NitroDriftTrack = race.get("track")
+    if _recover_if_outside(model):
+        return
     cones.step(dt,model.position,model.heading,model.velocity,track.body_half_length,track.body_half_width)
-    _soft_edge(model)
+    _service_step(dt, model)
     if tutorial != null:
         tutorial.update(dt,{"pos":model.position,"speed_kmh":model.speed_kmh(),"drift_angle":model.drift_angle,
             "steer":steer,"gas":gas,"brake":braking,"handbrake":handbrake})
@@ -192,23 +216,57 @@ func after_step(dt: float, steer: float, gas: float, braking: float, handbrake: 
     _nav_hint(nav)
     _update_line(model,nav)
 
-## The far invisible edge: not a wall - no sound, no shake, no scoring. The car just
-## cannot leave the world; it slides along the edge.
-func _soft_edge(model: NitroDriveModel) -> void:
-    var d: float = LAYOUT.pad_distance(model.position,0.0)
-    if d <= LAYOUT.SOFT_EDGE_M:
+func _recover_if_outside(model: NitroDriveModel) -> bool:
+    if model.position.is_finite() and SITE.BOUNDS.has_point(model.position):
+        return false
+    model.reset(LAYOUT.START_POS, LAYOUT.START_HEADING)
+    race.had_skid = false
+    race._snap_cameras()
+    _reset_visit()
+    _show_site_notice("BACK ON THE PLAZA")
+    return true
+
+func _reset_visit() -> void:
+    _repair_wait = 0.0
+    _repair_serviced = false
+
+func _service_step(dt: float, model: NitroDriveModel) -> void:
+    if not SITE.REPAIR.has_point(model.position):
+        _reset_visit()
         return
-    var e: float = 0.5
-    var p: Vector2 = model.position
-    var n := Vector2(LAYOUT.pad_distance(p+Vector2(e,0),0.0)-LAYOUT.pad_distance(p-Vector2(e,0),0.0),
-        LAYOUT.pad_distance(p+Vector2(0,e),0.0)-LAYOUT.pad_distance(p-Vector2(0,e),0.0))
-    if n.length_squared() < 0.0001:
+    if _repair_serviced:
         return
-    n = n.normalized()
-    model.position = p-n*(d-LAYOUT.SOFT_EDGE_M)
-    var out: float = model.velocity.dot(n)
-    if out > 0.0:
-        model.velocity -= n*out
+    if model.speed_mps() > SITE.STOP_SPEED_MPS:
+        _repair_wait = 0.0
+        return
+    _repair_wait += dt
+    if _repair_wait >= SITE.STOP_SECONDS:
+        _repair_serviced = true
+        repair_requested.emit()
+        _show_site_notice("SERVICE COMPLETE")
+
+func _make_site_notice() -> void:
+    var layer := CanvasLayer.new()
+    layer.layer = 8
+    add_child(layer)
+    _site_notice = Label.new()
+    _site_notice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _site_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _site_notice.add_theme_font_size_override("font_size", 24)
+    _site_notice.add_theme_color_override("font_color", Color("#ffe48e"))
+    _site_notice.add_theme_color_override("font_outline_color", Color("#161224"))
+    _site_notice.add_theme_constant_override("outline_size", 7)
+    layer.add_child(_site_notice)
+    _site_notice.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+    _site_notice.offset_left = -155.0
+    _site_notice.offset_right = 155.0
+    _site_notice.offset_top = 72.0
+    _site_notice.hide()
+
+func _show_site_notice(message: String) -> void:
+    _site_notice.text = message
+    _site_notice.show()
+    _notice_left = 3.0
 
 # ---------------------------------------------------------------- exercise helpers
 

@@ -1,5 +1,9 @@
 # Nitro Wheelz — v0.1.33 AI-body test car (RYU-32 FLAME) on top of the mobile QA fixes (v0.1.32) and the Car Factory migration (v0.1.29–31)
 
+## Park 2.0 feature preview
+
+See the [Park 2.0 handoff](docs/dev/handoffs/nitro-wheelz-park-v2.md) for the provisional zone layout, spawn, ramps, repair trigger and evidence.
+
 ## AI BODY TEST CAR (v0.1.33)
 - docs/car_factory/AI_BODY_PROTOTYPE.md. Fifth car FLAME = AI-generated body (free-plan asset, NOT FOR RELEASE) + wheel library wheels, RYU-32 physics / V8. Next if the owner likes it: buy the paid plan, regenerate, patch the roof, remove text / plate, make CLEAN + LIVERY, apply the same pipeline to the Lada.
 

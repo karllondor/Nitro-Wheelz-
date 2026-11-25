@@ -342,6 +342,6 @@ func _run() -> void:
     _restore()
     race.queue_free()
     await process_frame
-    print("PASS: Park tutorial bugfix - touch layer stays live after a schematic (no dead / stuck GAS, stick, handbrake), the dismissing tap is not a pedal press, cards end by themselves, distance / side / on-screen arrow are live from the car (and follow the heading to the real donut), rings + guide line on the pavement, a real donut with REAL touch controls completes DONUT LEFT and advances to 7/10 DONUT RIGHT, wrong way / far / straight never count, SKIP clears the markers, layout + 80 cones unchanged")
+    print("PASS: Park tutorial bugfix - touch layer stays live after a schematic (no dead / stuck GAS, stick, handbrake), the dismissing tap is not a pedal press, cards end by themselves, distance / side / on-screen arrow are live from the car (and follow the heading to the real donut), rings + guide line on the pavement, a real donut with REAL touch controls completes DONUT LEFT and advances to 7/10 DONUT RIGHT, wrong way / far / straight never count, SKIP clears the markers, 80 cones retained")
     print("NOT RUN: the tutorial on the owner's phone")
     quit(0)
