@@ -1,3 +1,7 @@
+# v0.1.51 — My Tracks review
+
+- Adds Rename, Delete and Track Trash to My Tracks and separate Open, Save and Save As actions to both editors. Existing track IDs, PBs and stars survive display-name changes.
+
 # v0.1.50 — Android QA review
 
 - Restores the full results board for Practice, Club and Pro, gives GAS a uniform touch face, corrects event paint on the road mesh and prototypes CIRCUIT-only judging zones.

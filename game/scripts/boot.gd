@@ -30,6 +30,8 @@ const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 ## TRACK BUILDER, SETTINGS — each opening its own page; tools for testing
 ## (controller diagnostics) live under DEVELOPER. Portrait-first sizes,
 ## focusable buttons for controllers.
+const STORE = preload("res://scripts/world/player_track_store.gd")
+const FILE_DIALOG = preload("res://scripts/ui/track_file_dialog.gd")
 const TRACKS: Array = [
     ["SHIN-KAWA","res://tracks/shin_kawa_v2.json","shin_kawa_v2"],
     ["SHIN-KAWA • FULL CIRCUIT","res://tracks/shin_kawa_full_circuit.json","shin_kawa_full_circuit"],
@@ -112,6 +114,10 @@ func _ready() -> void:
         DirAccess.remove_absolute("user://qa-hotfix.once")
         get_tree().root.add_child.call_deferred(load("res://tests/qa_hotfix_checks.gd").new())
 
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-tracks.once"):
+        DirAccess.remove_absolute("user://qa-tracks.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/track_management_checks.gd").new())
+
 func _clear_page() -> void:
     for child in page.get_children():
         page.remove_child(child)
@@ -123,6 +129,7 @@ func show_page(which: String) -> void:
     page_name = which
     match which:
         "drive": _drive_page()
+        "track_trash": _track_trash_page()
         "setup": _setup_page()
         "park": _park_page()
         "profile": _profile_page()
@@ -181,45 +188,91 @@ func _drive_page() -> void:
     var mine: Array[Dictionary] = saved_tracks()
     _section(list,"MY TRACKS" if not mine.is_empty() else "MY TRACKS • none yet: TRACK BUILDER")
     for t in mine:
-        var row := HBoxContainer.new()
+        var row := VBoxContainer.new()
         row.name = "My track "+str(t["id"])
-        row.add_theme_constant_override("separation",int(10*ui_unit))
+        row.add_theme_constant_override("separation",int(6*ui_unit))
         list.add_child(row)
-        var best2: int = _best(str(t["id"]))
-        var label2: String = "★ %s • %d m\n%s" % [str(t["name"]).to_upper(),int(t["length"]),
+        var path: String = t.path
+        var best2: int = _best(str(t.id))
+        var label2: String = "%s • %d m\n%s" % [str(t.name).to_upper(),int(t.length),
             "BEST %s PTS" % RESULTS.points(best2) if best2 > 0 else "NO RUN YET"]
-        var drive: Button = _big(label2,_pick_track.bind(str(t["path"])))
+        var drive: Button = _big("DRIVE  ▸  "+label2,_pick_track.bind(path))
         drive.name = "Track custom"
-        drive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        # Player tracks are framed in the accent colour (built-ins neutral).
+        drive.clip_text = true
         STYLE.style_button(drive,ui_unit,true)
         _move(drive,row)
-        var edit_b: Button = _small("EDIT",_edit_track.bind(str(t["path"])))
-        edit_b.name = "Edit "+str(t["id"])
-        edit_b.custom_minimum_size = Vector2(120.0,86.0)*ui_unit
-        _move(edit_b,row)
+        var actions := HBoxContainer.new()
+        actions.add_theme_constant_override("separation",int(8*ui_unit))
+        row.add_child(actions)
+        var edit := _track_action(actions,"EDIT",_edit_track.bind(path))
+        edit.name = "Edit "+str(t.id)
+        _track_action(actions,"RENAME",_rename_saved_track.bind(path))
+        _track_action(actions,"DELETE",_delete_saved_track.bind(path))
+    var deleted := STORE.entries(true)
+    if not deleted.is_empty():
+        _move(_small("TRACK TRASH",func(): show_page("track_trash")),list)
     _section(list,"QUICK")
     _move(_big("RANDOM TRACK",_random_track),list).name = "Track random"
     _small("◀  BACK",_leave_track_list).name = "Back"
 
-## Every valid player track on this device: [{path, id, name, length, time}].
+func _track_action(row: HBoxContainer, caption: String, action: Callable) -> Button:
+    var button := _small(caption,action)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.custom_minimum_size = Vector2(0.0,56.0*ui_unit)
+    _move(button,row)
+    return button
+
+func _rename_saved_track(path: String) -> void:
+    var raw := STORE.read(path)
+    if raw.is_empty():
+        status_label.text = "TRACK IS UNAVAILABLE"
+        return
+    var expected := FileAccess.get_sha256(path)
+    var title := str(raw.get("name","TRACK"))
+    FILE_DIALOG.show(self,"RENAME TRACK","Rename %s" % title,"RENAME",func(new_name: String) -> String:
+        var result := STORE.rename(path,new_name,expected)
+        if result.has("error"):
+            return result.error
+        show_page("drive")
+        return "",title)
+
+func _delete_saved_track(path: String) -> void:
+    var raw := STORE.read(path)
+    if raw.is_empty():
+        status_label.text = "TRACK IS UNAVAILABLE"
+        return
+    var expected := FileAccess.get_sha256(path)
+    FILE_DIALOG.show(self,"DELETE TRACK","Move “%s” to Track Trash? It will disappear from My Tracks until restored." % str(raw.get("name","TRACK")),
+        "DELETE",func() -> String:
+            var error := STORE.trash(path,expected)
+            if error == "":
+                show_page("drive")
+            return error)
+
+func _track_trash_page() -> void:
+    _title("TRACK TRASH")
+    var list := _scroll_list()
+    for entry in STORE.entries(true):
+        var path: String = entry.path
+        var button := _big("RESTORE  ▸  "+str(entry.name),func():
+            var error := STORE.restore(path)
+            if error == "":
+                show_page("drive")
+            else:
+                status_label.text = error)
+        button.clip_text = true
+        _move(button,list)
+    _small("◀  BACK",func(): show_page("drive"))
+
 static func saved_tracks() -> Array[Dictionary]:
-    var out: Array[Dictionary] = []
-    for f in DirAccess.get_files_at("user://"):
-        if not (f.begins_with("nitro_track_") and f.ends_with(".json")):
-            continue
-        var path: String = "user://"+f
-        var c: Dictionary = DNA.read_track(path)
-        if not bool(c.get("ok",false)):
-            continue
-        out.append({"path":path,"id":str(c["track_id"]),"name":str(c["track_name"]),
-            "length":float(c["length_metres"]),"time":FileAccess.get_modified_time(path)})
-    out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["time"]) > int(b["time"]))
-    return out
+    return STORE.entries()
 
 func _edit_track(path: String) -> void:
-    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
-    if raw is Dictionary and not TERRAIN_TRACK.world_of(raw).is_empty() and not EDIT_TOOLS.node_shaped(raw):
+    var raw := STORE.read(path)
+    if raw.is_empty():
+        status_label.text = "TRACK IS UNAVAILABLE"
+        return
+    if not TERRAIN_TRACK.world_of(raw).is_empty() and not EDIT_TOOLS.node_shaped(raw):
         # Terrain-first tracks reopen in the terrain builder (same world); a circuit shaped in the node editor
         # (v0.1.42, keeps its landscape) reopens in the node editor.
         ProjectSettings.set_setting("nitro/terrain_edit_track",path)

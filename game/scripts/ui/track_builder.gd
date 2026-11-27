@@ -12,6 +12,7 @@ const DNA = preload("res://scripts/world/track_dna.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const GRASS = preload("res://assets/surfaces/grass_night.webp")
 const DRAFT: String = "user://nitro_builder_draft.json"
+const STORE = preload("res://scripts/world/player_track_store.gd")
 const BUILT: String = "user://nitro_track_built.json"
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 const TILT_DEG: float = 68.0
@@ -536,22 +537,22 @@ func _save() -> bool:
         return false
     var stamp: Dictionary = Time.get_datetime_dict_from_system()
     var title: String = "BUILT %02d-%02d %02d:%02d" % [stamp["day"],stamp["month"],stamp["hour"],stamp["minute"]]
-    var slug: String = "built_%04d%02d%02d_%02d%02d%02d" % [stamp["year"],stamp["month"],stamp["day"],
-        stamp["hour"],stamp["minute"],stamp["second"]]
-    var path: String = "user://nitro_track_"+slug+".json"
-    if not _write_track(path,title,slug):
+    var result := STORE.create(_track_data(title,""),title,"built_")
+    if result.has("error"):
+        _status(result.error,false)
         return false
-    var recent := FileAccess.open(LAST_SAVED,FileAccess.WRITE)
-    if recent != null:
-        recent.store_string(path)
-        recent.close()
+    STORE.mark_recent(result.path)
     _status("SAVED • "+title+" • ALSO EDITABLE IN EDIT TRACK",true)
     return true
 
-func _write_track(path: String, title: String, id: String) -> bool:
+func _track_data(title: String, id: String) -> Dictionary:
     var data: Dictionary = grid.to_track_data(title,id)
     # Theme + seed: the race rebuilds exactly this world from the tiles.
     data["world"] = world.descriptor() if world != null else {"theme":PROC_WORLD.THEME,"seed":world_seed,"version":PROC_WORLD.VERSION}
+    return data
+
+func _write_track(path: String, title: String, id: String) -> bool:
+    var data := _track_data(title,id)
     var compiled: Dictionary = DNA.compile(data)
     if not bool(compiled.get("ok",false)):
         _status("INVALID: "+str((compiled.get("errors",PackedStringArray()) as PackedStringArray)[0]),false)
