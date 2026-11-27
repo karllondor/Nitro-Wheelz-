@@ -131,7 +131,7 @@ func _check_editor(editor, id: String, path: String, raw: Dictionary, compiled: 
             editor.data.elevation.knot_heights[1] == heights[3],id+" altitude permutation")
     var changed: Dictionary = DNA.compile(editor.data)
     _check(changed.ok and absf(changed.length_metres-compiled.length_metres) < 0.02,id+" editor rotation length "+str(changed.errors)+" "+str(changed.length_metres))
-    var title := "QA three circuits %s %s" % [id,Time.get_ticks_usec()]
+    var title := "QA %s %s" % [id,Time.get_ticks_usec()]
     if not editor._persist_track(title):
         _check(false,id+" SAVE AS")
         return
