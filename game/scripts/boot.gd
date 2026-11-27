@@ -332,6 +332,20 @@ func _dev_page() -> void:
         show_page("dev"))
     wind_b.name = "Vegetation wind"
     STYLE.style_button(wind_b,ui_unit,wind_i != 0)
+    # Issue #54 FOREST LAB (developer only): the eight tree species on TOUGE routes, CLASSIC by default.
+    var lab = load("res://scripts/world/forest_lab/forest_lab_settings.gd")
+    var lab_on: bool = lab.mode() == "lab"
+    var lab_b: Button = _big("FOREST LAB: "+("ON" if lab_on else "CLASSIC")+"\nNEW TREES • TOUGE ROUTES ONLY",func():
+        lab.set_mode("classic" if lab_on else "lab")
+        show_page("dev"))
+    lab_b.name = "Forest lab mode"
+    STYLE.style_button(lab_b,ui_unit,lab_on)
+    var lab_den: int = int(lab.read()["density"])
+    var lab_d: Button = _big("FOREST DENSITY: "+str(lab.DENSITY_NAMES[lab_den])+"\nFOREST LAB ONLY",func():
+        lab.write_value("density",(lab_den+1)%3)
+        show_page("dev"))
+    lab_d.name = "Forest density"
+    _big("TREE DESIGNER ▶\nINSPECT • TUNE • SAVE PRESETS",func(): _go("res://scenes/forest_lab_designer.tscn")).name = "Tree designer"
     _big("ELEVATION PHYSICS ▶\nTERRAIN TRACKS",func(): show_page("elev")).name = "Elevation physics"
     # v0.1.32 mobile QA: touch / hitbox / input-order / FPS / wheel-angle
     # overlay in the Track Builder and the race.
