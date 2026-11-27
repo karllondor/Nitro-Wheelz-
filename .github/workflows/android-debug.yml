@@ -95,6 +95,11 @@ jobs:
         run: |
           sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.dev"/; s/^package\/name=.*/package\/name="Nitro Wheelz DEV"/' game/export_presets.cfg
           grep -n '^package/unique_name\|^package/name' game/export_presets.cfg
+      - name: Isolate the Forest Lab pilot (#54) from the production installation and its saves
+        if: github.head_ref == 'feat/sonnet-forest-lab' || github.ref_name == 'feat/sonnet-forest-lab'
+        run: |
+          sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.forestlab"/; s/^package\/name=.*/package\/name="Nitro Wheelz Forest Lab"/' game/export_presets.cfg
+          grep -n '^package/unique_name\|^package/name' game/export_presets.cfg
       - name: Isolate PRs targeting the unified preview
         if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150')
         env:
@@ -114,6 +119,10 @@ jobs:
           if [[ "$GITHUB_BASE_REF" == integration/nitro-dev || "$GITHUB_HEAD_REF" == feat/park-vehicle-damage || "$GITHUB_HEAD_REF" == feat/three-circuits-v0149 || "$GITHUB_HEAD_REF" == fix/qa-hotfix-v0150 ]]; then
             APK="builds/android/Nitro-Wheelz-LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA:0:8}.apk"
             artifact="LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA}-Android"
+          fi
+          if [[ "${GITHUB_HEAD_REF:-}" == feat/sonnet-forest-lab || "${GITHUB_REF_NAME:-}" == feat/sonnet-forest-lab ]]; then
+            APK="builds/android/Nitro-Wheelz-ForestLab_v$(cat VERSION)_Android-debug.apk"
+            artifact="Nitro-Wheelz-ForestLab_v$(cat VERSION)_Android-debug"
           fi
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
           "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/$APK"

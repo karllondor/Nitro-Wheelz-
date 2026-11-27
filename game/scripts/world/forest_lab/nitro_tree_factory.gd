@@ -558,22 +558,23 @@ static func _shrub(ctx: Dictionary) -> void:
         var rr2: float = rng.randf_range(0.3,0.95)*cw*s
         _blob(ctx,Vector3(cos(a2)*rr2,rng.randf_range(0.7,1.15)*s,sin(a2)*rr2),Vector3(0.12,0.11,0.12)*s*1.4,dots,-1,1.0,0.15)
 
-## Shared crown builder: NEAR = 20-face lumps (80 for a `big` one), FAR = every other lump, 1.25x bigger, 8 faces.
+## Shared crown builder: NEAR = 20-face lumps (80 for a `big` one), FAR = two lumps of three, 1.3x bigger, 8 faces.
 ## Lower lumps are darker (ambient occlusion), `c` picks main / light / dark so the crown reads as layered.
 static func _crown(ctx: Dictionary, blobs: Array, pal: Array[Color], _mask: float) -> void:
     var near: bool = ctx["near"]
     var rng: RandomNumberGenerator = ctx["rng"]
     var idx: int = 0
+    var thin: bool = not near and blobs.size() > 6      # a small crown (the shrub) keeps every lump at its own size
     for b in blobs:
         idx += 1
-        if not near and blobs.size() > 6 and idx%2 == 0:
-            continue
+        if thin and idx%3 == 0:
+            continue                      # FAR keeps two lumps of three, bigger, so the silhouette does not fall apart
         var col: Color = pal[0] if int(b["c"]) == 0 else (pal[1] if int(b["c"]) == 1 else pal[2].lerp(pal[0],0.45))
         col = col.darkened(clampf((1.0-float(b["ao"]))*0.28,0.0,0.3))
         var r: Vector3 = b["r"]
         var detail: int = -1
         if near:
             detail = 1 if bool(b.get("big",false)) else 0
-        else:
-            r *= 1.22
+        elif thin:
+            r *= 1.30
         _blob(ctx,b["p"],r,col,detail,1.0,0.17,rng.randf()*TAU)

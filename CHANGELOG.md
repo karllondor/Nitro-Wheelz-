@@ -1,3 +1,11 @@
+# Forest Lab pilot (branch `feat/sonnet-forest-lab`, issue #54) — on top of v0.1.50, NOT a release
+
+- Eight procedural low-poly tree species (pine, fir, birch, oak, sakura, Japanese maple, rowan, shrub) with NEAR / FAR meshes and five season palettes, one opaque shared material, rebuilt from the owner's prototype ZIP (its broadleaf crowns were detached bipyramids).
+- Opt-in **FOREST LAB** on **Touge** routes only (DEVELOPER > FOREST LAB, default CLASSIC): deterministic placement, chunked MultiMeshes, NEAR / FAR by camera distance, LOW / MEDIUM / HIGH density. CLASSIC trees are unchanged everywhere else and when the mode is CLASSIC.
+- Developer-only **Tree Designer** (species, season, height, crown, density, trunk, lean, blossom / berries, colour, tiers, shape variant; EDITED / COMPARE / GALLERY / STAND views; JSON presets with no silent overwrite).
+- Measured cost in the container (real race scene): +28 … +34 draw calls and +11 … +50 % primitives depending on density; phone FPS NOT measured. Details: `docs/FOREST_LAB.md`.
+- The Android workflow builds this branch as its own package `com.karllondor.nitrowheelz.forestlab` ("Nitro Wheelz Forest Lab") so it never replaces the standard app or its saves.
+
 # v0.1.50 — Android QA review
 
 - Restores the full results board for Practice, Club and Pro, gives GAS a uniform touch face, corrects event paint on the road mesh and prototypes CIRCUIT-only judging zones.

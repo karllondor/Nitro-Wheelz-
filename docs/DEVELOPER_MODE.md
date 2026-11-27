@@ -25,6 +25,9 @@ the player file. None of these options is saved into tracks or race results.
 | EXPORT DEVELOPER PRESET | action | Writes `user://nitro_dev_preset_<date_time>.cfg` and copies the same text to the clipboard (paste it into a bug report). | `dev_settings.gd export_preset()` |
 | AUDIO BENCHMARK | action | Synth cost per second of audio for the Lada I4 and the RYU-32 V8 on this device. | `boot.gd audio_benchmark()` |
 | (info line) | — | Godot version and renderer of this build. | `boot.gd` |
+| FOREST LAB | **CLASSIC** / ON | Issue #54: the eight new tree species on **TOUGE** routes only (other landscapes never change). Stored in `user://nitro_dev.cfg` `[forest_lab]`; saves, records and track files are untouched. | `world/forest_lab/*`, `terrain_scenery.gd` |
+| FOREST DENSITY | LOW / **MEDIUM** / HIGH | Trees per area for FOREST LAB (about 0.8x / 1.4x / 2x of the CLASSIC count); costs triangles, see `docs/FOREST_LAB.md`. | `forest_lab_settings.gd` |
+| TREE DESIGNER | screen | Look at, tune and save presets of the eight species (EDITED / COMPARE / GALLERY / STAND, orbit / pinch / fly camera). USE ON TOUGE selects a preset, STOCK GEOMETRY removes it. | `scenes/forest_lab_designer.tscn` |
 
 ## Proposed, NOT implemented yet
 
