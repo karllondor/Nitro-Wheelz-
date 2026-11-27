@@ -18,6 +18,8 @@ const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const TOUCH_DIAG = preload("res://scripts/ui/touch_diagnostics.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const WORLD = preload("res://scripts/world/terrain/terrain_world.gd")
+const STORE = preload("res://scripts/world/player_track_store.gd")
+const FILE_DIALOG = preload("res://scripts/ui/track_file_dialog.gd")
 const TT = preload("res://scripts/world/terrain/terrain_track.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const GRID = preload("res://scripts/world/track_grid.gd")
@@ -151,6 +153,7 @@ var dialog: Control
 ## Saved track being edited (SAVE overwrites it; SAVE AS NEW makes a copy).
 var loaded_path: String = ""
 var loaded_name: String = ""
+var source_signature: String = ""
 var _adapt_again: bool = false
 
 func _ready() -> void:
@@ -166,6 +169,8 @@ func _ready() -> void:
         loaded = load_track_file(edit_path)
     if not loaded:
         _load_draft()
+    elif edit_path == DRIVE_PATH:
+        _restore_draft_owner(JSON.parse_string(FileAccess.get_file_as_string(DRAFT)) if FileAccess.file_exists(DRAFT) else null)
     _build_ui()
     get_viewport().size_changed.connect(_on_resize)
     var enter := func() -> void:
@@ -451,7 +456,7 @@ func _build_ui() -> void:
     _landscape_row(y2,row_h,left,width)
     _row(setup_box,[["PRACTICE","_pick_event","practice"],["CLUB EVENT","_pick_event","club"],["PRO EVENT","_pick_event","pro"]],
         y3,row_h,left,width,"event_")
-    _row(setup_box,[["GENERATE TERRAIN","_generate_pressed",null],["MY TRACKS","_open_tracks",null],["VIEW","_cycle_view",null],
+    _row(setup_box,[["GENERATE TERRAIN","_generate_pressed",null],["OPEN","_open_tracks",null],["VIEW","_cycle_view",null],
         ["DRAW ROAD ▶","_enter_build",null]],y4,row_h,left,width,"")
     desc_label = Label.new()
     desc_label.name = "Landscape description"
@@ -495,24 +500,25 @@ func _build_ui() -> void:
     pending_label.add_theme_color_override("font_color",STYLE.WHITE)
     pending_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pending_panel.add_child(pending_label)
-    # BUILD bar: two rows.
+    # Build controls and track-file actions.
     build_box = Control.new()
     build_box.name = "Build"
     build_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
     ui_root.add_child(build_box)
     _row(build_box,[["DRAW","_set_draw",null],["ERASE","_set_erase",null],["↶ UNDO","_undo",null],["↷ REDO","_redo",null],["CLEAR","_clear",null]],
-        y3,row_h,left,width,"")
-    _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null],
-        ["SAVE","_save",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
-    _button(build_box,"Practice","_cycle_event",Rect2(left,y3-gap-row_h*0.95,width*0.32,row_h*0.85),"EVENT")
-    _button(build_box,"ROAD","_toggle_surface",Rect2(left+width*0.35,y3-gap-row_h*0.95,width*0.32,row_h*0.85),"SURFACE")
+        y2,row_h,left,width,"")
+    _row(build_box,[["LOOP","_toggle_topology",null],["CLOSE","_close_loop",null],["AUTO","_auto",null],["VIEW","_cycle_view",null]],
+        y3,row_h,left,width,"b_")
+    _row(build_box,[["OPEN","_open_tracks",null],["SAVE","_save",null],["SAVE AS","_request_save_as",null],
+        ["RENAME","_request_rename",null],["DRIVE","_drive",null]],y4,row_h,left,width,"b_")
+    _button(build_box,"Practice","_cycle_event",Rect2(left,y2-gap-row_h*0.95,width*0.32,row_h*0.85),"EVENT")
+    _button(build_box,"ROAD","_toggle_surface",Rect2(left+width*0.35,y2-gap-row_h*0.95,width*0.32,row_h*0.85),"SURFACE")
     var mw: float = width*0.30
-    _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y3-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
+    _button(build_box,"✋ MOVE","_toggle_pan",Rect2(left+width-mw,y2-gap-row_h*0.95,mw,row_h*0.85),"MOVE")
     var top: float = header_rect.end.y+s.y*0.006
     map_rect_setup = Rect2(0.0,top,s.x,y1-row_h*1.3-top)
-    # BUILD: the map reaches down to the two button rows (the MOVE button
-    # inside it is a Button and takes its own touches first).
-    map_rect_build = Rect2(0.0,top,s.x,y3-gap*0.5-top)
+    # The MOVE button inside the map takes its own touches first.
+    map_rect_build = Rect2(0.0,top,s.x,y2-gap*0.5-top)
     _sync_map_rect()
     _refresh_titles()
 
@@ -581,6 +587,8 @@ func _refresh_titles() -> void:
         title_label.text = "%s SELECTED • NOT GENERATED (SHOWING %s)" % [str(inf["name"]),str(shown["short"])]
     else:
         title_label.text = "%s • %s • SEED %d" % [str(CAT.COUNTRY_NAMES[country]),str(inf["name"]),terrain_seed]
+    if stage == "build" and loaded_name != "":
+        title_label.text = loaded_name+" • "+title_label.text
     if pending_panel != null:
         pending_panel.visible = pending and stage == "setup"
         dim_rect.visible = pending and stage == "setup"
@@ -1615,16 +1623,29 @@ func _write(path: String, title: String, id: String) -> bool:
     file.close()
     return bool(DNA.read_track(path).get("ok",false))
 
-## SAVE: asks for a name (v0.1.27). Editing a saved track offers SAVE
-## (overwrite) and SAVE AS NEW. Saved tracks appear in DRIVE > MY TRACKS and
-## in MY TRACKS here.
 func _save() -> bool:
+    if not _can_save():
+        return false
+    var path := loaded_path
+    var saved := STORE.read(path)
+    if not STORE.owned_path(path):
+        _name_dialog()
+        return true
+    if saved.is_empty():
+        _status("TRACK UNAVAILABLE • USE SAVE AS",false)
+        return false
+    var expected := FileAccess.get_sha256(path)
+    FILE_DIALOG.show(self,"SAVE TRACK","Replace the saved layout of “%s”?" % str(saved.get("name","TRACK")),
+        "SAVE",func() -> String:
+            if path != loaded_path:
+                return "TRACK CHANGED • REOPEN IT"
+            return _persist_track(str(saved.get("name","TRACK")),expected))
+    return true
+
+func _can_save() -> bool:
     if current_track_data("x","x").is_empty():
         _status("FINISH A VALID %s FIRST" % topology.to_upper(),false)
         return false
-    if not ui_async:
-        return _do_save(_default_name(),false)
-    _name_dialog()
     return true
 
 func _default_name() -> String:
@@ -1632,25 +1653,46 @@ func _default_name() -> String:
         return loaded_name
     return "MY %s %s" % [str(CAT.info(archetype)["short"]),"ROUTE" if topology == "route" else "CIRCUIT"]
 
-func _do_save(title: String, overwrite: bool) -> bool:
-    var name: String = title.strip_edges().to_upper()
-    if name == "":
-        name = _default_name()
-    var path: String = loaded_path
-    var slug: String = ""
-    if overwrite and loaded_path != "" and loaded_path != DRIVE_PATH:
-        slug = loaded_path.get_file().trim_prefix("nitro_track_").trim_suffix(".json")
-    else:
-        var stamp: Dictionary = Time.get_datetime_dict_from_system()
-        slug = "terrain_%04d%02d%02d_%02d%02d%02d" % [stamp["year"],stamp["month"],stamp["day"],
-            stamp["hour"],stamp["minute"],stamp["second"]]
-        path = "user://nitro_track_"+slug+".json"
-    if not _write(path,name,slug):
-        return false
-    loaded_path = path
-    loaded_name = name
-    _status("SAVED • %s • DRIVE > MY TRACKS" % name,true)
-    return true
+func _request_save_as() -> void:
+    if _can_save():
+        _name_dialog(STORE.owned_path(loaded_path))
+
+func _request_rename() -> void:
+    var path := loaded_path
+    var raw := STORE.read(path)
+    if raw.is_empty():
+        _status("SAVE A COPY BEFORE RENAMING",false)
+        return
+    var expected := FileAccess.get_sha256(path)
+    FILE_DIALOG.show(self,"RENAME TRACK","Rename the saved track. Your layout edits stay in the editor.",
+        "RENAME",func(title: String) -> String:
+            var result := STORE.rename(path,title,expected)
+            if result.has("error"):
+                return result.error
+            loaded_name = result.data.name
+            _refresh_titles()
+            _status("RENAMED • "+loaded_name,true)
+            return "",str(raw.get("name","TRACK")))
+
+func _persist_track(title: String, expected: String = "") -> String:
+    var raw := current_track_data(title,"")
+    if raw.is_empty():
+        return "FINISH A VALID %s FIRST" % topology.to_upper()
+    if expected != "" and _build_signature() == source_signature:
+        # A legacy road may have been baked by an earlier builder version.
+        # Keep its authored geometry when no editable input changed.
+        raw = STORE.read(loaded_path)
+    var result := STORE.create(raw,title,"terrain_") if expected == "" else STORE.replace(loaded_path,raw,expected)
+    if result.has("error"):
+        return result.error
+    loaded_path = result.path
+    loaded_name = result.data.name
+    source_signature = _build_signature()
+    STORE.mark_recent(loaded_path)
+    _save_draft()
+    _refresh_titles()
+    _status("SAVED • %s • DRIVE > MY TRACKS" % loaded_name,true)
+    return ""
 
 func _modal(title: String, height: float) -> VBoxContainer:
     _close_dialog()
@@ -1700,56 +1742,20 @@ func _dialog_button(parent: Control, text: String, cb: Callable, primary: bool =
     parent.add_child(b)
     return b
 
-func _name_dialog() -> void:
-    var box: VBoxContainer = _modal("SAVE TRACK",get_viewport().get_visible_rect().size.y*0.30)
-    var hint := Label.new()
-    hint.text = "NAME"
-    hint.add_theme_color_override("font_color",STYLE.MUTED)
-    box.add_child(hint)
-    var edit := LineEdit.new()
-    edit.name = "Track name"
-    edit.text = _default_name()
-    edit.max_length = 28
-    edit.select_all_on_focus = true
-    edit.custom_minimum_size.y = 60*ui_unit
-    edit.add_theme_font_size_override("font_size",int(22*ui_unit))
-    box.add_child(edit)
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation",int(10*ui_unit))
-    box.add_child(row)
-    if loaded_path != "" and loaded_path != DRIVE_PATH:
-        _dialog_button(row,"SAVE",func():
-            _close_dialog()
-            _do_save(edit.text,true),true)
-        _dialog_button(row,"SAVE AS NEW",func():
-            _close_dialog()
-            _do_save(edit.text,false))
-    else:
-        _dialog_button(row,"SAVE",func():
-            _close_dialog()
-            _do_save(edit.text,false),true)
-    _dialog_button(row,"CANCEL",_close_dialog)
-    edit.text_submitted.connect(func(t: String):
-        _close_dialog()
-        _do_save(t,loaded_path != "" and loaded_path != DRIVE_PATH))
-    edit.call_deferred("grab_focus")
+func _name_dialog(as_copy: bool = false) -> void:
+    var title := _default_name().left(37)+" COPY" if as_copy else _default_name().left(42)
+    FILE_DIALOG.show(self,"SAVE AS" if as_copy else "SAVE TRACK","Name your track.",
+        "SAVE",func(new_name: String) -> String: return _persist_track(new_name),title)
 
 ## Saved terrain tracks on this device (newest first).
 static func terrain_tracks() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
-    for f in DirAccess.get_files_at("user://"):
-        if not (f.begins_with("nitro_track_") and f.ends_with(".json")):
-            continue
-        var path: String = "user://"+f
-        var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-        if not (raw is Dictionary):
-            continue
+    for entry in STORE.entries():
+        var raw: Dictionary = entry.raw
         var w: Dictionary = TT.world_of(raw)
-        if w.is_empty():
-            continue
-        out.append({"path":path,"name":str(raw.get("name","TRACK")),"archetype":str(w.get("archetype","")),
-            "closed":bool(raw.get("closed",true)),"time":FileAccess.get_modified_time(path)})
-    out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["time"]) > int(b["time"]))
+        if not w.is_empty():
+            out.append({"path":entry.path,"name":entry.name,"archetype":str(w.get("archetype","")),
+                "closed":bool(raw.get("closed",true)),"time":entry.time})
     return out
 
 ## MY TRACKS: pick a saved terrain track to edit (its landscape is rebuilt).
@@ -1783,18 +1789,15 @@ func _open_tracks() -> void:
     _dialog_button(box,"CLOSE",_close_dialog)
 
 func _open_saved(path: String) -> void:
-    var shaped: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-    if shaped is Dictionary and bool((shaped.get("builder",{}) as Dictionary).get("nodes_edited",false)):
-        var marker := FileAccess.open("user://nitro_editor_last_path.txt",FileAccess.WRITE)
-        if marker != null:
-            marker.store_string(path)
-            marker.close()
+    var shaped := STORE.read(path)
+    if bool((shaped.get("builder",{}) as Dictionary).get("nodes_edited",false)):
+        STORE.mark_recent(path)
         get_tree().change_scene_to_file("res://scenes/track_editor.tscn")
         return
-    grid = TT.new_grid()
     if not load_track_file(path):
         _status("COULD NOT OPEN THAT TRACK",false)
         return
+    _save_draft()
     _generate_async(false,func():
         _enter_build()
         _status("EDITING %s" % loaded_name,true),"LOADING TRACK")
@@ -1815,18 +1818,30 @@ func _back() -> void:
 
 # ------------------------------------------------------------ persistence
 
-func _save_draft() -> void:
+func _grid_data() -> Dictionary:
     var tiles: Array = []
     var pairs: Array = []
-    for c in grid.links.keys():
+    var cells := grid.links.keys()
+    cells.sort()
+    for c in cells:
         tiles.append([c.x,c.y])
-        for n in grid.links[c]:
+        var neighbors: Array = grid.links[c].duplicate()
+        neighbors.sort()
+        for n in neighbors:
             if c < n:
                 pairs.append([c.x,c.y,n.x,n.y])
+    return {"tiles":tiles,"links":pairs}
+
+func _build_signature() -> String:
+    return JSON.stringify([descriptor(),_grid_data(),topology,[route_start.x,route_start.y]]).sha256_text()
+
+func _save_draft() -> void:
+    var grid_data := _grid_data()
     var file := FileAccess.open(DRAFT,FileAccess.WRITE)
     if file != null:
-        file.store_string(JSON.stringify({"version":1,"world":descriptor(),"tiles":tiles,"links":pairs,
-            "topology":topology,"route_start":[route_start.x,route_start.y],"stage":stage}))
+        file.store_string(JSON.stringify({"version":1,"world":descriptor(),"tiles":grid_data.tiles,"links":grid_data.links,
+            "topology":topology,"route_start":[route_start.x,route_start.y],"stage":stage,
+            "source_path":loaded_path,"source_signature":source_signature}))
         file.close()
 
 func _load_draft() -> void:
@@ -1835,6 +1850,7 @@ func _load_draft() -> void:
     var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(DRAFT))
     if not (raw is Dictionary):
         return
+    _restore_draft_owner(raw)
     var w: Variant = raw.get("world",{})
     if w is Dictionary and CAT.ARCHETYPES.has(str(w.get("archetype",""))):
         archetype = str(w["archetype"])
@@ -1851,28 +1867,42 @@ func _load_draft() -> void:
         grid.link(Vector2i(int(l[0]),int(l[1])),Vector2i(int(l[2]),int(l[3])))
     stage = "build" if str(raw.get("stage","setup")) == "build" and grid.tile_count() > 0 else "setup"
 
+func _restore_draft_owner(raw: Variant) -> void:
+    if raw is Dictionary:
+        var path := str(raw.get("source_path",""))
+        var saved := STORE.read(path)
+        if not saved.is_empty():
+            source_signature = str(raw.get("source_signature",""))
+            loaded_path = path
+            loaded_name = str(saved.get("name","TRACK"))
+
 ## Open a saved terrain track for editing (same world + road).
 func load_track_file(path: String) -> bool:
-    if not FileAccess.file_exists(path):
-        return false
-    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-    if not (raw is Dictionary):
-        return false
+    var raw := STORE.read(path)
+    if path == DRIVE_PATH or path == "res://tracks/event_workshop_29.json":
+        var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+        raw = parsed if parsed is Dictionary else {}
     var w: Dictionary = TT.world_of(raw)
-    if w.is_empty() or bool((raw.get("builder",{}) as Dictionary).get("nodes_edited",false)):
-        return false      # a circuit shaped in the node editor: its tiles describe an older road
+    if w.is_empty() or not CAT.ARCHETYPES.has(str(w.get("archetype",""))) \
+            or bool((raw.get("builder",{}) as Dictionary).get("nodes_edited",false)):
+        return false
+    var candidate := TT.new_grid()
+    var lg: Dictionary = TT.load_grid(candidate,raw)
+    if not bool(lg.get("ok",false)):
+        return false
+    grid = candidate
+    undo_stack.clear()
+    redo_stack.clear()
     archetype = str(w["archetype"])
     country = str(CAT.info(archetype)["country"])
     terrain_seed = int(w.get("terrain_seed",1))
     event_mode = str(w.get("event_mode","club"))
-    var lg: Dictionary = TT.load_grid(grid,raw)
-    if not bool(lg.get("ok",false)):
-        return false
     topology = "loop" if bool(lg["closed"]) else "route"
-    road_style=str(raw.get("road_style","road" if topology=="route" else "circuit"))
+    road_style = str(raw.get("road_style","road" if topology=="route" else "circuit"))
     var order: Array = lg["order"]
     route_start = order[0] if not order.is_empty() else Vector2i(-1,-1)
     stage = "build"
-    loaded_path = path if path.begins_with("user://") else ""
-    loaded_name = str(raw.get("name","")).to_upper()
+    loaded_path = path if STORE.owned_path(path) else ""
+    loaded_name = str(raw.get("name",""))
+    source_signature = _build_signature() if loaded_path != "" else ""
     return true

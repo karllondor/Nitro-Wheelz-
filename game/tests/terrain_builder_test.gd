@@ -220,7 +220,7 @@ func _run() -> void:
     var before: Array = []
     for f in DirAccess.get_files_at("user://"):
         before.append(f)
-    if not b._save():
+    if b._persist_track("Terrain Test Circuit") != "":
         _fail("SAVE failed: "+b.status_label.text)
         return
     var saved: String = ""

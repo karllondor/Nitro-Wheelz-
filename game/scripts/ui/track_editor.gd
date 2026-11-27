@@ -5,6 +5,8 @@ const DNA = preload("res://scripts/world/track_dna.gd")
 const STYLE = preload("res://scripts/ui/hud_style.gd")
 const TOOLS = preload("res://scripts/world/track_edit_tools.gd")
 const BUSY = preload("res://scripts/ui/busy_overlay.gd")
+const STORE = preload("res://scripts/world/player_track_store.gd")
+const FILE_DIALOG = preload("res://scripts/ui/track_file_dialog.gd")
 const SOURCE: String = "res://tracks/shin_kawa_full_circuit.json"
 const CUSTOM: String = "user://nitro_custom_track.json"
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
@@ -38,6 +40,7 @@ var add_mode: bool = false
 var invalid_nodes: Dictionary = {}
 var dialog_overlay: ColorRect
 var name_input: LineEdit
+var save_hint: Label
 var undo_stack: Array[Dictionary] = []
 var drag_recorded: bool = false
 var pending_drive: bool = false
@@ -132,7 +135,7 @@ func _redraw() -> void:
 
 func _update_header() -> void:
     if header_name != null:
-        header_name.text = last_saved_name.to_upper() if not last_saved_name.is_empty() else "UNSAVED TRACK"
+        header_name.text = str(data.get("name","UNSAVED TRACK")).to_upper()
 
 static func help_hidden() -> bool:
     var cfg := ConfigFile.new()
@@ -296,11 +299,13 @@ func _make_ui() -> void:
     _button("REVERSE",0.35,0.801,0.30,0.054,Callable(self,"_reverse")).name = "Reverse"
     smooth_button = _button("AUTO-SMOOTH",0.67,0.801,0.30,0.054,Callable(self,"_auto_smooth"))
     smooth_button.name = "Auto smooth"
-    _button("OPEN...",0.03,0.860,0.30,0.054,Callable(self,"_request_open")).name = "Open"
-    _button("SAVE AS...",0.35,0.860,0.30,0.054,Callable(self,"_request_save"))
-    _button("START NEW",0.67,0.860,0.30,0.054,Callable(self,"_request_new"))
-    _button("BACK",0.03,0.919,0.30,0.054,Callable(self,"_back"))
-    _button("DRIVE",0.35,0.919,0.62,0.054,Callable(self,"_drive")).name = "Drive"
+    _button("OPEN...",0.03,0.860,0.22,0.054,Callable(self,"_request_open")).name = "Open"
+    _button("SAVE",0.27,0.860,0.22,0.054,Callable(self,"_request_save"))
+    _button("SAVE AS...",0.51,0.860,0.22,0.054,Callable(self,"_request_save_as"))
+    _button("RENAME",0.75,0.860,0.22,0.054,Callable(self,"_request_rename"))
+    _button("BACK",0.03,0.919,0.22,0.054,Callable(self,"_back"))
+    _button("START NEW",0.27,0.919,0.29,0.054,Callable(self,"_request_new"))
+    _button("DRIVE",0.58,0.919,0.39,0.054,Callable(self,"_drive")).name = "Drive"
 
 func _save_undo_snapshot() -> void:
     undo_stack.append({
@@ -387,6 +392,8 @@ func _show_dialog(kind: String) -> void:
     if kind=="help":
         hint.add_theme_constant_override("line_spacing",int(6.0*sc))
     stack.add_child(hint)
+    if kind=="save":
+        save_hint = hint
     if kind=="help":
         help_check = CheckBox.new()
         help_check.name = "Do not show again"
@@ -399,7 +406,7 @@ func _show_dialog(kind: String) -> void:
         stack.add_child(help_check)
     if kind=="save":
         name_input = LineEdit.new()
-        name_input.text = last_saved_name
+        name_input.text = (last_saved_name.left(37)+" COPY") if STORE.owned_path(last_saved_path) else str(data.get("name","")).left(42)
         name_input.placeholder_text = "e.g. Welsh Mountain Drift"
         name_input.max_length = 42
         name_input.custom_minimum_size.y = 48.0*sc
@@ -479,87 +486,103 @@ func _replace_new_track(points: Array,adding: bool) -> void:
     _redraw()
 
 func _request_save() -> void:
+    pending_drive = false
+    _save_dialog()
+
+func _request_save_as() -> void:
+    pending_drive = false
+    _validate()
+    if ready_to_play:
+        _show_dialog("save")
+
+func _save_dialog() -> void:
     _validate()
     if not ready_to_play:
         _status("FIX RED NODES FIRST • Cannot save invalid geometry",false)
         return
+    if not STORE.owned_path(last_saved_path):
+        _show_dialog("save")
+        return
+    var path := last_saved_path
+    var saved := STORE.read(path)
+    if saved.is_empty():
+        _status("TRACK UNAVAILABLE • USE SAVE AS",false)
+        return
+    var expected := FileAccess.get_sha256(path)
+    var title := str(saved.get("name","TRACK"))
+    var drive := pending_drive
     pending_drive = false
-    _show_dialog("save")
+    FILE_DIALOG.show(self,"SAVE TRACK","Replace the saved layout of “%s”?" % title,"SAVE",func() -> String:
+        if path != last_saved_path or not _persist_track(title,expected):
+            return "COULD NOT SAVE • REOPEN OR USE SAVE AS"
+        if drive:
+            _launch_saved()
+        return "")
 
-func _safe_slug(name: String) -> String:
-    var clean: String = ""
-    for i in range(name.length()):
-        var ch: String = name.substr(i,1).to_lower()
-        if ch in "abcdefghijklmnopqrstuvwxyz0123456789":
-            clean += ch
-        elif ch in " -_":
-            if not clean.ends_with("_"):
-                clean += "_"
-    clean = clean.strip_edges().trim_suffix("_")
-    if clean.is_empty():
-        clean = "track"
-    return clean.substr(0,40)
+func _request_rename() -> void:
+    var path := last_saved_path
+    var raw := STORE.read(path)
+    if raw.is_empty():
+        _status("SAVE A COPY BEFORE RENAMING",false)
+        return
+    var expected := FileAccess.get_sha256(path)
+    var title := str(raw.get("name","TRACK"))
+    FILE_DIALOG.show(self,"RENAME TRACK","Rename the saved track. Your layout edits stay in the editor.",
+        "RENAME",func(new_name: String) -> String:
+            var result := STORE.rename(path,new_name,expected)
+            if result.has("error"):
+                return result.error
+            last_saved_name = result.data.name
+            data.name = last_saved_name
+            for state in undo_stack:
+                if state.last_saved_path == path:
+                    state.last_saved_name = last_saved_name
+                    state.data.name = last_saved_name
+            _update_header()
+            _status("RENAMED • "+last_saved_name,true)
+            return "",title)
 
 func _confirm_save() -> void:
     var title: String = name_input.text.strip_edges()
-    if title.is_empty():
-        _status("ENTER A TRACK NAME BEFORE SAVING",false)
-        pending_drive = false
-        return
     if not _persist_track(title):
-        pending_drive = false
         return
     _close_dialog()
     if pending_drive:
         pending_drive = false
-        ProjectSettings.set_setting("nitro/selected_track",last_saved_path)
-        get_tree().change_scene_to_file("res://scenes/race.tscn")
+        _launch_saved()
 
-func _persist_track(title: String) -> bool:
+func _launch_saved() -> void:
+    ProjectSettings.set_setting("nitro/selected_track",last_saved_path)
+    get_tree().change_scene_to_file("res://scenes/race.tscn")
+
+func _persist_track(title: String, expected: String = "") -> bool:
     _validate()
     if not ready_to_play:
         return false
-    if terrain_field != null:
-        # A terrain circuit is saved with the road heights solved on ITS landscape (what the Terrain Builder does).
-        var fit: Dictionary = TOOLS.fit_terrain(data,terrain_field)
+    var copy := data.duplicate(true)
+    var original := STORE.read(last_saved_path) if expected != "" else {}
+    var unchanged := not original.is_empty() and STORE.same_layout(original,copy)
+    if terrain_field != null and not unchanged:
+        var fit: Dictionary = TOOLS.fit_terrain(copy,terrain_field)
         if not bool(fit["ok"]):
-            _status("TERRAIN • "+str((fit["reasons"] as Array)[0] if not (fit["reasons"] as Array).is_empty() else "NOT BUILDABLE"),false)
+            _status("TERRAIN • "+str(fit.reasons[0] if not fit.reasons.is_empty() else "NOT BUILDABLE"),false)
             return false
-        data = fit["data"]
-    # The tiles of a builder circuit describe the road as it was before the nodes were shaped.
-    TOOLS.mark_node_shaped(data)
-    var slug: String = _safe_slug(title)
-    var path: String = "user://nitro_track_"+slug+".json"
-    data["name"] = title
-    # Records per layout (v0.1.32): the id carries a geometry fingerprint.
-    data["id"] = load("res://scripts/ui/race_results.gd").layout_id("custom_"+slug,data)
-    var file: FileAccess = FileAccess.open(path,FileAccess.WRITE)
-    if file == null:
-        _status("FAILED • Device storage unavailable",false)
+        copy = fit.data
+    if not unchanged:
+        TOOLS.mark_node_shaped(copy)
+    var result := STORE.create(copy,title) if expected == "" else STORE.replace(last_saved_path,copy,expected)
+    if result.has("error"):
+        _status(result.error,false)
+        if is_instance_valid(save_hint):
+            save_hint.text = result.error
         return false
-    # Full float precision: the saved file is exactly the validated track.
-    file.store_string(JSON.stringify(data,"  ",false,true))
-    file.close()
-    var compiled: Dictionary = DNA.read_track(path)
-    if not bool(compiled.get("ok",false)):
-        _status("FAILED • Saved file did not pass validator",false)
-        return false
-    if compiled["centerline"] != DNA.compile(data)["centerline"]:
-        _status("FAILED • Saved geometry differs from the editor",false)
-        return false
-    # Keep editing exactly what the file holds (what the race will load).
-    var reread: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-    if reread is Dictionary:
-        data["control_points"] = reread["control_points"]
-        _refresh_preview()
-    var recent: FileAccess = FileAccess.open(LAST_SAVED,FileAccess.WRITE)
-    if recent != null:
-        recent.store_string(path)
-        recent.close()
-    last_saved_path = path
-    last_saved_name = title
+    data = result.data
+    last_saved_path = result.path
+    last_saved_name = data.name
+    STORE.mark_recent(last_saved_path)
+    _refresh_preview()
     _update_header()
-    _status("SAVED • "+title+" • %.0f m" % last_length,true)
+    _status("SAVED • "+last_saved_name+" • %.0f m" % last_length,true)
     return true
 
 func _button(text: String,xx: float,yy: float,ww: float,hh: float,action: Callable) -> Button:
@@ -797,7 +820,7 @@ func _drive() -> void:
         _status("FIX RED NODES FIRST • Cannot drive an invalid track",false)
         return
     pending_drive = true
-    _show_dialog("save")
+    _save_dialog()
 
 func _reset_shape() -> void:
     _save_undo_snapshot()
@@ -906,8 +929,11 @@ func _request_open() -> void:
 
 ## Load a saved circuit into the editor. `builtin_name` != "" = a built-in circuit, opened as an unsaved copy.
 func _load_path(path: String,builtin_name: String = "") -> void:
-    var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
-    if not (raw is Dictionary) or not bool(DNA.compile(raw).get("ok",false)):
+    var raw := STORE.read(path)
+    if builtin_name != "" and path.begins_with("res://tracks/") and FileAccess.file_exists(path):
+        var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+        raw = parsed if parsed is Dictionary and DNA.compile(parsed).get("ok",false) else {}
+    if raw.is_empty():
         _close_dialog()
         _status("COULD NOT OPEN • that file is not a valid circuit",false)
         return

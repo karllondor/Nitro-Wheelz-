@@ -52,7 +52,7 @@ func _run() -> void:
     b._name_dialog()
     await _shot("ui_save_name")
     b._close_dialog()
-    b._do_save("TATRY SUNSET ROUTE",false)
+    b._persist_track("TATRY SUNSET ROUTE")
     b._open_tracks()
     await _shot("ui_my_tracks")
     b._close_dialog()

@@ -9,6 +9,10 @@ case "${NITRO_SMOKE:-circuits}" in
         shots=(paint-0 chase-paint-0 paint-1 chase-paint-1 paint-2 chase-paint-2 paint-3 chase-paint-3
             results-pro retry-five retry-paint results-club results-practice results-ordinary)
         ;;
+    tracks)
+        case_name=tracks
+        shots=()
+        ;;
     circuits)
         case_name=circuits
         shots=()
@@ -29,12 +33,22 @@ mkdir -p "$out"
 previous=""
 upgrade_track="$out/upgrade-track.json"
 upgrade_runs="$out/upgrade-runs.json"
-if [[ "$case_name" == hotfix ]]; then
-    if [[ -d builds/android-pr45 ]]; then
-        previous=$(find builds/android-pr45 -name '*.apk' -print -quit)
+if [[ "$case_name" == hotfix || "$case_name" == tracks ]]; then
+    previous_dir=builds/android-pr45
+    previous_version=v0.1.49
+    previous_sha=6fc57b954555c048c5f909a43cf2c7e53c29b7ea993bd2209dfe708b50e3b761
+    target_version=v0.1.50
+    if [[ "$case_name" == tracks ]]; then
+        previous_dir=builds/android-pr58
+        previous_version=v0.1.50
+        previous_sha=02073a39db1d86c44d0ae382d0a35a0580b3b132134dee1a1eee269dc8278515
+        target_version=v0.1.51
+    fi
+    if [[ -d "$previous_dir" ]]; then
+        previous=$(find "$previous_dir" -name '*.apk' -print -quit)
     fi
     if [[ -n "$previous" ]]; then
-        printf '%s  %s\n' '6fc57b954555c048c5f909a43cf2c7e53c29b7ea993bd2209dfe708b50e3b761' "$previous" | sha256sum -c -
+        printf '%s  %s\n' "$previous_sha" "$previous" | sha256sum -c -
         adb install -r "$previous"
         adb shell run-as "$pkg" mkdir -p files
         cp game/tracks/fuji_speedway_short.json "$upgrade_track"
@@ -42,7 +56,7 @@ if [[ "$case_name" == hotfix ]]; then
         adb shell "run-as $pkg sh -c 'cat > files/nitro_track_qa_upgrade.json'" < "$upgrade_track"
         adb shell "run-as $pkg sh -c 'cat > files/nitro_local_runs.json'" < "$upgrade_runs"
     else
-        echo "SKIP: the signed PR #45 v0.1.49 artifact is unavailable" | tee "$out/upgrade-verdict.txt"
+        echo "SKIP: the signed $previous_version artifact is unavailable" | tee "$out/upgrade-verdict.txt"
     fi
 fi
 adb install -r "$apk"
@@ -85,7 +99,7 @@ grep -q '^PASS:' "$out/verdict.txt"
 if [[ -n "$previous" ]]; then
     adb exec-out run-as "$pkg" cat files/nitro_track_qa_upgrade.json | cmp "$upgrade_track" -
     adb exec-out run-as "$pkg" cat files/nitro_local_runs.json | cmp "$upgrade_runs" -
-    echo "PASS: signed v0.1.49 to v0.1.50 upgrade, custom track and records byte-identical" | tee "$out/upgrade-verdict.txt"
+    echo "PASS: signed $previous_version to $target_version upgrade, custom track and records byte-identical" | tee "$out/upgrade-verdict.txt"
 fi
 /usr/bin/python3 - "$out" "${#shots[@]}" <<'PYCODE'
 from pathlib import Path

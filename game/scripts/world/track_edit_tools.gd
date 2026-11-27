@@ -15,6 +15,7 @@ const CAT = preload("res://scripts/world/terrain/terrain_catalog.gd")
 const FIELD = preload("res://scripts/world/terrain/terrain_field.gd")
 const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 
+const STORE = preload("res://scripts/world/player_track_store.gd")
 const LAST_SAVED: String = "user://nitro_editor_last_path.txt"
 const MIN_ROAD_WIDTH_M: float = 12.0          # #29 ROAD / TOUGE surface width
 const EVENT_NAMES: Dictionary = {"practice":"PRACTICE","club":"CLUB EVENT","pro":"PRO EVENT"}
@@ -231,19 +232,10 @@ static func _read(path: String) -> Dictionary:
 ## {path, name, length, kind, label, open (point-to-point route: edited in the Terrain Builder), builtin, time}
 static func list_tracks() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
-    for f in DirAccess.get_files_at("user://"):
-        if not (f.begins_with("nitro_track_") and f.ends_with(".json")):
-            continue
-        var path: String = "user://"+f
-        var raw: Dictionary = _read(path)
-        if raw.is_empty():
-            continue
-        var c: Dictionary = DNA.compile(raw)
-        if not bool(c.get("ok",false)):
-            continue
-        out.append({"path":path,"name":str(c["track_name"]),"length":float(c["length_metres"]),"kind":kind_of(raw),
-            "label":kind_label(raw),"open":is_open_route(raw),"builtin":false,"time":FileAccess.get_modified_time(path)})
-    out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["time"]) > int(b["time"]))
+    for entry in STORE.entries():
+        var raw: Dictionary = entry.raw
+        out.append({"path":entry.path,"name":entry.name,"length":entry.length,"kind":kind_of(raw),
+            "label":kind_label(raw),"open":is_open_route(raw),"builtin":false,"time":entry.time})
     for entry in BUILTIN:
         var raw2: Dictionary = _read(str(entry[1]))
         var c2: Dictionary = DNA.compile(raw2) if not raw2.is_empty() else {}
@@ -257,11 +249,14 @@ static func list_tracks() -> Array[Dictionary]:
 ## the scene change; the editor and the 3D tile builder write it when they save). "" = none / not a closed circuit.
 static func marker_track_path() -> String:
     if FileAccess.file_exists(LAST_SAVED):
-        var marked: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
-        if marked.begins_with("user://nitro_track_") and FileAccess.file_exists(marked):
-            var raw: Dictionary = _read(marked)
-            if not raw.is_empty() and not is_open_route(raw) and bool(DNA.compile(raw).get("ok",false)):
-                return marked
+        var marked := FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
+        var raw := STORE.read(marked)
+        if marked == "user://nitro_track_built.json":
+            raw = _read(marked)
+            if not raw.is_empty() and not DNA.compile(raw).get("ok",false):
+                return ""
+        if not raw.is_empty() and not is_open_route(raw):
+            return marked
     return ""
 
 ## The circuit "TRACK BUILDER > EDIT NODES" opens: the one the player touched last — the explicit request above or the
@@ -276,11 +271,7 @@ static func default_track_path() -> String:
         if int(t["time"]) > newest_time:
             newest_time = int(t["time"])
             newest = str(t["path"])
-    if FileAccess.file_exists(LAST_SAVED):
-        var marked: String = FileAccess.get_file_as_string(LAST_SAVED).strip_edges()
-        if marked.begins_with("user://nitro_track_") and FileAccess.file_exists(marked):
-            var raw: Dictionary = _read(marked)
-            if not raw.is_empty() and not is_open_route(raw) and bool(DNA.compile(raw).get("ok",false)):
-                if newest == "" or FileAccess.get_modified_time(LAST_SAVED) >= newest_time:
-                    return marked
+    var marked := marker_track_path()
+    if STORE.owned_path(marked) and (newest == "" or FileAccess.get_modified_time(LAST_SAVED) >= newest_time):
+        return marked
     return newest
