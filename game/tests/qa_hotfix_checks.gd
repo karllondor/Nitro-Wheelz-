@@ -155,18 +155,27 @@ func _paint_and_retries(race) -> void:
     _check(paint != null and paint.mesh.get_surface_count() == 1,"no single batched event paint mesh")
     if paint == null:
         return
+    # Even a 16-bit orthographic depth buffer has several steps between
+    # the road and the paint in the same view ray over the playable area.
+    _check((race.overhead.far-race.overhead.near)/65535.0 < 0.031/4.0
+        and race.chase.near >= 0.6-0.00001,"event camera depth precision")
     var colours: Material = paint.material_override
     var mesh := paint.mesh
     var z: Dictionary = race.track.event_layout.zones.filter(func(zone): return zone.kind == "OUTSIDE").front()
     var frame: Dictionary = race.track._road_at_arc(z.a-4.0)
     var forward := Vector2(frame.across.y,-frame.across.x)
     race.model.reset(frame.centre,atan2(forward.x,-forward.y))
+    race.road_y = frame.y
+    race.car_y = frame.y
     race._update_visuals()
     race._snap_cameras()
     for preset in [TIME.Preset.DAWN,TIME.Preset.DAY,TIME.Preset.GOLDEN_HOUR,TIME.Preset.NIGHT]:
         race._apply_time_of_day(preset)
         _check(paint.material_override == colours and paint.mesh == mesh,"preset mutated scoring paint")
         await _shot("paint-%d" % preset)
+        race._toggle_camera()
+        await _shot("chase-paint-%d" % preset)
+        race._toggle_camera()
     race._apply_time_of_day(TIME.Preset.GOLDEN_HOUR)
     for attempt in range(5):
         race.scorer.chain_points = 45.0
@@ -192,6 +201,13 @@ func _paint_and_retries(race) -> void:
             and race.track.find_children("Road paint","MeshInstance3D",false,false).size() == 1,
             "repeat allocated duplicate paint")
     await _shot("retry-five")
+    # Retest the same painted corner after the five resets.
+    race.model.reset(frame.centre,atan2(forward.x,-forward.y))
+    race.road_y = frame.y
+    race.car_y = frame.y
+    race._update_visuals()
+    race._snap_cameras()
+    await _shot("retry-paint")
 
 func _finish(race, mode: String, capture: bool = true) -> NitroRaceResults:
     var prior := FileAccess.get_file_as_string(RESULTS.STORAGE)

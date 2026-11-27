@@ -6,7 +6,8 @@ pkg="${NITRO_PKG:?Set NITRO_PKG to the debug review package}"
 case "${NITRO_SMOKE:-circuits}" in
     hotfix)
         case_name=hotfix
-        shots=(paint-0 paint-1 paint-2 paint-3 results-pro retry-five results-club results-practice results-ordinary)
+        shots=(paint-0 chase-paint-0 paint-1 chase-paint-1 paint-2 chase-paint-2 paint-3 chase-paint-3
+            results-pro retry-five retry-paint results-club results-practice results-ordinary)
         ;;
     circuits)
         case_name=circuits

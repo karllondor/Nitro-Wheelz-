@@ -405,6 +405,11 @@ func _make_cameras() -> void:
     chase = Camera3D.new()
     chase.name = "Behind car"
     chase.fov = 78.0
+    if track.event_mode in ["club","pro"]:
+        # Reserve enough depth steps for the paint 31 mm above the road.
+        # The overhead camera only needs local scenery; chase keeps its horizon.
+        overhead.far = 320.0
+        chase.near = 0.6
     chase.current = false
     add_child(chase)
     _update_camera(1.0)
