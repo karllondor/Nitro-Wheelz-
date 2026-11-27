@@ -486,12 +486,20 @@ func audio_benchmark() -> String:
 # ------------------------------------------------- v0.1.35 profile + flow
 
 ## Every track that can be loaded again: built-in circuits + MY TRACKS.
-func _known_tracks() -> Array:
+func _known_tracks(include_trash: bool = false) -> Array:
     var out: Array = []
     for t in TRACKS:
         out.append({"id":str(t[2]),"name":str(t[0]),"path":str(t[1])})
     for t2 in saved_tracks():
         out.append({"id":str(t2["id"]),"name":str(t2["name"]).to_upper(),"path":str(t2["path"])})
+    if include_trash:
+        var known_ids := {}
+        for track in out:
+            known_ids[track.id] = true
+        for entry in STORE.entries(true):
+            if not known_ids.has(entry.id):
+                out.append({"id":entry.id,"name":str(entry.name).to_upper(),"path":""})
+                known_ids[entry.id] = true
     return out
 
 ## The track DRIVE would start now: this session's pick, else the last one the
@@ -566,7 +574,7 @@ func _profile_chip() -> void:
     av.custom_minimum_size = Vector2(86,86)*ui_unit
     av.set_look(PROFILE.avatar())
     row.add_child(av)
-    var stars: int = PROGRESS.total_stars(PROGRESS.rows(_known_tracks()))
+    var stars: int = PROGRESS.total_stars(PROGRESS.rows(_known_tracks(true)))
     var chip: Button = _big("%s\n%s %d" % [PROFILE.get_driver_name().to_upper(),"★",stars]+" STARS",func(): show_page("profile"))
     chip.name = "PROFILE"
     chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -656,7 +664,7 @@ func _profile_page() -> void:
         else:
             name_in.text = PROFILE.get_driver_name())
     col.add_child(name_in)
-    var rows: Array = PROGRESS.rows(_known_tracks())
+    var rows: Array = PROGRESS.rows(_known_tracks(true))
     var stars_l := Label.new()
     stars_l.name = "Total stars"
     stars_l.text = "★ %d STARS  •  %d TRACKS" % [PROGRESS.total_stars(rows),rows.size()]
@@ -685,7 +693,9 @@ func _profile_page() -> void:
         var row: Dictionary = r
         var label: String = "%s\n%s   %s  •  %s PTS" % [str(row["name"]),PROGRESS.star_text(int(row["best_stars"])),
             RESULTS.clock(float(row["best_seconds"])),RESULTS.points(int(row["best_points"]))]
-        var b: Button = _big(label,_pick_track.bind(str(row["path"])))
+        var path: String = row.path
+        var b: Button = _big(label+("\nIN TRACK TRASH" if path == "" else ""),_pick_track.bind(path))
+        b.disabled = path == ""
         b.name = "Driven "+str(row["id"])
         _move(b,list)
     _small("◀  BACK",func(): show_page("main")).name = "Back"

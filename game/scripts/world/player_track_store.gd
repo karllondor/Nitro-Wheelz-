@@ -118,7 +118,8 @@ static func create(data: Dictionary, title: String, prefix: String = "") -> Dict
     var path := PREFIX+file+".json"
     var copy := data.duplicate(true)
     copy.name = clean
-    copy.id = _layout_id(("custom_" if prefix == "" else "")+file,copy)
+    # The legacy helper treats a trailing eight hex digits as an old hash.
+    copy.id = _layout_id(("custom_" if prefix == "" else "")+file+"_track",copy)
     return _commit(path,copy,"")
 
 static func _layout_id(base: String, data: Dictionary) -> String:

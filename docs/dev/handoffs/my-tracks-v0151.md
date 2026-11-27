@@ -11,7 +11,7 @@ Issue [#61](https://github.com/karllondor/Nitro-Wheelz-/issues/61). Draft review
 
 ## Storage and records
 
-`PlayerTrackStore` keeps the existing `user://nitro_track_*.json` format. It checks ownership, validates the geometry before publishing and rechecks the confirmed file hash before replacement. Rename edits the display name in-place. The original layout ID stays attached to unchanged geometry, including legacy terrain opened and saved without edits. Layout edits keep the existing fingerprinting policy. PB and stars remain associated with the original layout ID. Trash and restore move the file with its records association intact. Deleting the current selection falls back to Shin-Kawa and clears stale editor references. Trash is local and has no automatic expiry.
+`PlayerTrackStore` keeps the existing `user://nitro_track_*.json` format. It checks ownership, validates the geometry before publishing and rechecks the confirmed file hash before replacement. Rename edits the display name in-place. The original layout ID stays attached to unchanged geometry, including legacy terrain opened and saved without edits. Layout edits keep the existing fingerprinting policy. PB and stars remain associated with the original layout ID. Trash and restore move the file with its records association intact. Trashed tracks still contribute their stars to the profile. Deleting the current selection falls back to Shin-Kawa and clears stale editor references. Trash is local and has no automatic expiry.
 
 ## Owner Android QA
 

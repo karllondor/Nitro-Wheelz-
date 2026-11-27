@@ -7,6 +7,7 @@ const TERRAIN = preload("res://scenes/terrain_builder.tscn")
 const NODE_EDITOR = preload("res://scenes/track_editor.tscn")
 const RESULTS = preload("res://scripts/ui/race_results.gd")
 const PROFILE = preload("res://scripts/player/driver_profile.gd")
+const PROGRESS = preload("res://scripts/player/player_progress.gd")
 const NODE_SOURCE = "res://tracks/shin_kawa_v2.json"
 const ROUTE_SOURCE = "res://tracks/event_workshop_29.json"
 const DRAFT = "user://nitro_terrain_builder_draft.json"
@@ -123,6 +124,7 @@ func _exercise(boot: Node) -> void:
     var id: String = raw.id
     _check(RESULTS.save_run(id,91.0,12345,3),"Record setup")
     var runs_hash := FileAccess.get_sha256(RESULTS.STORAGE)
+    var stars := PROGRESS.total_stars(PROGRESS.rows(boot._known_tracks(true)))
     boot.show_page("drive")
     await get_tree().process_frame
     var card: Node = boot.find_child("My track "+id,true,false)
@@ -157,6 +159,8 @@ func _exercise(boot: Node) -> void:
     _check(boot.current_track() == STORE.FALLBACK and PROFILE.last_track() == STORE.FALLBACK
         and ProjectSettings.get_setting("nitro/terrain_edit_track","") == ""
         and not FileAccess.file_exists(STORE.LAST_EDIT),"Stale selection references")
+    _check(PROGRESS.total_stars(PROGRESS.rows(boot._known_tracks(true))) == stars,
+        "Moving a track to trash reduced profile stars")
     await _press(boot,"TRACK TRASH")
     await _press(boot,"RESTORE  ▸  "+tag+" Renamed")
     _check(STORE.read(legacy).get("id") == id and RESULTS.track_runs(id).size() == 1
