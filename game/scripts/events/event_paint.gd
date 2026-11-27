@@ -23,28 +23,22 @@ static func build(track) -> void:
             var end: float=track.length_metres if j==0 else track.arc_lengths[j]
             var b:=minf(end,strip[1])
             if b>a:
-                var corners: Array[Vector3]=[]
-                for station: float in [a,b]:
-                    for edge in [-0.5,0.5]:
-                        var d: float=strip[2]+edge*strip[3]
-                        var t:=inverse_lerp(begin,end,station)
-                        var u:=clampf(0.5+d/(track.halfwidths[i]*2),0,1)
-                        # Interpolate the exact two asphalt triangles (same diagonal).
-                        var left: Vector2=track.left_edge[i]
-                        var right: Vector2=track.right_edge[j]
-                        var p: Vector2
-                        if u+t<=1:
-                            p=left+(track.left_edge[j]-left)*t+(track.right_edge[i]-left)*u
-                        else:
-                            p=right+(track.right_edge[i]-right)*(1-t)+(track.left_edge[j]-right)*(1-u)
-                        corners.append(Vector3(p.x,lerpf(track.hy(i),track.hy(j),t)+0.081,p.y))
-                for idx in [0,2,1,1,2,3]:
-                    st.set_color(strip[4])
-                    st.add_vertex(corners[idx])
+                var ta := clampf(inverse_lerp(begin,end,a),0.0,1.0)
+                var tb := clampf(inverse_lerp(begin,end,b),0.0,1.0)
+                var wa: float = lerpf(track.halfwidths[i],track.halfwidths[j],ta)*2.0
+                var wb: float = lerpf(track.halfwidths[i],track.halfwidths[j],tb)*2.0
+                var lo: float = strip[2]-strip[3]*0.5
+                var hi: float = strip[2]+strip[3]*0.5
+                var quad := [
+                    Vector2(ta,clampf(0.5+lo/wa,0,1)),Vector2(tb,clampf(0.5+lo/wb,0,1)),
+                    Vector2(tb,clampf(0.5+hi/wb,0,1)),Vector2(ta,clampf(0.5+hi/wa,0,1))]
+                _emit_patch(st,track,i,j,_clip_diagonal(quad,1.0),strip[4],false)
+                _emit_patch(st,track,i,j,_clip_diagonal(quad,-1.0),strip[4],true)
             i+=1
             a=b
     var mesh:=MeshInstance3D.new()
     mesh.name="Road paint"
+    mesh.set_meta("fixed_paint_palette",true)
     mesh.mesh=st.commit()
     var mat:=StandardMaterial3D.new()
     mat.vertex_color_use_as_albedo=true
@@ -53,3 +47,36 @@ static func build(track) -> void:
     mesh.material_override=mat
     mesh.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     track.add_child(mesh)
+
+## Clip at the actual asphalt diagonal. A quad that crosses it can bridge
+## across the two road planes on a graded bend and intersect the asphalt.
+static func _clip_diagonal(quad: Array, side: float) -> PackedVector2Array:
+    var out := PackedVector2Array()
+    var previous: Vector2 = quad.back()
+    var distance := (previous.x+previous.y-1.0)*side
+    for point: Vector2 in quad:
+        var next_distance := (point.x+point.y-1.0)*side
+        if (distance < 0.0) != (next_distance < 0.0):
+            out.append(previous.lerp(point,distance/(distance-next_distance)))
+        if next_distance <= 0.0:
+            out.append(point)
+        previous = point
+        distance = next_distance
+    return out
+
+static func _emit_patch(st: SurfaceTool, track, i: int, j: int, patch: PackedVector2Array,
+        color: Color, upper: bool) -> void:
+    for v in range(1,patch.size()-1):
+        if absf((patch[v]-patch[0]).cross(patch[v+1]-patch[0])) < 0.0000001:
+            continue
+        for uv in [patch[0],patch[v],patch[v+1]]:
+            var p: Vector2
+            if upper:
+                p = track.right_edge[j]+(track.right_edge[i]-track.right_edge[j])*(1.0-uv.x) \
+                    +(track.left_edge[j]-track.right_edge[j])*(1.0-uv.y)
+            else:
+                p = track.left_edge[i]+(track.left_edge[j]-track.left_edge[i])*uv.x \
+                    +(track.right_edge[i]-track.left_edge[i])*uv.y
+            st.set_color(color)
+            st.set_normal(Vector3.UP)
+            st.add_vertex(Vector3(p.x,lerpf(track.hy(i),track.hy(j),uv.x)+0.081,p.y))

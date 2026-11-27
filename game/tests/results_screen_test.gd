@@ -75,7 +75,7 @@ func _run() -> void:
     # Layout: sections and buttons on screen, no overlaps, portrait + landscape.
     var view: NitroRaceResults = RESULTS.new()
     root.add_child(view)
-    for screen in [Vector2(720,1600),Vector2(1280,2276),Vector2(1280,720),Vector2(1080,1920)]:
+    for screen in [Vector2(720,1600),Vector2(1280,2276),Vector2(1280,720),Vector2(1080,1920),Vector2(1080,2400)]:
         var lay: Dictionary = view.layout(screen)
         var full := Rect2(Vector2.ZERO,screen)
         var keys: Array[String] = ["title","hero","laps","chips","top","restart","menu"]

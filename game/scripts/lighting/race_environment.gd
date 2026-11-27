@@ -82,7 +82,7 @@ func bind(track: Node3D) -> void:
         _labels.append({"node": node, "color": (node as Label3D).modulate})
 
 func _remember_mesh(mesh: MeshInstance3D) -> void:
-    if mesh.mesh == null:
+    if mesh.mesh == null or mesh.has_meta("fixed_paint_palette"):
         return
     if str(mesh.name).begins_with("Vegetation quadrant") or mesh.name in ["Workshop walls and canopy posts", "Parked cars"]:
         _shadow_meshes.append(mesh)

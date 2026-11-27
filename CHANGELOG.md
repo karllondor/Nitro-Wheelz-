@@ -1,3 +1,7 @@
+# v0.1.50 — Android QA review
+
+- Restores the full results board for Practice, Club and Pro, gives GAS a uniform touch face, corrects event paint on the road mesh and prototypes CIRCUIT-only judging zones.
+
 # v0.1.49 — Three-circuit review
 
 - Adds Driftwood Circuit, Testandori Raceway and Fuji Speedway Short to solo, the Node Editor and native LAN. Fuji uses PRO judging in solo and standard race scoring in LAN, on the same Sakura terrain. See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md).

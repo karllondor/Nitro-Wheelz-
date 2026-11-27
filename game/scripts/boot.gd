@@ -108,6 +108,9 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-circuits.once"):
         DirAccess.remove_absolute("user://qa-circuits.once")
         get_tree().root.add_child.call_deferred(load("res://tests/three_circuit_checks.gd").new())
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-hotfix.once"):
+        DirAccess.remove_absolute("user://qa-hotfix.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/qa_hotfix_checks.gd").new())
 
 func _clear_page() -> void:
     for child in page.get_children():

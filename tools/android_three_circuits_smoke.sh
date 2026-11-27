@@ -3,8 +3,48 @@ set -euo pipefail
 
 apk=$(find builds/android -name '*.apk' -print -quit)
 pkg="${NITRO_PKG:?Set NITRO_PKG to the debug review package}"
-out=builds/circuits-android
+case "${NITRO_SMOKE:-circuits}" in
+    hotfix)
+        case_name=hotfix
+        shots=(paint-0 chase-paint-0 paint-1 chase-paint-1 paint-2 chase-paint-2 paint-3 chase-paint-3
+            results-pro retry-five retry-paint results-club results-practice results-ordinary)
+        ;;
+    circuits)
+        case_name=circuits
+        shots=()
+        for circuit in driftwood_circuit testandori_raceway fuji_speedway_short; do
+            shots+=("$circuit-editor" "$circuit-race")
+        done
+        ;;
+    *)
+        echo "Unknown Android review smoke case" >&2
+        exit 2
+        ;;
+esac
+out="builds/$case_name-android"
+verdict="$case_name-verdict.txt"
 mkdir -p "$out"
+# The preceding signed review may age out of Actions retention. When present,
+# exercise a real Android upgrade and verify that app-private data survives.
+previous=""
+upgrade_track="$out/upgrade-track.json"
+upgrade_runs="$out/upgrade-runs.json"
+if [[ "$case_name" == hotfix ]]; then
+    if [[ -d builds/android-pr45 ]]; then
+        previous=$(find builds/android-pr45 -name '*.apk' -print -quit)
+    fi
+    if [[ -n "$previous" ]]; then
+        printf '%s  %s\n' '6fc57b954555c048c5f909a43cf2c7e53c29b7ea993bd2209dfe708b50e3b761' "$previous" | sha256sum -c -
+        adb install -r "$previous"
+        adb shell run-as "$pkg" mkdir -p files
+        cp game/tracks/fuji_speedway_short.json "$upgrade_track"
+        printf '%s\n' '[{"track_id":"driftwood_circuit","seconds":183.24,"score":9900,"stars":1,"driver":"QA","car":"e30"}]' > "$upgrade_runs"
+        adb shell "run-as $pkg sh -c 'cat > files/nitro_track_qa_upgrade.json'" < "$upgrade_track"
+        adb shell "run-as $pkg sh -c 'cat > files/nitro_local_runs.json'" < "$upgrade_runs"
+    else
+        echo "SKIP: the signed PR #45 v0.1.49 artifact is unavailable" | tee "$out/upgrade-verdict.txt"
+    fi
+fi
 adb install -r "$apk"
 adb shell am force-stop "$pkg"
 adb shell settings put secure immersive_mode_confirmations confirmed
@@ -13,22 +53,19 @@ adb shell wm dismiss-keyguard
 adb shell wm size 720x1536
 adb shell wm density 240
 adb shell run-as "$pkg" mkdir -p files
-adb shell run-as "$pkg" rm -f files/circuits-verdict.txt
-circuits=(driftwood_circuit testandori_raceway fuji_speedway_short)
-for circuit in "${circuits[@]}"; do
-    for scene in editor race; do
-        adb shell run-as "$pkg" rm -f "files/ready-$circuit-$scene" "files/captured-$circuit-$scene"
-    done
+adb shell run-as "$pkg" rm -f "files/$verdict"
+for shot in "${shots[@]}"; do
+    adb shell run-as "$pkg" rm -f "files/ready-$shot" "files/captured-$shot"
 done
-adb shell run-as "$pkg" touch files/qa-circuits.once
+adb shell run-as "$pkg" touch "files/qa-$case_name.once"
 adb shell monkey -p "$pkg" 1
 trap 'adb logcat -d -s godot > "$out/godot.log" || true' EXIT
 
 await_file() {
     for attempt in {1..75}; do
         if adb shell run-as "$pkg" test -s "files/$1"; then return; fi
-        if [[ "$1" != circuits-verdict.txt ]] && adb shell run-as "$pkg" test -s files/circuits-verdict.txt; then
-            adb exec-out run-as "$pkg" cat files/circuits-verdict.txt >&2
+        if [[ "$1" != "$verdict" ]] && adb shell run-as "$pkg" test -s "files/$verdict"; then
+            adb exec-out run-as "$pkg" cat "files/$verdict" >&2
             return 1
         fi
         sleep 2
@@ -37,26 +74,28 @@ await_file() {
     return 1
 }
 
-for circuit in "${circuits[@]}"; do
-    for scene in editor race; do
-        shot="$circuit-$scene"
-        await_file "ready-$shot"
-        adb exec-out screencap -p > "$out/$shot.png"
-        adb shell run-as "$pkg" touch "files/captured-$shot"
-    done
+for shot in "${shots[@]}"; do
+    await_file "ready-$shot"
+    adb exec-out screencap -p > "$out/$shot.png"
+    adb shell run-as "$pkg" touch "files/captured-$shot"
 done
-await_file circuits-verdict.txt
-adb exec-out run-as "$pkg" cat files/circuits-verdict.txt | tee "$out/verdict.txt"
+await_file "$verdict"
+adb exec-out run-as "$pkg" cat "files/$verdict" | tee "$out/verdict.txt"
 grep -q '^PASS:' "$out/verdict.txt"
-/usr/bin/python3 - "$out" <<'PY'
+if [[ -n "$previous" ]]; then
+    adb exec-out run-as "$pkg" cat files/nitro_track_qa_upgrade.json | cmp "$upgrade_track" -
+    adb exec-out run-as "$pkg" cat files/nitro_local_runs.json | cmp "$upgrade_runs" -
+    echo "PASS: signed v0.1.49 to v0.1.50 upgrade, custom track and records byte-identical" | tee "$out/upgrade-verdict.txt"
+fi
+/usr/bin/python3 - "$out" "${#shots[@]}" <<'PYCODE'
 from pathlib import Path
 import sys
 from PIL import Image
 shots = list(Path(sys.argv[1]).glob("*.png"))
-assert len(shots) == 6
+assert len(shots) == int(sys.argv[2])
 for path in shots:
     with Image.open(path) as image:
         w, h = image.size
         scene = image.crop((w//12, h//7, w*11//12, h*3//4)).convert("RGB")
         assert len(set(scene.resize((256, 256)).getdata())) > 100, f"Missing rendered scene in {path}"
-PY
+PYCODE

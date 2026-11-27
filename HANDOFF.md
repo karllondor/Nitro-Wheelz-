@@ -1,3 +1,7 @@
+## v0.1.50 QA hotfix review
+
+See the [hotfix handoff](docs/dev/handoffs/qa-hotfix-v0150.md) for the four changes, regression evidence and owner checklist.
+
 ## v0.1.49 three-circuit review
 
 See the [track review handoff](docs/dev/handoffs/three-circuits-v0149.md) for geometry provenance, visual comparisons, automated checks and the owner playtest.

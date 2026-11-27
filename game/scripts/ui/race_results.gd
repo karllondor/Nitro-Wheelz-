@@ -198,11 +198,6 @@ static func summarize(track_id: String,track_name: String,seconds: float,score: 
 
 func show_race(track_id: String,track_name: String,seconds: float,score: int,
         target: float,on_replay: Callable,on_garage: Callable,stats: Dictionary = {}) -> void:
-    replay = on_replay
-    garage = on_garage
-    STYLE.ensure_settings()
-    mouse_filter = Control.MOUSE_FILTER_STOP
-    set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var length_m: float = float(stats.get("length_m",0.0))
     if length_m <= 0.0:
         length_m = maxf(target*14.0/3.0,100.0)  # legacy callers: time target
@@ -223,11 +218,26 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     data["stored"] = stored
     data["diagnostic"] = not record_allowed()
     data["multiplayer"] = NET_SESSION.race_active()
+    _show_board(on_replay,on_garage)
+
+## Event runs use the race board and keep their existing session-only scoring.
+func show_event(track_name: String, seconds: float, score: int, on_replay: Callable,
+        on_menu: Callable, stats: Dictionary, event: Dictionary) -> void:
+    data = summarize("",track_name,seconds,score,0,[],[],"",stats)
+    data["event"] = event
+    _show_board(on_replay,on_menu)
+
+func _show_board(on_replay: Callable, on_menu: Callable) -> void:
+    replay = on_replay
+    garage = on_menu
+    STYLE.ensure_settings()
+    mouse_filter = Control.MOUSE_FILTER_STOP
+    set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var s: Vector2 = get_viewport_rect().size
     var sc: float = clampf(s.x/720.0,0.85,1.85)
     theme = STYLE.screen_theme(sc)
     var shade := ColorRect.new()
-    shade.color = Color(0.008,0.010,0.018,0.96)
+    shade.color = Color(0.008,0.010,0.018,0.84 if data.has("event") else 0.96)
     shade.mouse_filter = Control.MOUSE_FILTER_STOP
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(shade)
@@ -237,19 +247,32 @@ func show_race(track_id: String,track_name: String,seconds: float,score: int,
     canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     canvas.draw.connect(_draw_board)
     add_child(canvas)
-    var lay: Dictionary = layout(s)
+    _place_actions()
+    resized.connect(_place_actions)
+
+func _place_actions() -> void:
+    for button in buttons:
+        remove_child(button)
+        button.queue_free()
+    buttons.clear()
+    var lay: Dictionary = layout(get_viewport_rect().size)
+    var stats: Dictionary = data["stats"]
     var on_edit: Callable = stats.get("on_edit",Callable())
+    var event_run := data.has("event")
+    var replay_label := "DRIVE AGAIN" if event_run else "RESTART"
+    var scale: float = float(lay["u"])
+    var rr: Rect2 = lay["restart"]
     if on_edit.is_valid():
-        # Player track: RESTART | EDIT TRACK | GARAGE / MENU (editor loop).
-        var rr: Rect2 = lay["restart"]
         var gap: float = rr.size.x*0.035
-        var w1: float = rr.size.x*0.60
-        _action("RESTART",Rect2(rr.position,Vector2(w1,rr.size.y)),replay,float(lay["u"]),true)
-        _action("EDIT TRACK",Rect2(rr.position+Vector2(w1+gap,0.0),Vector2(rr.size.x-w1-gap,rr.size.y)),
-            on_edit,float(lay["u"]),false,0.68)
+        var w1: float = rr.size.x*0.56
+        _action(replay_label,Rect2(rr.position,Vector2(w1,rr.size.y)),replay,scale,true)
+        _action("EDIT ROAD" if event_run else "EDIT TRACK",
+            Rect2(rr.position+Vector2(w1+gap,0.0),Vector2(rr.size.x-w1-gap,rr.size.y)),
+            on_edit,scale,false,0.85 if event_run else 0.68)
     else:
-        _action("RESTART",Rect2(lay["restart"]),replay,float(lay["u"]),true)
-    _action("GARAGE / MENU",Rect2(lay["menu"]),garage,float(lay["u"]),false)
+        _action(replay_label,rr,replay,scale,true)
+    _action("MENU" if event_run else "GARAGE / MENU",Rect2(lay["menu"]),garage,scale,false)
+    canvas.queue_redraw()
 
 func _action(label: String,rect: Rect2,callback: Callable,u: float,primary: bool,font_scale: float = 1.0) -> void:
     var button := Button.new()
@@ -313,12 +336,16 @@ func _draw_board() -> void:
     _hero(Rect2(lay["hero"]),k,u)
     _laps(Rect2(lay["laps"]),k,u)
     _chips(Rect2(lay["chips"]),k,u)
-    if not bool(data.get("multiplayer",false)):
+    if data.has("event"):
+        _event_summary(Rect2(lay["top"]),k,u)
+    elif not bool(data.get("multiplayer",false)):
         _top_runs(Rect2(lay["top"]),k,u)
     var foot: String = "SAVED ON THIS DEVICE ONLY  •  STARS = DRIFT POINTS  •  v"+str(
         ProjectSettings.get_setting("application/config/version","?"))
     var diagnostic: bool = bool(data.get("diagnostic",false))
-    if bool(data.get("multiplayer",false)):
+    if data.has("event"):
+        foot = "EVENT RESULTS  •  THIS RUN IS NOT SAVED"
+    elif bool(data.get("multiplayer",false)):
         foot = "LOCAL MULTIPLAYER  •  THIS RUN IS NOT SAVED  •  NO STARS, NO RECORDS"
     elif diagnostic:
         foot = "DIAGNOSTIC PHYSICS (REAL_POWER_TEST)  •  THIS RUN IS NOT SAVED"
@@ -331,15 +358,22 @@ func _draw_board() -> void:
 
 func _title(r: Rect2, k: float, u: float) -> void:
     var c: Control = canvas
+    var event_run := data.has("event")
+    var lap_count: int = int((data["stats"] as Dictionary).get("lap_limit",3))
+    var subtitle := "%d LAPS" % lap_count if lap_count > 1 else "1 RUN"
+    var track_label := str(data["track_name"]).to_upper()+"  •  "+subtitle
+    var label_width := r.size.x*(0.97 if event_run else 0.62)
     STYLE.text(c,Vector2(r.position.x,r.position.y+38.0*k),
-        str(data["track_name"]).to_upper()+"  •  3 LAPS",30.0*k,STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,r.size.x*0.62,false)
+        track_label,STYLE.fit_size(track_label,30.0*k,label_width),STYLE.MUTED,HORIZONTAL_ALIGNMENT_LEFT,label_width,false)
     var headline: String = "NEW BEST!" if bool(data["new_best"]) and not bool(data["first_run"]) else (
         "FIRST RUN" if bool(data["first_run"]) else "FINISHED")
-    if bool(data.get("multiplayer",false)):
+    if event_run:
+        headline = str(data["event"].label).to_upper()+" RESULTS"
+    elif bool(data.get("multiplayer",false)):
         headline = "FINISHED"
-    STYLE.text(c,Vector2(r.position.x,r.position.y+122.0*k),headline,78.0*k,
+    STYLE.text(c,Vector2(r.position.x,r.position.y+122.0*k),headline,STYLE.fit_size(headline,78.0*k,r.size.x*0.98),
         STYLE.GOLD if headline == "NEW BEST!" else STYLE.WHITE)
-    if bool(data.get("multiplayer",false)):
+    if event_run or bool(data.get("multiplayer",false)):
         return
     var stars: int = int(data["stars"])
     var tiers: Array = data.get("tiers",[])
@@ -367,7 +401,11 @@ func _hero(r: Rect2, k: float, u: float) -> void:
     var delta_txt: String
     var delta_col: Color
     var multiplayer_run := bool(data.get("multiplayer",false))
-    if multiplayer_run:
+    var event_run := data.has("event")
+    if event_run:
+        delta_txt = "BANKED SCORE"
+        delta_col = STYLE.PINK_SOFT
+    elif multiplayer_run:
         delta_txt = "LOCAL MULTIPLAYER"
         delta_col = STYLE.MUTED
     elif bool(data["first_run"]):
@@ -398,8 +436,8 @@ func _hero(r: Rect2, k: float, u: float) -> void:
         ["TIME",clock(secs),time_sub,time_col],
         ["RANK","#%d" % rank if rank > 0 else "-","OF %d RUNS" % int(data["runs"]),STYLE.MUTED],
         ["BEST CHAIN",points(int((data["stats"] as Dictionary).get("best_chain",0))),"PTS",STYLE.MUTED]]
-    if multiplayer_run:
-        facts[1] = ["LAPS",str((data["laps"] as Array).size()),"",STYLE.MUTED]
+    if multiplayer_run or event_run:
+        facts[1] = ["LAPS COMPLETED",str((data["laps"] as Array).size()),"",STYLE.MUTED]
     for i in range(3):
         var f: Array = facts[i]
         var x: float = r.position.x+cols*float(i)
@@ -460,6 +498,32 @@ func _laps(r: Rect2, k: float, u: float) -> void:
             c.draw_rect(Rect2(bar.position,Vector2(bw*f,bh*0.35)),Color(1,1,1,0.22))
         STYLE.text(c,Vector2(box.end.x-190.0*k,cy+14.0*k),points(int(l["score"])),36.0*k,STYLE.WHITE,
             HORIZONTAL_ALIGNMENT_RIGHT,170.0*k)
+
+func _event_summary(r: Rect2, k: float, u: float) -> void:
+    var event: Dictionary = data["event"]
+    var practice: bool = event.mode == "practice"
+    var y: float = _section(r,"EVENT SECTORS","",k)
+    var box := Rect2(r.position.x,y,r.size.x,r.end.y-y)
+    STYLE.panel(canvas,box,u,18.0,0.0,false,0.0)
+    if practice:
+        STYLE.text(canvas,Vector2(box.position.x,box.get_center().y+12.0*k),
+            "FREE PRACTICE  •  SECTORS OFF",39.0*k,STYLE.MUTED,HORIZONTAL_ALIGNMENT_CENTER,box.size.x)
+        return
+    var filled: int = event.filled
+    var missed: int = event.missed
+    var remaining: int = maxi(0,int(event.planned)-filled-missed)
+    var rows := [["SECTORS FILLED",points(filled)],["SECTORS MISSED",points(missed)],
+        ["SECTORS UNASSESSED",points(remaining)],["TECHNICAL POINTS BEFORE BANKING",points(int(event.technical))]]
+    var row_h := box.size.y/float(rows.size())
+    for i in range(rows.size()):
+        var baseline := box.position.y+(float(i)+0.63)*row_h
+        if i > 0:
+            var line_y := box.position.y+float(i)*row_h
+            canvas.draw_line(Vector2(box.position.x+30.0*k,line_y),Vector2(box.end.x-30.0*k,line_y),
+                Color(1,1,1,0.08),2.0*k)
+        STYLE.text(canvas,Vector2(box.position.x+30.0*k,baseline),rows[i][0],33.0*k,STYLE.MUTED)
+        STYLE.text(canvas,Vector2(box.end.x-270.0*k,baseline),rows[i][1],46.0*k,
+            STYLE.GOLD if i == 3 else STYLE.WHITE,HORIZONTAL_ALIGNMENT_RIGHT,240.0*k)
 
 func _chips(r: Rect2, k: float, u: float) -> void:
     var c: Control = canvas

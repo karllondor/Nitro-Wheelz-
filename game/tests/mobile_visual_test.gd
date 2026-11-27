@@ -86,10 +86,10 @@ func _run() -> void:
     var gas_pedal: Rect2 = Rect2(portrait_controls["gas"])
     var brake_pedal: Rect2 = Rect2(portrait_controls["brake"])
     var drift_rect: Rect2 = Rect2(portrait_controls["drift"])
-    if gas_pedal.size.y < brake_pedal.size.y*1.35 or gas_pedal.position.y >= brake_pedal.position.y:
+    if gas_pedal.size.y < controls.pedal_face(brake_pedal,false).size.y*1.35 or gas_pedal.position.y >= brake_pedal.position.y:
         _fail("Gas pedal must be taller and start higher than brake")
         return
-    if absf(brake_pedal.size.x-720.0*0.160)>1.0 or absf(gas_pedal.size.x-720.0*0.158)>1.0:
+    if absf(brake_pedal.size.x-720.0*0.160)>1.0 or absf(gas_pedal.size.x-720.0*0.2439)>1.0:
         _fail("Portrait pedal sizing diverged from reference")
         return
     if drift_rect.position.y < 1600.0*0.46 or drift_rect.size.y < 1600.0*0.29:

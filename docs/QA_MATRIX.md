@@ -1,3 +1,7 @@
+## v0.1.50 QA hotfix
+
+`qa_hotfix_test` covers results in four modes, saved custom and built-in circuits, ROAD/CIRCUIT A/B, paint under all presets, and five Drive Again attempts. `gas_pedal_shape_test` covers visual and actual touch geometry. Android review evidence and physical-device acceptance are tracked in the hotfix PR.
+
 ## v0.1.49 three-circuit review
 
 | Coverage | Evidence |

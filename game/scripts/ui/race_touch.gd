@@ -36,15 +36,23 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
     # PAUSE / CAM share their rectangles with the HUD style metrics so the
     # drawn buttons and touch targets are always identical.
     var hud: Dictionary = STYLE.metrics(s)
-    if s.y > s.x:
+    var portrait := s.y > s.x
+    var brake_rect := Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132) if portrait \
+        else Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161)
+    var old_gas := Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190) if portrait \
+        else Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224)
+    var face := pedal_face(old_gas,true)
+    var left := brake_rect.end.x+brake_rect.size.x*0.12
+    var gas := Rect2(left,face.position.y,face.end.x-left,face.size.y)
+    var gas_shape := STYLE.shape(gas,old_gas.size.x*0.14,0.0)
+    if portrait:
         return {
             "joystick_center": Vector2(s.x*0.215,s.y*0.853),
             "joystick_radius": s.x*0.175,
             "drift": Rect2(s.x*0.790,s.y*0.470,s.x*0.188,s.y*0.300),
-            "brake": Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132),
-            "gas": Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190),
-            "gas_shape": _gas_shape(Rect2(s.x*0.788,s.y*0.788,s.x*0.158,s.y*0.190),
-                Rect2(s.x*0.515,s.y*0.846,s.x*0.160,s.y*0.132)),
+            "brake": brake_rect,
+            "gas": gas,
+            "gas_shape": gas_shape,
             "pause": hud["pause"],
             "camera": hud["camera"],
             "restart": Rect2(s.x*0.265,s.y*0.43,s.x*0.470,s.y*0.095),
@@ -54,10 +62,9 @@ func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
         "joystick_center": Vector2(s.x*0.142,s.y*0.810),
         "joystick_radius": s.y*0.177,
         "drift": Rect2(s.x*0.850,s.y*0.390,s.x*0.128,s.y*0.340),
-        "brake": Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161),
-        "gas": Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224),
-        "gas_shape": _gas_shape(Rect2(s.x*0.856,s.y*0.754,s.x*0.098,s.y*0.224),
-            Rect2(s.x*0.698,s.y*0.817,s.x*0.096,s.y*0.161)),
+        "brake": brake_rect,
+        "gas": gas,
+        "gas_shape": gas_shape,
         "pause": hud["pause"],
         "camera": hud["camera"],
         "restart": Rect2(s.x*0.33,s.y*0.49,s.x*0.34,s.y*0.12),
@@ -80,11 +87,9 @@ func _zone_at(pos: Vector2, size_override: Vector2 = Vector2.ZERO) -> String:
         return "camera"
     if pos.distance_to(Vector2(geo["joystick_center"])) <= float(geo["joystick_radius"])*1.17:
         return "steering"
-    for key in ["drift","brake","gas"]:
+    for key in ["drift","brake"]:
         if Rect2(geo[key]).has_point(pos):
             return key
-    # v0.1.36: the gas pedal has a "wing" above the brake (owner's request:
-    # the thumb slid off the top-left of the pedal). Drawn and touched as one.
     if Geometry2D.is_point_in_polygon(pos,PackedVector2Array(geo["gas_shape"])):
         return "gas"
     return ""
@@ -150,39 +155,6 @@ static func pedal_face(rect: Rect2, gas_pedal: bool, press: float = 0.0) -> Rect
         rect.size.x*0.90,rect.size.y*(0.88 if gas_pedal else 0.86))
 
 const PEDAL_SKEW: float = 0.10
-
-## Outline (screen pixels, italic skew applied) of the L-shaped GAS pedal: the
-## normal pedal plus a wing that reaches left over the top of the brake and
-## tapers back to the pedal along a diagonal (the owner's sketch, 2026-11-22:
-## "add surface so it nests with the brake"). The drawing and the touch
-## detection use this one polygon; the brake rectangle stays untouched.
-static func _gas_shape(gas: Rect2, brake_rect: Rect2) -> PackedVector2Array:
-    var face: Rect2 = pedal_face(gas,true)
-    var radius: float = gas.size.x*0.14
-    var margin: float = brake_rect.size.x*0.12
-    var x0: float = brake_rect.end.x+margin
-    var y_top: float = face.position.y
-    var y_left: float = brake_rect.position.y-gas.size.y*0.012
-    var y_end: float = face.position.y+face.size.y*0.62
-    var wing := PackedVector2Array([
-        Vector2(x0,y_top),Vector2(face.position.x+face.size.x*0.40,y_top),
-        Vector2(face.position.x+face.size.x*0.40,y_end),Vector2(face.position.x+face.size.x*0.02,y_end),
-        Vector2(x0,y_left)])
-    var union: Array = Geometry2D.merge_polygons(STYLE.shape(face,radius,0.0),wing)
-    if union.is_empty():
-        return STYLE.shape(face,radius,PEDAL_SKEW)
-    var poly: PackedVector2Array = union[0]
-    # Round the corners: close (concave), then open (convex).
-    var r: float = radius*0.85
-    for delta in [r,-r,-r,r]:
-        var grown: Array = Geometry2D.offset_polygon(poly,float(delta),Geometry2D.JOIN_ROUND)
-        if grown.is_empty():
-            break
-        poly = grown[0]
-    var out := PackedVector2Array()
-    for p in poly:
-        out.append(STYLE.skew_point(p,face,PEDAL_SKEW))
-    return out
 
 ## Face polygon of the (rectangular) brake pedal, for overlap checks.
 static func brake_shape(brake_rect: Rect2) -> PackedVector2Array:
@@ -336,24 +308,23 @@ func _handbrake(rect: Rect2, pressed: bool) -> void:
 
 func _pedal(rect: Rect2, label: String, pressed: bool, shape: PackedVector2Array = PackedVector2Array()) -> void:
     # Perforated brushed-aluminium pedals with a pink-lit lower edge.
-    # Visual footprint = the touch area (v0.1.36: the GAS pedal is an L-shape
-    # with a wing above the brake, passed in as `shape`).
     var u: float = _ui_scale()
     var gas_pedal: bool = label == "GAS"
-    var press: float = rect.size.y*0.025 if pressed else 0.0
+    var press: float = rect.size.y*0.025 if pressed and not gas_pedal else 0.0
     var face: Rect2 = pedal_face(rect,gas_pedal,press)
-    var skew: float = PEDAL_SKEW
+    var skew: float = PEDAL_SKEW if not gas_pedal else 0.0
     var radius: float = rect.size.x*0.14
     var depth: float = rect.size.y*(0.055 if gas_pedal else 0.075)
     var side_rect := Rect2(face.position+Vector2(0,depth),face.size)
     var face_pts: PackedVector2Array = STYLE.shape(face,radius,skew)
     var side_pts: PackedVector2Array = STYLE.shape(side_rect,radius,skew)
     if gas_pedal and shape.size() >= 3:
-        face_pts = _shifted(shape,Vector2(0,press))
-        side_pts = _shifted(shape,Vector2(0,press+depth))
-    STYLE.glow_line(self,STYLE.glow_path(side_rect,radius,skew,0.02,0.75),STYLE.PINK,
-        2.6*u,1.8 if pressed else 1.0)
-    draw_colored_polygon(side_pts,Color(0.30,0.31,0.35))
+        face_pts = shape
+        face = _bounds(shape)
+    else:
+        STYLE.glow_line(self,STYLE.glow_path(side_rect,radius,skew,0.02,0.75),STYLE.PINK,
+            2.6*u,1.8 if pressed else 1.0)
+        draw_colored_polygon(side_pts,Color(0.30,0.31,0.35))
     var box: Rect2 = _bounds(face_pts)
     var cols := PackedColorArray()
     for p in face_pts:
@@ -372,34 +343,23 @@ func _pedal(rect: Rect2, label: String, pressed: bool, shape: PackedVector2Array
     var outline: PackedVector2Array = face_pts.duplicate()
     outline.append(face_pts[0])
     draw_polyline(outline,Color(1,1,1,0.85),1.6*u,true)
-    # Holes: gas 2x5 grid (+ 2 in the wing), brake 2-1-2.
+    # Holes: gas 3x5 grid, brake 2-1-2.
     var holes: Array[Vector2] = []
     if gas_pedal:
         for row in range(5):
-            for col in [0.30,0.70]:
+            for col in [0.22,0.50,0.78]:
                 holes.append(Vector2(col,0.13+0.74*float(row)/4.0))
-        if shape.size() >= 3:
-            holes.append(Vector2(-0.36,0.13))
-            holes.append(Vector2(-0.36,0.30))
     else:
         holes = [Vector2(0.28,0.20),Vector2(0.72,0.20),Vector2(0.5,0.50),
             Vector2(0.28,0.80),Vector2(0.72,0.80)]
-    var hole_r: float = face.size.x*(0.105 if gas_pedal else 0.12)
+    var hole_r: float = minf(face.size.x*0.079,face.size.y*0.065) if gas_pedal else face.size.x*0.12
     for rel in holes:
         var c: Vector2 = STYLE.skew_point(face.position+face.size*rel,face,skew)
-        if rel.x < 0.0 and not Geometry2D.is_point_in_polygon(c,face_pts):
-            continue
         draw_circle(c+Vector2(hole_r*0.10,hole_r*0.14),hole_r*1.08,Color(1,1,1,0.55))
         draw_circle(c,hole_r,Color(0.05,0.05,0.07))
         draw_circle(c-Vector2(hole_r*0.18,hole_r*0.20),hole_r*0.72,Color(0.015,0.015,0.02))
     if pressed:
         draw_polyline(outline,Color(1.0,0.35,0.70,0.9),2.4*u,true)
-
-static func _shifted(pts: PackedVector2Array, by: Vector2) -> PackedVector2Array:
-    var out := PackedVector2Array()
-    for p in pts:
-        out.append(p+by)
-    return out
 
 static func _bounds(pts: PackedVector2Array) -> Rect2:
     var lo := Vector2(INF,INF)
