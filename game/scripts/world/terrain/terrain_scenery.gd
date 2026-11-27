@@ -22,6 +22,8 @@ const PROFILE = preload("res://scripts/world/terrain/road_profile.gd")
 const MODS = preload("res://scripts/world/scenery_modules.gd")
 const VEG_SHADER = preload("res://assets/shaders/terrain_vegetation.gdshader")
 const DEV_SETTINGS = preload("res://scripts/dev_settings.gd")
+const LAB = preload("res://scripts/world/forest_lab/forest_lab_scatter.gd")
+const LAB_FACTORY = preload("res://scripts/world/forest_lab/nitro_tree_factory.gd")
 const SHADOW_SHADER = preload("res://assets/shaders/soft_shadow.gdshader")
 const CITY_SHADER = preload("res://assets/shaders/city_facade.gdshader")
 
@@ -94,6 +96,12 @@ var landmark_info: Array = []
 var counts: Dictionary = {}
 var city_kinds: Dictionary = {}           # chunk -> {block kind: count} (Japan City)
 var _meshes: Dictionary = {}
+# FOREST LAB (issue #54): {} = CLASSIC trees (the default and the only behaviour of every other biome). Set by setup() for a
+# TOUGE world when DEVELOPER > FOREST LAB is on (or by set_forest_config() in tests / captures).
+var forest_config: Dictionary = {}
+var lab_cfg: Dictionary = {}
+var lab_stats: Dictionary = {}            # chunk -> {"trees","mmi","by_type","tris_near","tris_far"}
+var _lab_mat: ShaderMaterial
 var _veg_mat: ShaderMaterial
 var _veg_baked_mat: ShaderMaterial    # merged roadside planting: sway lever / phase baked in UV2
 var _shadow_mat: ShaderMaterial
@@ -118,6 +126,7 @@ func setup(w: NitroTerrainWorld) -> void:
     _veg_baked_mat = ShaderMaterial.new()
     _veg_baked_mat.shader = VEG_SHADER
     _veg_baked_mat.set_shader_parameter("baked",1.0)
+    _configure_lab()
     set_wind(float(DEV_SETTINGS.get_value("developer","vegetation_wind",1.0)))
     _shadow_mat = ShaderMaterial.new()
     _shadow_mat.shader = SHADOW_SHADER
@@ -141,6 +150,19 @@ func set_wind(factor: float) -> void:
         _veg_mat.set_shader_parameter("sway",factor)
     if _veg_baked_mat != null:
         _veg_baked_mat.set_shader_parameter("sway",factor)
+    if _lab_mat != null:
+        _lab_mat.set_shader_parameter("sway",factor)
+
+## FOREST LAB: decides CLASSIC vs LAB for this world (TOUGE only) and makes the one shared tree material.
+func _configure_lab() -> void:
+    lab_cfg = LAB.active_config(info,forest_config)
+    _lab_mat = LAB_FACTORY.make_material(float(DEV_SETTINGS.get_value("developer","vegetation_wind",1.0))) if not lab_cfg.is_empty() else null
+
+## Tests / captures / the Tree Designer preview: switch the mode for this world, then rebuild_all().
+func set_forest_config(cfg: Dictionary) -> void:
+    forest_config = cfg
+    _configure_lab()
+    set_wind(float(DEV_SETTINGS.get_value("developer","vegetation_wind",1.0)))
 
 func rebuild_all() -> void:
     STEPS.run_now(rebuild_steps())
@@ -155,6 +177,7 @@ func rebuild_steps() -> Array:
     return steps
 
 func _rebuild_begin() -> void:
+    lab_stats.clear()
     for child in get_children():
         remove_child(child)
         child.queue_free()
@@ -334,7 +357,8 @@ func _build_chunk(id: Vector2i) -> void:
     var spacing: float = 11.0 if float(info["forest"]) > 0.4 else 12.0
     var cells: int = int(span/spacing)
     var relief: String = field.relief
-    for b in range(cells):
+    var lab_on: bool = not lab_cfg.is_empty()      # FOREST LAB (TOUGE only): its own scatter below replaces this CLASSIC loop
+    for b in range(0 if lab_on else cells):
         for a in range(cells):
             var x: float = x0+(float(a)+rng.randf_range(0.1,0.9))*spacing
             var z: float = z0+(float(b)+rng.randf_range(0.1,0.9))*spacing
@@ -363,6 +387,8 @@ func _build_chunk(id: Vector2i) -> void:
     _scatter_rocks(node,id,x0,z0,span)
     _roadside(node,id,x0,z0,span,per,shadows)
     _field_lines(per,shadows,node,x0,z0,span)
+    if lab_on:
+        lab_stats[id] = LAB.build_chunk(self,node,id,x0,z0,span,lab_cfg,shadows,_lab_mat)
     if relief == "urban":
         _city_district(node,id,x0,z0,span,per,shadows)
     var keys: Array = per.keys()
@@ -480,7 +506,7 @@ func _roadside(node: Node3D, id: Vector2i, x0: float, z0: float, span: float, pe
                 col = Color(0.96,0.72,0.20).lightened(rng.randf_range(-0.08,0.08))
             soft[kind][1].append(col)
         # Forest edge: a tree row right at the safety strip where it is wooded.
-        if float(info["forest"]) > 0.3 and i % 3 == 0:
+        if float(info["forest"]) > 0.3 and i % 3 == 0 and lab_cfg.is_empty():     # FOREST LAB places its own edge
             for side2 in [-1.0,1.0]:
                 var q: Vector2 = samples[i]+nrm*side2*(hw[i]+PROFILE.VERGE+PROFILE.MARGIN+SAFETY_M+rng.randf_range(2.5,7.0))
                 if field.mask_at(field.forest,q.x,q.y) < 0.18 or rng.randf() > 0.7 or field.is_water(q.x,q.y):
