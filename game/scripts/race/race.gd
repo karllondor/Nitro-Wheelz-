@@ -597,6 +597,8 @@ func _physics_process(delta: float) -> void:
 func _show_results() -> void:
     # Separate full-screen result presentation. Never stack the old pause
     # popup, HUD and touch controls underneath the finish buttons.
+    if results_open:
+        return
     results_open = true
     if sfx != null:
         sfx.silence()
@@ -619,45 +621,28 @@ func _show_results() -> void:
         board.show_round(net.session,track.display_name,Callable(self,"_restart"),
             func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
         return
-    if track.event_mode!="":
-        _event_results()
-        return
     var view: NitroRaceResults = RESULTS.new()
     results_layer.add_child(view)
     var target: float = float(hud.target_time) if hud != null else 0.0
     if target <= 0.0:
         # Uncalibrated courses use provisional local practice tiers.
         target = track.length_metres*3.0/14.0
-    view.show_race(track.track_id,track.display_name,time_elapsed,lap_score,target,
-        Callable(self,"_restart"),func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"),
-        {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
+    var stats := {"best_chain":scorer.best_chain,"transitions":scorer.transitions,
         "kerb_clips":scorer.kerb_clips,"chains_lost":scorer.chains_lost,
         "laps":lap_splits.duplicate(true),"length_m":track.length_metres/(3.0 if route_mode else 1.0),
-        "on_edit":_edit_this_track if _player_track_path().begins_with("user://nitro_track_") else Callable()})
-
-func _event_results() -> void:
-    var panel:=PanelContainer.new()
-    results_layer.add_child(panel)
-    panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-    var box:=VBoxContainer.new()
-    panel.add_child(box)
-    box.theme=preload("res://scripts/ui/hud_style.gd").screen_theme(1.1)
-    var title:=Label.new()
-    title.text="%s    •    %s NITRO POINTS" % [track.EVENT_LAYOUT.MODES[track.event_mode],scorer.total]
-    box.add_child(title)
-    if track.event_mode!="practice":
-        var stats:=Label.new()
-        stats.text="%d sectors filled   •   %d missed\n%d technical points before banking" % [judge.complete,judge.missed,roundi(judge.technical)]
-        box.add_child(stats)
-    for action in ["DRIVE AGAIN","EDIT ROAD","MENU"]:
-        var button:=Button.new()
-        button.text=action
-        button.custom_minimum_size.y=62
-        box.add_child(button)
-        match action:
-            "DRIVE AGAIN": button.pressed.connect(_restart)
-            "EDIT ROAD": button.pressed.connect(_edit_this_track)
-            "MENU": button.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/boot.tscn"))
+        "lap_limit":laps_total}
+    var on_menu := func(): get_tree().change_scene_to_file("res://scenes/boot.tscn")
+    if track.event_mode != "":
+        stats["on_edit"] = _edit_this_track
+        view.show_event(track.display_name,time_elapsed,scorer.total,Callable(self,"_restart"),on_menu,stats,
+            {"mode":track.event_mode,"label":track.EVENT_LAYOUT.MODES[track.event_mode],
+            "filled":judge.complete,"missed":judge.missed,"technical":roundi(judge.technical),
+            "planned":track.event_layout.zones.size()*laps_total})
+    else:
+        if _player_track_path().begins_with("user://nitro_track_"):
+            stats["on_edit"] = _edit_this_track
+        view.show_race(track.track_id,track.display_name,time_elapsed,lap_score,target,
+            Callable(self,"_restart"),on_menu,stats)
 
 func _player_track_path() -> String:
     return str(ProjectSettings.get_setting("nitro/selected_track",""))
@@ -1135,6 +1120,7 @@ func _reset_run() -> void:
         pause_layer.queue_free()
         pause_layer = null
     if results_layer != null:
+        remove_child(results_layer)
         results_layer.queue_free()
         results_layer = null
     results_open = false
@@ -1177,6 +1163,7 @@ func _reset_run() -> void:
     skid_segments.clear()
     skid_heights.clear()
     skid_mesh.clear_surfaces()
+    skid_clock = 0.0
     had_skid = false
     collision_cooldown = 0.0
     camera_shake_strength = 0.0

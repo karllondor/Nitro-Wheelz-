@@ -18,7 +18,7 @@ static func launch_speeds(car: String) -> PackedFloat32Array:
             break
     return speeds
 
-static func verify(track,z: Dictionary,mode: String,car: String,speeds: PackedFloat32Array,grade_force: int) -> bool:
+static func verify(track,z: Dictionary,mode: String,car: String,speeds: PackedFloat32Array,grade_force: int, extended: bool = false) -> bool:
     var model=DRIVE.new()
     CARS.configure_model(model,car)
     var body: Dictionary=CARS.info(car)
@@ -47,7 +47,7 @@ static func verify(track,z: Dictionary,mode: String,car: String,speeds: PackedFl
             var change_at := -INF
             var coverage:=0.0
             var prev_s:=start
-            for k in range(100):
+            for k in range(160 if extended else 100):
                 var dt:=1.0/60
                 var steer: float=z.turn*steer_factor
                 var brake_pull := 0.5 if k<8 else 0.0

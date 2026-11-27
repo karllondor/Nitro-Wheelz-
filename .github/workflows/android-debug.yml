@@ -96,7 +96,7 @@ jobs:
           sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.dev"/; s/^package\/name=.*/package\/name="Nitro Wheelz DEV"/' game/export_presets.cfg
           grep -n '^package/unique_name\|^package/name' game/export_presets.cfg
       - name: Isolate PRs targeting the unified preview
-        if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149')
+        if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150')
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
@@ -111,7 +111,7 @@ jobs:
           "$GODOT_BIN" --headless --editor --path game --import
           APK="builds/android/Nitro-Wheelz_v$(cat VERSION)_Android-debug.apk"
           artifact="Nitro-Wheelz_v$(cat VERSION)_Android-debug"
-          if [[ "$GITHUB_BASE_REF" == integration/nitro-dev || "$GITHUB_HEAD_REF" == feat/park-vehicle-damage || "$GITHUB_HEAD_REF" == feat/three-circuits-v0149 ]]; then
+          if [[ "$GITHUB_BASE_REF" == integration/nitro-dev || "$GITHUB_HEAD_REF" == feat/park-vehicle-damage || "$GITHUB_HEAD_REF" == feat/three-circuits-v0149 || "$GITHUB_HEAD_REF" == fix/qa-hotfix-v0150 ]]; then
             APK="builds/android/Nitro-Wheelz-LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA:0:8}.apk"
             artifact="LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA}-Android"
           fi
@@ -177,9 +177,9 @@ jobs:
           if-no-files-found: error
 
   workshop-device:
-    if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149') || github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
+    if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150') || github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
     env:
-      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149') && format('com.karllondor.nitrowheelz.review.pr{0}', github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
+      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150') && format('com.karllondor.nitrowheelz.review.pr{0}', github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -199,7 +199,7 @@ jobs:
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
-          script: ${{ github.head_ref == 'feat/three-circuits-v0149' && 'bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/park-vehicle-damage' && 'bash tools/android_event_smoke.sh && bash tools/android_park_damage_smoke.sh' || (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'bash tools/android_event_smoke.sh && bash tools/android_integration_smoke.sh' || 'bash tools/android_event_smoke.sh' }}
+          script: ${{ github.head_ref == 'fix/qa-hotfix-v0150' && 'NITRO_SMOKE=hotfix bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/three-circuits-v0149' && 'bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/park-vehicle-damage' && 'bash tools/android_event_smoke.sh && bash tools/android_park_damage_smoke.sh' || (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'bash tools/android_event_smoke.sh && bash tools/android_integration_smoke.sh' || 'bash tools/android_event_smoke.sh' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -209,3 +209,4 @@ jobs:
             builds/integration-android/
             builds/damage-android/
             builds/circuits-android/
+            builds/hotfix-android/
