@@ -24,6 +24,27 @@ esac
 out="builds/$case_name-android"
 verdict="$case_name-verdict.txt"
 mkdir -p "$out"
+# The preceding signed review may age out of Actions retention. When present,
+# exercise a real Android upgrade and verify that app-private data survives.
+previous=""
+upgrade_track="$out/upgrade-track.json"
+upgrade_runs="$out/upgrade-runs.json"
+if [[ "$case_name" == hotfix ]]; then
+    if [[ -d builds/android-pr45 ]]; then
+        previous=$(find builds/android-pr45 -name '*.apk' -print -quit)
+    fi
+    if [[ -n "$previous" ]]; then
+        printf '%s  %s\n' '6fc57b954555c048c5f909a43cf2c7e53c29b7ea993bd2209dfe708b50e3b761' "$previous" | sha256sum -c -
+        adb install -r "$previous"
+        adb shell run-as "$pkg" mkdir -p files
+        cp game/tracks/fuji_speedway_short.json "$upgrade_track"
+        printf '%s\n' '[{"track_id":"driftwood_circuit","seconds":183.24,"score":9900,"stars":1,"driver":"QA","car":"e30"}]' > "$upgrade_runs"
+        adb shell "run-as $pkg sh -c 'cat > files/nitro_track_qa_upgrade.json'" < "$upgrade_track"
+        adb shell "run-as $pkg sh -c 'cat > files/nitro_local_runs.json'" < "$upgrade_runs"
+    else
+        echo "SKIP: the signed PR #45 v0.1.49 artifact is unavailable" | tee "$out/upgrade-verdict.txt"
+    fi
+fi
 adb install -r "$apk"
 adb shell am force-stop "$pkg"
 adb shell settings put secure immersive_mode_confirmations confirmed
@@ -61,6 +82,11 @@ done
 await_file "$verdict"
 adb exec-out run-as "$pkg" cat "files/$verdict" | tee "$out/verdict.txt"
 grep -q '^PASS:' "$out/verdict.txt"
+if [[ -n "$previous" ]]; then
+    adb exec-out run-as "$pkg" cat files/nitro_track_qa_upgrade.json | cmp "$upgrade_track" -
+    adb exec-out run-as "$pkg" cat files/nitro_local_runs.json | cmp "$upgrade_runs" -
+    echo "PASS: signed v0.1.49 to v0.1.50 upgrade, custom track and records byte-identical" | tee "$out/upgrade-verdict.txt"
+fi
 /usr/bin/python3 - "$out" "${#shots[@]}" <<'PYCODE'
 from pathlib import Path
 import sys

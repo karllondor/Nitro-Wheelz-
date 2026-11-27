@@ -98,7 +98,7 @@ jobs:
       - name: Isolate PRs targeting the unified preview
         if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150')
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.head_ref == 'fix/qa-hotfix-v0150' && 45 || github.event.pull_request.number }}
         run: |
           sed -i "s/^package\/unique_name=.*/package\/unique_name=\"com.karllondor.nitrowheelz.review.pr${PR_NUMBER}\"/; s/^package\/name=.*/package\/name=\"Nitro Wheelz Review ${PR_NUMBER}\"/" game/export_presets.cfg
       - name: Export unsigned-source-safe debug build
@@ -179,7 +179,10 @@ jobs:
   workshop-device:
     if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150') || github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
     env:
-      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150') && format('com.karllondor.nitrowheelz.review.pr{0}', github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
+      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150') && format('com.karllondor.nitrowheelz.review.pr{0}', github.head_ref == 'fix/qa-hotfix-v0150' && 45 || github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
+    permissions:
+      contents: read
+      actions: read
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -189,6 +192,15 @@ jobs:
         with:
           name: ${{ needs.android.outputs.artifact }}
           path: builds/android
+      - name: Retrieve the preceding signed QA APK for the in-place upgrade test
+        if: github.head_ref == 'fix/qa-hotfix-v0150'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: LAB-PR-45-8541ba066e5c22aa9d54d5de7c010ee53d2782fb-Android
+          run-id: 45670167827
+          github-token: ${{ github.token }}
+          path: builds/android-pr45
       - name: Enable emulator acceleration
         run: |
           sudo chmod 666 /dev/kvm
