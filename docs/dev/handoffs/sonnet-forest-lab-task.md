@@ -1,3 +1,34 @@
+# OWNER-APPROVED PHASE 1 — TOUGE TREE REFINEMENT (27 NOV 2026)
+
+**This section supersedes the older broader rollout below: begin with TOUGE only.** The owner approved the eight-species forest asset illustration and asks Claude Sonnet to prepare and improve the procedural models on a Touge test route first. No replacement of other biomes or merge to `main` before owner Android review.
+
+## Required reference materials
+- Approved art: `APPROVED_FOREST_ASSETS_REFERENCE.png` from the conversation (illustrative concept, NOT a Godot screenshot). Aim for recognisable forms rather than claiming identical geometry.
+- Prototype source ZIP: `NITRO_WHEELZ_COMPLETE_FOREST_LAB_8_SPECIES.zip`; SHA-256 `908dbd043400e8033f2344f29823ca87d35b80da9f09c38bfdbca0c70f9c1e87`. **Not committed to GitHub**. User must attach to Sonnet session. Contains `nitro_tree_factory.gd`, species gallery/free camera, road demo, scenes and unexecuted source tests. First compile it and repair issues, don't blindly copy.
+- Existing production code: `game/scripts/world/scenery_modules.gd`, `game/scripts/world/procedural_world.gd`, `game/scripts/world/scenery_rules.gd`, and `game/scripts/world/terrain/terrain_field.gd`. Identify the live tree renderer for Touge ROUTE and 3D Builder vs Race, and preserve route consistency.
+- Work on existing `feat/sonnet-forest-lab` branch, verify HEAD before committing. No edits to #61 track storage or #62 collision/scoring; avoid conflicting work on shared base.
+
+## A — Improve eight models and autumn variations
+1. **Pine** broad asymmetric layered needles and trunk; **Fir** taller/narrower layered tiers; **Birch** light airy crown and white bark with dark dash markings; **Oak** wide irregular crown and exposed thick branches.
+2. **Sakura** pink spring blossom clusters, not oversized cubes; **Japanese maple** airy low branching with red/orange/gold autumn; **Rowan** smaller lobed crown with visible red berry clusters; **Shrubs** varied green, flowers and autumn red/orange accents.
+3. Keep shared faceted opaque polygon meshes, vertex colours, reproducible species seeds, near/far LOD versions; avoid repeated primitive cones. No downloaded photoreal textures or per-leaf geometry on mass forest.
+4. Provide real Godot NEAR close-ups, same-scale profile comparisons and spring/summer/golden-orange-red autumn samples next to approved illustration. List compromises candidly.
+
+## B — Simple Tree Designer for owner QA (developer only)
+Provide a lightweight editor/preview to choose **species, LOD, season, height/scale, crown width, foliage density and forest density** and see the effect in 3D. Support mouse orbit or free-fly (RMB + WASD, Q/E, Shift, scroll) and export/import presets as JSON. Keep editing tools out of race HUD. Shape changes may trigger mesh regeneration inside preview, not on every gameplay frame.
+
+## C — Touge-only integration
+Integrate as opt-in `CLASSIC / FOREST LAB` mode, with CLASSIC default, on **one Touge test route** first. Preserve original trees on all other tracks. Place denser varied woods on hillsides while retaining views of hairpins and lower serpentines from Chase camera. Use terrain height/slope, deterministic seeds, chunked MultiMesh, clearance around roads, walls, bridges, tunnels, water, pits, starts and finishes. No trees floating or growing through driveable geometry. Golden Hour shadow flicker #48 remains unresolved; avoid enabling dynamic shadows on every tree.
+
+## D — QA gate
+- Compile all Godot scripts, run and fix `tests_tree_factory.gd` and test 8 species × 2 LOD × seasonal palettes.
+- Compare CLASSIC vs FOREST LAB on identical Touge seed, camera, time of day and hardware: median FPS, p95 frame time, draw calls, memory and generation time, plus a 10-minute warm-device test. Offer LOW/MEDIUM/HIGH forest density and measured graceful downgrade if needed.
+- Compare Chase and top-down screenshots by DAY/GOLDEN HOUR/NIGHT, test no view obstruction and no vegetation popping. Ensure mobile GL Compatibility plus Web/PC sanity.
+- Submit draft PR, exact commit SHA, real in-game captures, comparative table, Android QA APK and handoff. Owner approval is required before adding other maps or merging to main.
+
+**Deferred:** production-wide asset replacement, whole-season gameplay system, complex artist-modeling tool, scoring/track editing, and automatic main merge.
+
+---
 # SONNET TASK — Nitro Forest Lab / Issue #54
 
 Status: **HANDOFF ONLY, NOT IMPLEMENTED**. This file is a task specification. This branch was created from verified PR #58 head `73a03ca6c17c36f76186fd8d1c9468adbf6a5316` and remains isolated from `main`.
