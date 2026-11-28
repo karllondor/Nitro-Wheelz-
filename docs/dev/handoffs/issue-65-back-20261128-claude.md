@@ -15,12 +15,24 @@ OWNER REPORT: "systemowe back wychodzi z gry" in the DEVELOPER step of the v0.1.
 | v0.1.53 left the game on ONE BACK on the main menu (Android convention) | `boot.gd go_back()` |
 | The v0.1.52/53 device check ran with menu navigation OFF, so it could not see a quit on the main menu | `android_ux_checks.gd` (`navigate_enabled=false`) |
 
-## Most likely cause (not proven on the phone)
-DEVELOPER → main menu → game closed in two BACK deliveries: either the owner pressed twice (the first press's page change is easy to miss), or one gesture reached the game twice. Either way one BACK on the main menu was enough to close the game. A system-level exit (Android 16 predictive back bypassing Godot) remains possible; the new log separates the two.
+## Root cause — REPRODUCED in CI on the Android 16 (API 36) emulator
+CI run 46129718732 (v0.1.54 first build, `NITRO_BACK` lines from `adb logcat -s godot`), one `adb shell input keyevent KEYCODE_BACK` each:
+
+```
+09:20:36 BACK -> ui_cancel (boot/dev)
+09:20:36 BACK ignored (duplicate 258 ms after the previous)
+09:20:41 BACK -> ui_cancel (boot/main)
+09:20:41 BACK on the main menu (first press) -> asks to press again
+09:20:41 BACK ignored (duplicate 2 ms after the previous)
+```
+
+On **API 36** ONE system BACK reaches the game **twice** (key press + the predictive-back callback on release); on API 35 once.
+v0.1.53 handled both: DEVELOPER → main menu → (second delivery) leave the game = the owner's report. The physical phone was not
+attached, so "the owner's phone is Android 16" is inferred from the identical symptom, not read from the phone.
 
 ## Fix in v0.1.54
-* `android_back.gd`: a BACK within 350 ms of the previous one is **ignored** (logged as a duplicate).
-* `boot.gd go_back()`: on the main menu the first BACK shows **PRESS BACK AGAIN TO EXIT**; only a second BACK 0.35–2.5 s later leaves the game.
+* `android_back.gd`: a BACK within 700 ms of the previous one is **ignored** (logged as a duplicate; the duplicate gap follows the press length).
+* `boot.gd go_back()`: on the main menu the first BACK shows **PRESS BACK AGAIN TO EXIT**; only a second BACK 0.7–3 s later leaves the game (a long press on the main menu, released after 0.7 s, counts as the second).
 * Every system BACK, every ignored duplicate, every main-menu decision and every app pause / resume / start is written to
   `user://back_events.log` (24 lines, kept across restarts), printed as `NITRO_BACK …` for `adb logcat -s godot`, and shown on
   DEVELOPER ("SYSTEM BACK LOG"). If the game ever closes again, reopen it → DEVELOPER: a line `APP PAUSED n ms after the last BACK`
@@ -30,8 +42,7 @@ DEVELOPER → main menu → game closed in two BACK deliveries: either the owner
 * `android_ux_rescue_test` (headless): duplicate ignored, first main-menu BACK only asks, an instant second does not leave, a deliberate
   second leaves, a late one asks again, log recorded and shown. Mutation checks: one-BACK exit → FAIL; no debounce → FAIL.
 * Emulator (`NITRO_SMOKE=uxrescue`), navigation ON for the BACK steps: real `KEYCODE_BACK` DEVELOPER → main menu; one more
-  `KEYCODE_BACK` on the main menu → the app must still run (`pidof`) and show the prompt; **gesture navigation** + edge swipe on
-  DEVELOPER → the app must still run. Runs on **API 35 and API 36** (Android 16, the APK's target) for the QA branch.
+  `KEYCODE_BACK` on the main menu → the app must still run (`pidof`) and show the prompt; **gesture navigation** (switched on before the game starts; switching it while the game runs recreates the activity and is not a BACK test) + edge swipe on DEVELOPER → the app must still run. Runs on **API 35 (buttons) and API 36 (gestures)** for the QA branch.
 
 ## Expected BACK per screen (v0.1.54)
 DEVELOPER / ELEVATION / SETTINGS / PROFILE / PARK / BUILD pages → parent page (same as the on-screen BACK) · Track list → Race setup

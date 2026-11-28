@@ -77,6 +77,12 @@ if [[ "$case_name" == hotfix || "$case_name" == tracks || "$case_name" == uxresc
         echo "SKIP: the signed $previous_version artifact is unavailable" | tee "$out/upgrade-verdict.txt"
     fi
 fi
+# Gesture navigation (most current phones) is switched on BEFORE the game starts: switching it while the game runs is an
+# overlay change that recreates the activity, which is not a BACK test.
+if [[ "${NITRO_NAV:-buttons}" == gesture ]]; then
+    adb shell cmd overlay enable com.android.internal.systemui.navbar.gestural || true
+    sleep 3
+fi
 adb install -r "$apk"
 adb shell am force-stop "$pkg"
 adb shell settings put secure immersive_mode_confirmations confirmed
@@ -122,13 +128,10 @@ after_shot() {
         ux-dev-scrolled|ux-delete|ux-rename) adb shell input keyevent KEYCODE_BACK ;;
         ux-main-back) adb shell input keyevent KEYCODE_BACK; alive "one BACK on the main menu" ;;
         ux-gesture)
-            # Gesture navigation (as on most current phones), then a back swipe in from the left edge.
-            adb shell cmd overlay enable com.android.internal.systemui.navbar.gestural || true
-            sleep 3
-            adb shell input swipe 2 900 420 900 250
-            alive "a back gesture on DEVELOPER"
-            adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
-            sleep 2
+            if [[ "${NITRO_NAV:-buttons}" == gesture ]]; then
+                adb shell input swipe 2 900 420 900 250      # back swipe in from the left edge
+                alive "a back gesture on DEVELOPER"
+            fi
             ;;
     esac
 }

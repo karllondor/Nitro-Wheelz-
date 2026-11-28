@@ -8,12 +8,13 @@ extends Node
 ##     the garage goes back, a race opens / closes PAUSE, the builders and editors cancel the current tool. On the main menu
 ##     the game is left only after a SECOND BACK (boot.gd go_back), never on one press. Screens that handle BACK themselves
 ##     (the LAN lobby, the Tree Designer) join the group "own_go_back" and are left alone.
-## v0.1.54: a BACK that arrives within DEBOUNCE_MS of the previous one is ignored. On the owner's phone one gesture could
-## reach the game twice or two quick presses were taken as "Developer -> main menu -> leave the game"; the CI emulator never
-## showed it (the cause on the phone is not proven, see docs/dev/handoffs/issue-65-back-20261128-claude.md). Every BACK and
-## every pause of the app is written to user://back_events.log (shown in DEVELOPER), so the next phone report says what
-## happened even when the game was closed.
-const DEBOUNCE_MS: int = 350
+## v0.1.54 ROOT CAUSE (reproduced on the Android 16 / API 36 emulator; this APK targets SDK 36): ONE system BACK reaches the
+## game TWICE - once as the key press and once through the predictive-back callback when it is released (258 ms and 2 ms apart
+## in CI). v0.1.53 took the second one on the main menu as "leave the game", so BACK in DEVELOPER closed the game on the owner's
+## phone; API 35 delivers it once, which is why CI never saw it. A BACK within DEBOUNCE_MS of the previous one is now ignored
+## (long enough for a normal press-and-release), and the main menu needs a second deliberate BACK anyway. Every BACK and every
+## pause of the app is written to user://back_events.log (shown in DEVELOPER). See docs/dev/handoffs/issue-65-back-20261128-claude.md.
+const DEBOUNCE_MS: int = 700
 const LOG_PATH: String = "user://back_events.log"
 const LOG_KEEP: int = 24
 

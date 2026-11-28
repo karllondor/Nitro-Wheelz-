@@ -166,10 +166,10 @@ func _checks() -> String:
         return "the first BACK on the main menu must only ask to press again"
     if str(boot.call("go_back")) == "quit":
         return "an instant second BACK (a duplicate) must not leave the game"
-    boot.set("_exit_armed_ms",Time.get_ticks_msec()-800)
+    boot.set("_exit_armed_ms",Time.get_ticks_msec()-1000)
     if str(boot.call("go_back")) != "quit":
         return "a deliberate second BACK on the main menu leaves the game"
-    boot.set("_exit_armed_ms",Time.get_ticks_msec()-5000)
+    boot.set("_exit_armed_ms",Time.get_ticks_msec()-6000)
     if str(boot.call("go_back")) != "armed":
         return "a BACK long after the prompt asks again (does not leave)"
     var back_log: PackedStringArray = back_nav.call("log_lines",8)

@@ -177,9 +177,9 @@ func _unhandled_input(event: InputEvent) -> void:
         go_back()
 
 ## v0.1.54 (owner phone report): BACK on the main menu leaves the game only on a SECOND press within EXIT_WINDOW_MS (and at
-## least EXIT_MIN_GAP_MS after the first, so one gesture delivered twice can never close the game).
-const EXIT_WINDOW_MS: int = 2500
-const EXIT_MIN_GAP_MS: int = 350
+## least EXIT_MIN_GAP_MS after the first, so one BACK delivered twice - Android 16 does that - can never close the game).
+const EXIT_WINDOW_MS: int = 3000
+const EXIT_MIN_GAP_MS: int = 700
 var _exit_armed_ms: int = -100000
 
 func go_back() -> String:
