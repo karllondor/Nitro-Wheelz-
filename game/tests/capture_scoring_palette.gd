@@ -28,7 +28,10 @@ func _run() -> void:
     DirAccess.make_dir_recursive_absolute(out)
     var was: String = STYLE.accent_name
     var size: Vector2 = root.get_visible_rect().size
+    var only: String = OS.get_environment("ONLY")   # optional: one preset label, e.g. DAY
     for preset in [TIME.Preset.DAWN,TIME.Preset.DAY,TIME.Preset.GOLDEN_HOUR,TIME.Preset.NIGHT]:
+        if only != "" and TIME.LABELS[preset].replace(" ","_") != only:
+            continue
         for accent in ACCENTS:
             STYLE.set_accent(accent)
             var holder := Control.new()
@@ -48,14 +51,16 @@ func _run() -> void:
             if preset == TIME.Preset.DAY:
                 var cloud := ColorRect.new()                       # worst case for light text: a white cloud behind the callouts
                 cloud.color = Color(1,1,1)
-                cloud.position = Vector2(size.x*0.12,size.y*0.30)
-                cloud.size = Vector2(size.x*0.76,size.y*0.14)
+                cloud.position = Vector2(size.x*0.06,size.y*0.425)
+                cloud.size = Vector2(size.x*0.88,size.y*0.13)
                 holder.add_child(cloud)
             var hud: Control = HUD.new()
             hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
             hud.car_screen = Vector2(size.x*0.5,size.y*0.68)
-            hud.score_events = [{"text":"KERB CLIP  x1.5","age":0.15},{"text":"BANKED  +12,345","age":0.10},
-                {"text":"WALL!  CHAIN LOST","age":0.05}]
+            var events: Array[Dictionary] = []
+            for e in [["KERB CLIP  x1.5",0.15],["BANKED  +12,345",0.10],["WALL!  CHAIN LOST",0.05]]:
+                events.append({"text":e[0],"age":e[1]})
+            hud.score_events = events
             holder.add_child(hud)
             for _f in range(6):
                 await process_frame
