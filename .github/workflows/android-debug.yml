@@ -96,11 +96,27 @@ jobs:
           sed -i 's/^package\/unique_name=.*/package\/unique_name="com.karllondor.nitrowheelz.dev"/; s/^package\/name=.*/package\/name="Nitro Wheelz DEV"/' game/export_presets.cfg
           grep -n '^package/unique_name\|^package/name' game/export_presets.cfg
       - name: Isolate PRs targeting the unified preview
-        if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152')
+        if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa')
         env:
-          PR_NUMBER: ${{ (github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152') && 45 || github.event.pull_request.number }}
+          PR_NUMBER: ${{ (github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa') && 45 || github.event.pull_request.number }}
         run: |
           sed -i "s/^package\/unique_name=.*/package\/unique_name=\"com.karllondor.nitrowheelz.review.pr${PR_NUMBER}\"/; s/^package\/name=.*/package\/name=\"Nitro Wheelz Review ${PR_NUMBER}\"/" game/export_presets.cfg
+      - name: Stable QA channel - one package, one certificate (issue #68)
+        if: github.head_ref == 'integration/stable-mobile-qa' || github.ref_name == 'integration/stable-mobile-qa'
+        env:
+          NITRO_DEBUG_KEYSTORE_B64: ${{ secrets.NITRO_DEBUG_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          source tools/qa_channel.env
+          if [ -z "${NITRO_DEBUG_KEYSTORE_B64:-}" ]; then
+            echo "FAIL: the QA channel needs the persistent signing secret NITRO_DEBUG_KEYSTORE_B64 (a throwaway key cannot update the owner's app)"; exit 1
+          fi
+          code=$(sed -n 's/^version\/code=//p' game/export_presets.cfg)
+          if [ "$code" -le "$QA_LAST_VERSION_CODE" ]; then
+            echo "FAIL: versionCode $code is not above the last QA delivery $QA_LAST_VERSION_CODE (Android would refuse the update)"; exit 1
+          fi
+          sed -i "s/^package\/unique_name=.*/package\/unique_name=\"$QA_PACKAGE\"/; s/^package\/name=.*/package\/name=\"$QA_LABEL\"/" game/export_presets.cfg
+          grep -n '^package/unique_name\|^package/name\|^version/' game/export_presets.cfg | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Export unsigned-source-safe debug build
         id: apk
         shell: bash
@@ -114,6 +130,11 @@ jobs:
           if [[ "$GITHUB_BASE_REF" == integration/nitro-dev || "$GITHUB_HEAD_REF" == feat/park-vehicle-damage || "$GITHUB_HEAD_REF" == feat/three-circuits-v0149 || "$GITHUB_HEAD_REF" == fix/qa-hotfix-v0150 || "$GITHUB_HEAD_REF" == feat/my-tracks-management-v0151 || "$GITHUB_HEAD_REF" == fix/android-ux-rescue-v0152 ]]; then
             APK="builds/android/Nitro-Wheelz-LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA:0:8}.apk"
             artifact="LAB-PR-${{ github.event.pull_request.number }}-${GITHUB_SHA}-Android"
+          fi
+          if [[ "${GITHUB_HEAD_REF:-}" == integration/stable-mobile-qa || "${GITHUB_REF_NAME:-}" == integration/stable-mobile-qa ]]; then
+            code=$(sed -n 's/^version\/code=//p' game/export_presets.cfg)
+            APK="builds/android/Nitro-Wheelz-QA_v$(cat VERSION)_code${code}_${GITHUB_SHA:0:8}.apk"
+            artifact="Nitro-Wheelz-QA_v$(cat VERSION)_code${code}_${GITHUB_SHA}-Android"
           fi
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
           "$GODOT_BIN" --headless --verbose --path game --export-debug "Android Debug" "$PWD/$APK"
@@ -130,12 +151,25 @@ jobs:
           echo "PACKAGE: $PKG" | tee -a "$GITHUB_STEP_SUMMARY"
           sha256sum "$APK" > "$APK.sha256"
           echo "BUILT: APK not yet tested on a real Android device."
+      - name: PRs into the QA branch are not an owner app (issue #68)
+        if: github.base_ref == 'integration/stable-mobile-qa'
+        run: |
+          echo "This PR targets integration/stable-mobile-qa: its APK built and exported, but it is NOT uploaded." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "The owner's one QA APK is built from integration/stable-mobile-qa itself (tools/qa_channel.env)." | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: github.base_ref != 'integration/stable-mobile-qa'
         with:
           name: ${{ steps.apk.outputs.artifact }}
           path: builds/android/*
           if-no-files-found: error
           retention-days: 30
+      - name: Verify the stable QA channel identity (issue #68)
+        if: github.head_ref == 'integration/stable-mobile-qa' || github.ref_name == 'integration/stable-mobile-qa'
+        run: |
+          source tools/qa_channel.env
+          python3 tools/apk_identity.py builds/android/*.apk --expect-package "$QA_PACKAGE" --expect-cert "$QA_CERT_SHA256" \
+            --min-version-code $((QA_LAST_VERSION_CODE+1)) | tee -a "$GITHUB_STEP_SUMMARY"
+          test "${PIPESTATUS[0]}" -eq 0
       - name: Verify the QA update identity (issue #68)
         if: github.head_ref == 'fix/android-ux-rescue-v0152'
         run: |
@@ -184,15 +218,22 @@ jobs:
           if-no-files-found: error
 
   workshop-device:
-    if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152') || github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
+    if: (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa') || github.head_ref == 'agent/codex/issue-29-procedural-events' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev'
     env:
-      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152') && format('com.karllondor.nitrowheelz.review.pr{0}', (github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152') && 45 || github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
+      NITRO_PKG: ${{ (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'feat/park-vehicle-damage' || github.head_ref == 'feat/three-circuits-v0149' || github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa') && format('com.karllondor.nitrowheelz.review.pr{0}', (github.head_ref == 'fix/qa-hotfix-v0150' || github.head_ref == 'feat/my-tracks-management-v0151' || github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa') && 45 || github.event.pull_request.number) || (github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'com.karllondor.nitrowheelz.dev' || 'com.karllondor.nitrowheelz.workshop' }}
     permissions:
       contents: read
       actions: read
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    # v0.1.54: the QA branch also runs on Android 16 (API 36) - the APK targets SDK 36, where the system BACK uses the
+    # predictive-back path. Non-blocking (an emulator image problem must not hide the API 35 result); its verdict is read.
+    strategy:
+      fail-fast: false
+      matrix:
+        api: ${{ fromJSON(github.head_ref == 'integration/stable-mobile-qa' && '[35, 36]' || '[35]') }}
+    continue-on-error: ${{ matrix.api == 36 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -217,6 +258,15 @@ jobs:
           run-id: 45917376264
           github-token: ${{ github.token }}
           path: builds/android-pr58
+      - name: Retrieve the owner's installed QA build v0.1.53 for the in-place upgrade test
+        if: github.head_ref == 'integration/stable-mobile-qa'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Nitro-Wheelz-QA_v0.1.53_code53_ff038bd0836f1efa86fdef451d18f1bf040e94bc-Android
+          run-id: 46091423533
+          github-token: ${{ github.token }}
+          path: builds/android-qa0153
       - name: Retrieve the signed v0.1.51 APK (PR 63) for the in-place upgrade test
         if: github.head_ref == 'fix/android-ux-rescue-v0152'
         continue-on-error: true
@@ -232,15 +282,15 @@ jobs:
           sudo apt-get install -y python3-pil
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
-          script: ${{ github.head_ref == 'fix/android-ux-rescue-v0152' && 'NITRO_SMOKE=uxrescue bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/my-tracks-management-v0151' && 'NITRO_SMOKE=tracks bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'fix/qa-hotfix-v0150' && 'NITRO_SMOKE=hotfix bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/three-circuits-v0149' && 'bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/park-vehicle-damage' && 'bash tools/android_event_smoke.sh && bash tools/android_park_damage_smoke.sh' || (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'bash tools/android_event_smoke.sh && bash tools/android_integration_smoke.sh' || 'bash tools/android_event_smoke.sh' }}
+          script: ${{ (github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa') && (matrix.api == 36 && 'NITRO_NAV=gesture NITRO_SMOKE=uxrescue bash tools/android_three_circuits_smoke.sh' || 'NITRO_SMOKE=uxrescue bash tools/android_three_circuits_smoke.sh') || github.head_ref == 'feat/my-tracks-management-v0151' && 'NITRO_SMOKE=tracks bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'fix/qa-hotfix-v0150' && 'NITRO_SMOKE=hotfix bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/three-circuits-v0149' && 'bash tools/android_three_circuits_smoke.sh' || github.head_ref == 'feat/park-vehicle-damage' && 'bash tools/android_event_smoke.sh && bash tools/android_park_damage_smoke.sh' || (github.base_ref == 'integration/nitro-dev' || github.head_ref == 'integration/nitro-dev' || github.ref_name == 'integration/nitro-dev') && 'bash tools/android_event_smoke.sh && bash tools/android_integration_smoke.sh' || 'bash tools/android_event_smoke.sh' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Workshop-Android-evidence
+          name: Workshop-Android-evidence-api${{ matrix.api }}
           path: |
             builds/event-android/
             builds/integration-android/

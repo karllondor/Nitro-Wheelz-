@@ -16,7 +16,7 @@ case "${NITRO_SMOKE:-circuits}" in
     uxrescue)
         # issue #65 / #59: real adb swipe + Android BACK on the menus, cards and garage (android_ux_checks.gd)
         case_name=uxrescue
-        shots=(ux-dev-top ux-dev-scrolled ux-delete ux-rename ux-garage)
+        shots=(ux-dev-top ux-dev-scrolled ux-main-back ux-gesture ux-delete ux-rename ux-garage)
         ;;
     circuits)
         case_name=circuits
@@ -50,10 +50,17 @@ if [[ "$case_name" == hotfix || "$case_name" == tracks || "$case_name" == uxresc
         target_version=v0.1.51
     fi
     if [[ "$case_name" == uxrescue ]]; then
-        previous_dir=builds/android-pr63
-        previous_version=v0.1.51
-        previous_sha=b5cea4df5d84095f312504d0a0352f8adb34ea9e64a4c1751f38a5c1a1e68003
-        target_version=v0.1.52
+        # v0.1.54: upgrade from the owner's installed QA build v0.1.53 when CI has it, else from v0.1.51 (PR 63).
+        if [[ -d builds/android-qa0153 ]]; then
+            previous_dir=builds/android-qa0153
+            previous_version=v0.1.53
+            previous_sha=09babebae6b8f1bce31ef39ff9074dc73d0ee9b149a682f8febf1c6e10752535
+        else
+            previous_dir=builds/android-pr63
+            previous_version=v0.1.51
+            previous_sha=b5cea4df5d84095f312504d0a0352f8adb34ea9e64a4c1751f38a5c1a1e68003
+        fi
+        target_version=v$(cat VERSION)
     fi
     if [[ -d "$previous_dir" ]]; then
         previous=$(find "$previous_dir" -name '*.apk' -print -quit)
@@ -69,6 +76,12 @@ if [[ "$case_name" == hotfix || "$case_name" == tracks || "$case_name" == uxresc
     else
         echo "SKIP: the signed $previous_version artifact is unavailable" | tee "$out/upgrade-verdict.txt"
     fi
+fi
+# Gesture navigation (most current phones) is switched on BEFORE the game starts: switching it while the game runs is an
+# overlay change that recreates the activity, which is not a BACK test.
+if [[ "${NITRO_NAV:-buttons}" == gesture ]]; then
+    adb shell cmd overlay enable com.android.internal.systemui.navbar.gestural || true
+    sleep 3
 fi
 adb install -r "$apk"
 adb shell am force-stop "$pkg"
@@ -100,10 +113,26 @@ await_file() {
 }
 
 # Real OS input after a screenshot (uxrescue): a swipe that starts on a DEVELOPER button, then Android BACK.
+alive() {
+    sleep 2
+    if ! adb shell pidof "$pkg" >/dev/null; then
+        echo "FAIL: the game closed after $1" | tee "$out/verdict.txt" >&2
+        adb logcat -d -s godot | grep NITRO_BACK | tail -n 20 >&2 || true
+        exit 1
+    fi
+}
+
 after_shot() {
     case "$1" in
         ux-dev-top) adb shell input swipe 360 1150 360 450 400 ;;
         ux-dev-scrolled|ux-delete|ux-rename) adb shell input keyevent KEYCODE_BACK ;;
+        ux-main-back) adb shell input keyevent KEYCODE_BACK; alive "one BACK on the main menu" ;;
+        ux-gesture)
+            if [[ "${NITRO_NAV:-buttons}" == gesture ]]; then
+                adb shell input swipe 2 900 420 900 250      # back swipe in from the left edge
+                alive "a back gesture on DEVELOPER"
+            fi
+            ;;
     esac
 }
 

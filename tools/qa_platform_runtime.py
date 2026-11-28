@@ -18,7 +18,7 @@ def text_points(image, target, area=None):
     gray.resize((crop.width * 2, crop.height * 2)).save(stream, "PNG")
     data = subprocess.run(
         ["tesseract", "stdin", "stdout", "--psm", "11", "tsv"],
-        input=stream.getvalue(), capture_output=True, check=True, timeout=10,
+        input=stream.getvalue(), capture_output=True, check=True, timeout=30,
     ).stdout.decode()
     lines = {}
     for word in csv.DictReader(io.StringIO(data), delimiter="\t"):

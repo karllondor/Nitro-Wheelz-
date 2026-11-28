@@ -9,6 +9,7 @@ class_name NitroRaceHUD
 ## angle under it on the left. All values are live race data.
 
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const PALETTE = preload("res://scripts/ui/scoring_palette.gd")
 
 ## NITRO WHEELZ PARK (issue #27): no lap, no score, no minimap, no callouts - only the
 ## speedometer and the drift angle; the lesson card (park_guide.gd) uses the header.
@@ -308,9 +309,15 @@ func _minimap(rect: Rect2, u: float) -> void:
         _end_marker(rect,u,start_progress,STYLE.WHITE,false)
         _end_marker(rect,u,finish_progress,STYLE.GOLD,true)
     var dot: Vector2 = _map_point(point_at_progress(track_progress),rect)
-    draw_circle(dot,9.0*u,Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.28))
-    draw_circle(dot,5.5*u,STYLE.PINK)
-    draw_arc(dot,5.5*u,0.0,TAU,20,STYLE.WHITE,1.4*u,true)
+    for primitive in map_marker_spec(u):
+        draw_circle(dot,float(primitive["radius"]),primitive["color"])
+
+## Issue #28 (owner v0.1.50): the player's dot on the minimap is a SOLID RED disc without a white stroke, the same red for every
+## HUD accent and for Club / Pro. A soft dark halo lifts it off the white route line and the dark map. Returned as circle
+## primitives (back to front) so the drawing and its test read the same numbers.
+const MAP_MARKER_RED: Color = Color(1.0,0.10,0.10)
+static func map_marker_spec(u: float) -> Array:
+    return [{"radius":10.0*u,"color":Color(0.0,0.0,0.0,0.45)},{"radius":7.0*u,"color":MAP_MARKER_RED}]
 
 func _map_point(p: Vector2, rect: Rect2) -> Vector2:
     return rect.get_center()+(p.rotated(-_map_rot)-_map_mid)*_map_scale
@@ -493,6 +500,11 @@ func callout_anchor(m: Dictionary, s: Vector2) -> Vector2:
     y = clampf(y,lo,maxf(lo,hi))
     return Vector2(s.x*0.5,y)
 
+## Issue #66: a callout's colour is fixed by its MEANING (red penalty, gold banked, violet technical bonus, white info)
+## and never follows the player's HUD accent. See scoring_palette.gd.
+func callout_color(event: Dictionary) -> Color:
+    return PALETTE.color_for(event)
+
 func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
     var size: float = minf(s.x,s.y)*0.062
     if STYLE.platform_profile() != "mobile":
@@ -505,14 +517,13 @@ func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
         var alpha: float = clampf(1.6-age,0.0,1.0)
         var pop: float = 1.0+0.25*clampf(1.0-age*6.0,0.0,1.0)
         var txt: String = str(e.get("text",""))
-        var bad: bool = txt.contains("LOST")
-        var col: Color = Color(1.0,0.42,0.42) if bad else (STYLE.GOLD if txt.begins_with("BANKED") else STYLE.PINK_SOFT)
+        var col: Color = callout_color(e)
         col.a = alpha
         var px: float = size*pop
         var pos := Vector2(0.0,y-age*18.0*u)
         # Dark outline for readability over kerbs, sky and grass.
         for o in [Vector2(-2,0),Vector2(2,0),Vector2(0,-2),Vector2(0,2)]:
-            draw_string(STYLE.BOLD,pos+o*u,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),Color(0,0,0,0.65*alpha))
+            draw_string(STYLE.BOLD,pos+o*u,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),Color(0,0,0,PALETTE.OUTLINE_ALPHA*alpha))
         draw_string(STYLE.BOLD,pos,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),col)
         y -= size*1.35
 
