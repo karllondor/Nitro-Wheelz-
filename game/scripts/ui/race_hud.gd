@@ -9,6 +9,7 @@ class_name NitroRaceHUD
 ## angle under it on the left. All values are live race data.
 
 const STYLE = preload("res://scripts/ui/hud_style.gd")
+const PALETTE = preload("res://scripts/ui/scoring_palette.gd")
 
 ## NITRO WHEELZ PARK (issue #27): no lap, no score, no minimap, no callouts - only the
 ## speedometer and the drift angle; the lesson card (park_guide.gd) uses the header.
@@ -493,6 +494,11 @@ func callout_anchor(m: Dictionary, s: Vector2) -> Vector2:
     y = clampf(y,lo,maxf(lo,hi))
     return Vector2(s.x*0.5,y)
 
+## Issue #66: a callout's colour is fixed by its MEANING (red penalty, gold banked, violet technical bonus, white info)
+## and never follows the player's HUD accent. See scoring_palette.gd.
+func callout_color(event: Dictionary) -> Color:
+    return PALETTE.color_for(event)
+
 func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
     var size: float = minf(s.x,s.y)*0.062
     if STYLE.platform_profile() != "mobile":
@@ -505,14 +511,13 @@ func _draw_callouts(anchor: Vector2, s: Vector2, u: float) -> void:
         var alpha: float = clampf(1.6-age,0.0,1.0)
         var pop: float = 1.0+0.25*clampf(1.0-age*6.0,0.0,1.0)
         var txt: String = str(e.get("text",""))
-        var bad: bool = txt.contains("LOST")
-        var col: Color = Color(1.0,0.42,0.42) if bad else (STYLE.GOLD if txt.begins_with("BANKED") else STYLE.PINK_SOFT)
+        var col: Color = callout_color(e)
         col.a = alpha
         var px: float = size*pop
         var pos := Vector2(0.0,y-age*18.0*u)
         # Dark outline for readability over kerbs, sky and grass.
         for o in [Vector2(-2,0),Vector2(2,0),Vector2(0,-2),Vector2(0,2)]:
-            draw_string(STYLE.BOLD,pos+o*u,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),Color(0,0,0,0.65*alpha))
+            draw_string(STYLE.BOLD,pos+o*u,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),Color(0,0,0,PALETTE.OUTLINE_ALPHA*alpha))
         draw_string(STYLE.BOLD,pos,txt,HORIZONTAL_ALIGNMENT_CENTER,s.x,int(px),col)
         y -= size*1.35
 
