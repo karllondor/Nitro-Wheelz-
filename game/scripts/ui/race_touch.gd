@@ -28,7 +28,13 @@ func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_process_input(true)
 
-func _process(_delta: float) -> void:
+## v0.1.54 (#28): how far the GAS face is pushed in, 0..1. Purely visual: it follows the input state (throttle) a few
+## frames late; the hit polygon never moves.
+var gas_press: float = 0.0
+const GAS_PRESS_RATE: float = 12.0
+
+func _process(delta: float) -> void:
+    gas_press = move_toward(gas_press,1.0 if throttle > 0.0 else 0.0,delta*GAS_PRESS_RATE)
     queue_redraw()
 
 func _layout(size_override: Vector2 = Vector2.ZERO) -> Dictionary:
@@ -155,6 +161,50 @@ static func pedal_face(rect: Rect2, gas_pedal: bool, press: float = 0.0) -> Rect
         rect.size.x*0.90,rect.size.y*(0.88 if gas_pedal else 0.86))
 
 const PEDAL_SKEW: float = 0.10
+
+## The visible GAS pedal (#28, owner: slanted mechanical face + visible press, but the wide full-height touch area stays).
+## `gas_rect` / `hit_shape` are the layout's "gas" and "gas_shape": that polygon is the ONLY input area and is never moved or
+## shrunk. The visible face is a parallelogram leaning like the BRAKE (PEDAL_SKEW), always drawn INSIDE the hit polygon, with a
+## depth plate under it. `press` (0..1) pushes the face down onto the plate, so the pedal looks pressed in while the plate
+## and the hit polygon stay where they are.
+## Returns {"face","plate" (polygons), "face_rect","plate_rect" (rects before the lean), "radius","depth","skew"}.
+static func gas_visual(gas_rect: Rect2, hit_shape: PackedVector2Array, press: float = 0.0) -> Dictionary:
+    var hit_radius: float = _corner_radius(hit_shape)
+    var radius: float = hit_radius*1.25
+    var depth: float = gas_rect.size.y*0.055
+    var travel: float = depth*0.6*clampf(press,0.0,1.0)
+    # The smallest inset that keeps every visible point inside the hit polygon (the lean and the rounded corners need a little).
+    var margin: float = maxf(1.0,hit_radius*0.12)
+    var out: Dictionary = {}
+    for _attempt in range(16):
+        var face_h: float = gas_rect.size.y-depth-2.0*margin
+        var lean: float = PEDAL_SKEW*face_h*0.5       # the lean moves the top right and the bottom left by this much
+        var face_rect := Rect2(gas_rect.position.x+margin+lean,gas_rect.position.y+margin+travel,
+            gas_rect.size.x-2.0*margin-2.0*lean,face_h)
+        var plate_rect := Rect2(face_rect.position.x,gas_rect.position.y+margin+depth,face_rect.size.x,face_h)
+        out = {"face":STYLE.shape(face_rect,radius,PEDAL_SKEW),"plate":STYLE.shape(plate_rect,radius,PEDAL_SKEW),
+            "face_rect":face_rect,"plate_rect":plate_rect,"radius":radius,"depth":depth,"skew":PEDAL_SKEW}
+        var inside: bool = true
+        for label in ["face","plate"]:
+            for p in (out[label] as PackedVector2Array):
+                if not Geometry2D.is_point_in_polygon(p,hit_shape):
+                    inside = false
+                    break
+            if not inside:
+                break
+        if inside:
+            break
+        margin *= 1.25
+    return out
+
+## Corner radius of a rounded-rectangle polygon built by STYLE.shape without lean: the top edge starts `radius` from the left.
+static func _corner_radius(shape: PackedVector2Array) -> float:
+    var box: Rect2 = _bounds(shape)
+    var left: float = INF
+    for p in shape:
+        if p.y <= box.position.y+0.001:
+            left = minf(left,p.x)
+    return maxf(1.0,left-box.position.x)
 
 ## Face polygon of the (rectangular) brake pedal, for overlap checks.
 static func brake_shape(brake_rect: Rect2) -> PackedVector2Array:
@@ -312,19 +362,23 @@ func _pedal(rect: Rect2, label: String, pressed: bool, shape: PackedVector2Array
     var gas_pedal: bool = label == "GAS"
     var press: float = rect.size.y*0.025 if pressed and not gas_pedal else 0.0
     var face: Rect2 = pedal_face(rect,gas_pedal,press)
-    var skew: float = PEDAL_SKEW if not gas_pedal else 0.0
+    var skew: float = PEDAL_SKEW
     var radius: float = rect.size.x*0.14
     var depth: float = rect.size.y*(0.055 if gas_pedal else 0.075)
     var side_rect := Rect2(face.position+Vector2(0,depth),face.size)
     var face_pts: PackedVector2Array = STYLE.shape(face,radius,skew)
     var side_pts: PackedVector2Array = STYLE.shape(side_rect,radius,skew)
     if gas_pedal and shape.size() >= 3:
-        face_pts = shape
-        face = _bounds(shape)
-    else:
-        STYLE.glow_line(self,STYLE.glow_path(side_rect,radius,skew,0.02,0.75),STYLE.PINK,
-            2.6*u,1.8 if pressed else 1.0)
-        draw_colored_polygon(side_pts,Color(0.30,0.31,0.35))
+        # #28: slanted face + depth plate inside the unchanged hit polygon; the face is pushed in by the smoothed press.
+        var vis: Dictionary = gas_visual(rect,shape,gas_press)
+        face = vis["face_rect"]
+        side_rect = vis["plate_rect"]
+        radius = float(vis["radius"])
+        face_pts = vis["face"]
+        side_pts = vis["plate"]
+    STYLE.glow_line(self,STYLE.glow_path(side_rect,radius,skew,0.02,0.75),STYLE.PINK,
+        2.6*u,1.8 if pressed else 1.0)
+    draw_colored_polygon(side_pts,Color(0.30,0.31,0.35))
     var box: Rect2 = _bounds(face_pts)
     var cols := PackedColorArray()
     for p in face_pts:
