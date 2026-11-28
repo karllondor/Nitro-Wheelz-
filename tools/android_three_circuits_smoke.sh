@@ -53,7 +53,7 @@ if [[ "$case_name" == hotfix || "$case_name" == tracks || "$case_name" == uxresc
         previous_dir=builds/android-pr63
         previous_version=v0.1.51
         previous_sha=b5cea4df5d84095f312504d0a0352f8adb34ea9e64a4c1751f38a5c1a1e68003
-        target_version=v0.1.52
+        target_version=v$(cat VERSION)
     fi
     if [[ -d "$previous_dir" ]]; then
         previous=$(find "$previous_dir" -name '*.apk' -print -quit)

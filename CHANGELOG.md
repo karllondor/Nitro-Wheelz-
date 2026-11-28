@@ -1,3 +1,8 @@
+# v0.1.53 — Stable mobile QA candidate (issues #67, #68)
+
+- ONE Android QA app: package `com.karllondor.nitrowheelz.review.pr45`, label **Nitro Wheelz QA**, the persistent debug certificate, versionCode 53. It installs as an update over the v0.1.50 / v0.1.51 / v0.1.52 QA app and keeps saved tracks, records, stars and garage choices. CI refuses a different package, certificate, a missing signing secret or a versionCode that is not above the last QA delivery (`tools/qa_channel.env`).
+- Contains v0.1.52 (Android UI rescue, #65 / #59) and the Forest Lab tools of #54 as **optional DEVELOPER features**: DEVELOPER > FOREST LAB (default CLASSIC, Touge only), FOREST DENSITY and TREE DESIGNER. CLASSIC trees stay the default and build no Forest Lab material, mesh or chunk. No separate Forest Lab app is built any more.
+
 # v0.1.52 — Android UI rescue (issues #65, #59)
 
 - Every menu page scrolls inside the screen with BACK fixed in a footer; DEVELOPER is fully reachable on a phone. Android BACK closes an open card first, then goes to the previous page (it no longer closes the game from any screen).
