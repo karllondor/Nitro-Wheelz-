@@ -1,3 +1,10 @@
+# v0.1.54 — Final QA candidate (owner phone fixes + Sonnet HUD patches)
+
+- Android system BACK (owner report on v0.1.53: BACK in DEVELOPER left the game): a BACK that arrives twice within 0.35 s is taken once, and the main menu leaves the game only after a SECOND BACK ("PRESS BACK AGAIN TO EXIT"). DEVELOPER shows the last system BACK events, kept across restarts, so the next phone report can say exactly what happened.
+- Scoring callouts (#66, PR #72): fixed meaning colours independent of the HUD accent — red penalty / CHAIN LOST, gold BANKED, nitro violet #9774C8 bonuses, white info; darker outline for readability. No scoring change.
+- GAS pedal and minimap (#28, PR #73): slanted GAS face with a visible press (touch area unchanged), solid red minimap marker without white stroke.
+- Same QA app (com.karllondor.nitrowheelz.review.pr45, same certificate), versionCode 54: installs over v0.1.53 and keeps tracks, records, stars and garage choices.
+
 # v0.1.53 — Stable mobile QA candidate (issues #67, #68)
 
 - ONE Android QA app: package `com.karllondor.nitrowheelz.review.pr45`, label **Nitro Wheelz QA**, the persistent debug certificate, versionCode 53. It installs as an update over the v0.1.50 / v0.1.51 / v0.1.52 QA app and keeps saved tracks, records, stars and garage choices. CI refuses a different package, certificate, a missing signing secret or a versionCode that is not above the last QA delivery (`tools/qa_channel.env`).

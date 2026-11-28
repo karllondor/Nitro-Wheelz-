@@ -147,6 +147,7 @@ func _clear_page() -> void:
             holder.remove_child(child)
             child.queue_free()
     status_label.text = ""
+    _exit_armed_ms = -100000
 
 ## Height of the scrolling page: its content, but never more than the screen minus the logo, the BACK footer and
 ## the status / version lines (so BACK is always visible and the rest scrolls).
@@ -175,15 +176,41 @@ func _unhandled_input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
         go_back()
 
+## v0.1.54 (owner phone report): BACK on the main menu leaves the game only on a SECOND press within EXIT_WINDOW_MS (and at
+## least EXIT_MIN_GAP_MS after the first, so one gesture delivered twice can never close the game).
+const EXIT_WINDOW_MS: int = 2500
+const EXIT_MIN_GAP_MS: int = 350
+var _exit_armed_ms: int = -100000
+
 func go_back() -> String:
     for child in footer.get_children():
         if child is Button and (child as Button).text.begins_with("◀") and not (child as Button).disabled:
             (child as Button).pressed.emit()
             return "back"
-    if page_name == "main" and OS.has_feature("mobile") and navigate_enabled:
-        get_tree().quit()
-        return "quit"
+    if page_name == "main" and (OS.has_feature("mobile") or not navigate_enabled):
+        var now: int = Time.get_ticks_msec()
+        var since: int = now-_exit_armed_ms
+        if since >= EXIT_MIN_GAP_MS and since <= EXIT_WINDOW_MS:
+            _back_log("BACK on the main menu (second press) -> leave the game")
+            if navigate_enabled:
+                get_tree().quit()
+            return "quit"
+        if since > EXIT_WINDOW_MS:
+            _exit_armed_ms = now
+            status_label.text = "PRESS BACK AGAIN TO EXIT"
+            _back_log("BACK on the main menu (first press) -> asks to press again")
+            return "armed"
+        return "none"
     return "none"
+
+func _back_log(line: String) -> void:
+    var nav: Node = get_tree().root.get_node_or_null("AndroidBack")
+    if nav != null and nav.has_method("record"):
+        nav.call("record",line)
+
+## Test hook: pretend the "press again" prompt was shown long ago.
+func disarm_exit() -> void:
+    _exit_armed_ms = -100000
 
 func show_page(which: String) -> void:
     _clear_page()
@@ -511,6 +538,16 @@ func _dev_page() -> void:
         show_page("dev"))
     iso_b.name = "Drift layer isolation"
     STYLE.style_button(iso_b,ui_unit,hidden != "off")
+    # v0.1.54: the last system BACK events (kept across restarts) so a phone report can say what happened.
+    var nav: Node = get_tree().root.get_node_or_null("AndroidBack")
+    if nav != null and nav.has_method("log_lines"):
+        var back_log := Label.new()
+        back_log.name = "System back log"
+        back_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        back_log.add_theme_font_size_override("font_size",int(13*ui_unit))
+        back_log.add_theme_color_override("font_color",STYLE.DIM)
+        back_log.text = "SYSTEM BACK LOG (latest last):\n"+"\n".join(nav.call("log_lines",6))
+        page.add_child(back_log)
     var dev_info := Label.new()
     dev_info.name = "Developer preset info"
     dev_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

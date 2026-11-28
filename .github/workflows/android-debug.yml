@@ -151,7 +151,13 @@ jobs:
           echo "PACKAGE: $PKG" | tee -a "$GITHUB_STEP_SUMMARY"
           sha256sum "$APK" > "$APK.sha256"
           echo "BUILT: APK not yet tested on a real Android device."
+      - name: PRs into the QA branch are not an owner app (issue #68)
+        if: github.base_ref == 'integration/stable-mobile-qa'
+        run: |
+          echo "This PR targets integration/stable-mobile-qa: its APK built and exported, but it is NOT uploaded." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "The owner's one QA APK is built from integration/stable-mobile-qa itself (tools/qa_channel.env)." | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: github.base_ref != 'integration/stable-mobile-qa'
         with:
           name: ${{ steps.apk.outputs.artifact }}
           path: builds/android/*
@@ -221,6 +227,13 @@ jobs:
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    # v0.1.54: the QA branch also runs on Android 16 (API 36) - the APK targets SDK 36, where the system BACK uses the
+    # predictive-back path. Non-blocking (an emulator image problem must not hide the API 35 result); its verdict is read.
+    strategy:
+      fail-fast: false
+      matrix:
+        api: ${{ fromJSON(github.head_ref == 'integration/stable-mobile-qa' && '[35, 36]' || '[35]') }}
+    continue-on-error: ${{ matrix.api == 36 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -245,8 +258,17 @@ jobs:
           run-id: 45917376264
           github-token: ${{ github.token }}
           path: builds/android-pr58
+      - name: Retrieve the owner's installed QA build v0.1.53 for the in-place upgrade test
+        if: github.head_ref == 'integration/stable-mobile-qa'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Nitro-Wheelz-QA_v0.1.53_code53_ff038bd0836f1efa86fdef451d18f1bf040e94bc-Android
+          run-id: 46091423533
+          github-token: ${{ github.token }}
+          path: builds/android-qa0153
       - name: Retrieve the signed v0.1.51 APK (PR 63) for the in-place upgrade test
-        if: github.head_ref == 'fix/android-ux-rescue-v0152' || github.head_ref == 'integration/stable-mobile-qa'
+        if: github.head_ref == 'fix/android-ux-rescue-v0152'
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -260,7 +282,7 @@ jobs:
           sudo apt-get install -y python3-pil
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
           emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim
@@ -268,7 +290,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Workshop-Android-evidence
+          name: Workshop-Android-evidence-api${{ matrix.api }}
           path: |
             builds/event-android/
             builds/integration-android/

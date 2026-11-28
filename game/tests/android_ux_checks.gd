@@ -47,7 +47,7 @@ func _run() -> void:
     _check(boot != null and boot.has_method("show_page"),"the menu did not start")
     if failures.is_empty():
         await _exercise(boot)
-    var verdict := "PASS: Android UI rescue on device - DEVELOPER scrolls under a real swipe that starts on a button without pressing it, Android BACK returns to the menu without closing the game, BACK closes DELETE and RENAME cards without confirming, garage paint swatches shown"
+    var verdict := "PASS: Android UI rescue on device - DEVELOPER scrolls under a real swipe that starts on a button without pressing it, Android BACK returns to the menu without closing the game, one BACK on the main menu asks to press again (navigation ON, the app stays), BACK closes DELETE and RENAME cards without confirming, garage paint swatches shown"
     if not failures.is_empty():
         verdict = "FAIL: "+str(failures)
     print(verdict)
@@ -66,8 +66,28 @@ func _exercise(boot: Node) -> void:
     await _shot("ux-dev-top")
     _check(scroll.scroll_vertical > 100,"a real swipe on DEVELOPER did not scroll (%d)" % scroll.scroll_vertical)
     _check(str(boot.get("last_scene")) == "","the swipe pressed a button (%s)" % str(boot.get("last_scene")))
+    # v0.1.54: real navigation is ON for the BACK steps, so a game-side quit on the main menu would really close the app
+    # (the smoke script then fails on `pidof`). The v0.1.52 check ran with navigation off and could not see it.
+    boot.set("navigate_enabled",true)
     await _shot("ux-dev-scrolled")
     _check(str(boot.get("page_name")) == "main","Android BACK did not return from DEVELOPER (%s)" % str(boot.get("page_name")))
+    # One more system BACK on the main menu (sent by the script after this shot): the game must stay open and ask again.
+    await _shot("ux-main-back")
+    var prompt: String = (boot.get("status_label") as Label).text
+    _check(prompt.contains("AGAIN"),"one BACK on the main menu must ask to press again (got '%s')" % prompt)
+    _check(str(boot.get("page_name")) == "main","the main menu must stay after one BACK")
+    # BACK by GESTURE (the script switches the emulator to gesture navigation and swipes in from the left edge).
+    boot.call("show_page","dev")
+    await _shot("ux-gesture")
+    var after_gesture: String = str(boot.get("page_name"))
+    if after_gesture == "main":
+        print("GESTURE BACK: DEVELOPER -> main menu")
+    else:
+        print("GESTURE BACK: not delivered by this emulator (page %s) - not counted" % after_gesture)
+    boot.set("navigate_enabled",false)
+    var nav: Node = get_tree().root.get_node_or_null("AndroidBack")
+    if nav != null:
+        print("BACK LOG:\n"+"\n".join(nav.call("log_lines",10)))
     boot.call("show_page","drive")
     var confirmed: Array = []
     var del: Node = FILE_DIALOG.show(boot,"DELETE TRACK","Move “QA UX” to Track Trash? It will disappear from My Tracks until restored.",

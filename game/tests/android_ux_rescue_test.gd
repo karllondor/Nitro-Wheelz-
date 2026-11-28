@@ -51,7 +51,7 @@ func _run() -> void:
         printerr("FAIL: "+err)
         quit(1)
         return
-    print("PASS: Android UI rescue (#65/#59) on a 1080x2340 portrait phone - every menu page keeps BACK on screen and scrolls, a drag starting on a button scrolls without pressing it, a still tap presses, Android BACK closes a card first then goes to the parent page (quit_on_go_back off), SAVE/RENAME/DELETE cards are 92 % wide with thumb-size buttons in the upper screen and keep errors on screen, CANCEL never touches the store, one switch turns all diagnostic overlays off + DIAG OFF on the overlay, garage paint swatches select and save a paint; NOT proven: finger feel and the Android keyboard on the owner's phone")
+    print("PASS: Android UI rescue (#65/#59) on a 1080x2340 portrait phone - every menu page keeps BACK on screen and scrolls, a drag starting on a button scrolls without pressing it, a still tap presses, Android BACK closes a card first then goes to the parent page (quit_on_go_back off), a duplicate BACK is ignored and the main menu leaves only on a second deliberate BACK, the BACK log is kept and shown in DEVELOPER, SAVE/RENAME/DELETE cards are 92 % wide with thumb-size buttons in the upper screen and keep errors on screen, CANCEL never touches the store, one switch turns all diagnostic overlays off + DIAG OFF on the overlay, garage paint swatches select and save a paint; NOT proven: finger feel and the Android keyboard on the owner's phone")
     quit(0)
 
 func _win(p: Vector2) -> Vector2:
@@ -146,15 +146,42 @@ func _checks() -> String:
     # ------------------------------------------------------------------------------------------ Android BACK
     boot.call("show_page","elev")
     await _frames()
+    back_nav.call("forget_last_back")
     if str(back_nav.call("handle_back")) != "cancel":
         return "BACK without a card must go to the screen's cancel path"
     await _frames(3)
     if str(boot.get("page_name")) != "dev":
         return "BACK on ELEVATION PHYSICS must return to DEVELOPER (%s)" % str(boot.get("page_name"))
+    back_nav.call("forget_last_back")
     back_nav.call("handle_back")
+    # v0.1.54: the same BACK delivered twice (owner's phone: DEVELOPER -> main menu -> game closed) is ignored.
+    if str(back_nav.call("handle_back")) != "ignored":
+        return "a second BACK within the debounce window must be ignored"
     await _frames(3)
     if str(boot.get("page_name")) != "main":
         return "BACK on DEVELOPER must return to the main menu (%s)" % str(boot.get("page_name"))
+    # The main menu never leaves the game on one BACK: the first asks to press again, a second (after the debounce) leaves.
+    boot.call("disarm_exit")
+    if str(boot.call("go_back")) != "armed" or not (boot.get("status_label") as Label).text.contains("AGAIN"):
+        return "the first BACK on the main menu must only ask to press again"
+    if str(boot.call("go_back")) == "quit":
+        return "an instant second BACK (a duplicate) must not leave the game"
+    boot.set("_exit_armed_ms",Time.get_ticks_msec()-800)
+    if str(boot.call("go_back")) != "quit":
+        return "a deliberate second BACK on the main menu leaves the game"
+    boot.set("_exit_armed_ms",Time.get_ticks_msec()-5000)
+    if str(boot.call("go_back")) != "armed":
+        return "a BACK long after the prompt asks again (does not leave)"
+    var back_log: PackedStringArray = back_nav.call("log_lines",8)
+    if not "\n".join(back_log).contains("ignored") or not "\n".join(back_log).contains("main menu"):
+        return "the system BACK log must record ignored duplicates and main-menu presses"
+    boot.call("show_page","dev")
+    await _frames()
+    var log_label: Label = boot.find_child("System back log",true,false)
+    if log_label == null or not log_label.text.contains("SYSTEM BACK LOG"):
+        return "DEVELOPER must show the system BACK log"
+    boot.call("show_page","main")
+    await _frames()
     # ------------------------------------------------------------------------------ confirmation cards
     boot.call("show_page","drive")
     await _frames()
@@ -171,6 +198,7 @@ func _checks() -> String:
         return "card buttons must be thumb size"
     if card.get_ok_button().get_theme_font_size("font_size") < int(24.0*u):
         return "card button text must be readable"
+    back_nav.call("forget_last_back")
     if str(back_nav.call("handle_back")) != "modal":
         return "BACK must close an open card first"
     await _frames(2)
