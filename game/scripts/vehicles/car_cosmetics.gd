@@ -127,6 +127,19 @@ static func next_paint(variant: String, profile: Dictionary) -> Dictionary:
     save(variant,choice)
     return choice
 
+## A specific paint preset (garage swatch row, v0.1.52) and saves it; same fields as next_paint.
+static func choose_paint(variant: String, profile: Dictionary, index: int) -> Dictionary:
+    var choice: Dictionary = current(variant,profile)
+    var list: Array = paints(profile)
+    if index < 0 or index >= list.size():
+        return choice
+    var p: Dictionary = list[index]
+    choice["paint_color_hex"] = str(p["hex"])
+    choice["paint_finish"] = str(p["finish"])
+    choice["livery_id"] = str(p.get("livery_id","clean"))
+    save(variant,choice)
+    return choice
+
 static func next_wheel(variant: String, profile: Dictionary) -> Dictionary:
     var choice: Dictionary = current(variant,profile)
     var list: Array = block(profile).get("wheels",[])

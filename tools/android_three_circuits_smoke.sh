@@ -13,6 +13,11 @@ case "${NITRO_SMOKE:-circuits}" in
         case_name=tracks
         shots=()
         ;;
+    uxrescue)
+        # issue #65 / #59: real adb swipe + Android BACK on the menus, cards and garage (android_ux_checks.gd)
+        case_name=uxrescue
+        shots=(ux-dev-top ux-dev-scrolled ux-delete ux-rename ux-garage)
+        ;;
     circuits)
         case_name=circuits
         shots=()
@@ -33,7 +38,7 @@ mkdir -p "$out"
 previous=""
 upgrade_track="$out/upgrade-track.json"
 upgrade_runs="$out/upgrade-runs.json"
-if [[ "$case_name" == hotfix || "$case_name" == tracks ]]; then
+if [[ "$case_name" == hotfix || "$case_name" == tracks || "$case_name" == uxrescue ]]; then
     previous_dir=builds/android-pr45
     previous_version=v0.1.49
     previous_sha=6fc57b954555c048c5f909a43cf2c7e53c29b7ea993bd2209dfe708b50e3b761
@@ -43,6 +48,12 @@ if [[ "$case_name" == hotfix || "$case_name" == tracks ]]; then
         previous_version=v0.1.50
         previous_sha=02073a39db1d86c44d0ae382d0a35a0580b3b132134dee1a1eee269dc8278515
         target_version=v0.1.51
+    fi
+    if [[ "$case_name" == uxrescue ]]; then
+        previous_dir=builds/android-pr63
+        previous_version=v0.1.51
+        previous_sha=b5cea4df5d84095f312504d0a0352f8adb34ea9e64a4c1751f38a5c1a1e68003
+        target_version=v0.1.52
     fi
     if [[ -d "$previous_dir" ]]; then
         previous=$(find "$previous_dir" -name '*.apk' -print -quit)
@@ -88,9 +99,18 @@ await_file() {
     return 1
 }
 
+# Real OS input after a screenshot (uxrescue): a swipe that starts on a DEVELOPER button, then Android BACK.
+after_shot() {
+    case "$1" in
+        ux-dev-top) adb shell input swipe 360 1150 360 450 400 ;;
+        ux-dev-scrolled|ux-delete|ux-rename) adb shell input keyevent KEYCODE_BACK ;;
+    esac
+}
+
 for shot in "${shots[@]}"; do
     await_file "ready-$shot"
     adb exec-out screencap -p > "$out/$shot.png"
+    after_shot "$shot"
     adb shell run-as "$pkg" touch "files/captured-$shot"
 done
 await_file "$verdict"
