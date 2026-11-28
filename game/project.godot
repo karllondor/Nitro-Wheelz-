@@ -4,7 +4,8 @@ config_version=5
 [application]
 config/name="Nitro Wheelz"
 config/icon="res://assets/brand/app_icon.png"
-config/version="0.1.51"
+config/quit_on_go_back=false
+config/version="0.1.52"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 run/main_scene="res://scenes/boot.tscn"
 boot_splash/bg_color=Color(0.039, 0.008, 0.075, 1)
@@ -16,6 +17,7 @@ boot_splash/use_filter=true
 [autoload]
 
 Music="*res://scripts/audio/music_player.gd"
+AndroidBack="*res://scripts/ui/android_back.gd"
 
 [display]
 window/size/viewport_width=1280

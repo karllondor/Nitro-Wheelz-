@@ -18,6 +18,10 @@ var spin_speed: float = 0.35
 var dragging: bool = false
 var paint_buttons: Dictionary = {}
 var cosmetic_buttons: Dictionary = {}
+## v0.1.52 (issue #65): the paint palette of the selected car as colour swatches (tap = choose that paint).
+var swatch_row: HBoxContainer
+var swatch_note: Label
+var _swatch_variant: String = ""
 var title_label: Label
 var info_label: Label
 var ui_unit: float = 1.0
@@ -61,8 +65,8 @@ func _ready() -> void:
 
     # Card frame with the HUD's pink neon edge.
     var card := Panel.new()
-    card.position = Vector2(s.x*0.045,s.y*0.180)
-    card.size = Vector2(s.x*0.91,s.y*0.40)
+    card.position = Vector2(s.x*0.045,s.y*0.175)
+    card.size = Vector2(s.x*0.91,s.y*0.355)
     card.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var frame := StyleBoxFlat.new()
     frame.bg_color = Color(0.05,0.045,0.07)
@@ -93,21 +97,39 @@ func _ready() -> void:
 
     var info := Label.new()
     info_label = info
-    info.position = Vector2(s.x*0.05,s.y*0.590)
-    info.size = Vector2(s.x*0.90,s.y*0.035)
+    info.position = Vector2(s.x*0.05,s.y*0.534)
+    info.size = Vector2(s.x*0.90,s.y*0.032)
     info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    info.add_theme_font_size_override("font_size",int(15.0*sc))
+    info.add_theme_font_size_override("font_size",int(16.0*sc))
     info.add_theme_color_override("font_color",STYLE.MUTED)
     add_child(info)
 
     version_label = Label.new()
-    version_label.position = Vector2(s.x*0.05,s.y*0.625)
-    version_label.size = Vector2(s.x*0.90,s.y*0.032)
+    version_label.position = Vector2(s.x*0.05,s.y*0.566)
+    version_label.size = Vector2(s.x*0.90,s.y*0.036)
     version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    version_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     version_label.add_theme_font_override("font",STYLE.BOLD)
-    version_label.add_theme_font_size_override("font_size",int(17.0*sc))
+    version_label.add_theme_font_size_override("font_size",int(20.0*sc))
     version_label.add_theme_color_override("font_color",STYLE.PINK_SOFT)
     add_child(version_label)
+
+    swatch_row = HBoxContainer.new()
+    swatch_row.name = "Paint swatches"
+    swatch_row.position = Vector2(s.x*0.05,s.y*0.606)
+    swatch_row.size = Vector2(s.x*0.90,s.y*0.050)
+    swatch_row.alignment = BoxContainer.ALIGNMENT_CENTER
+    swatch_row.add_theme_constant_override("separation",int(10.0*sc))
+    add_child(swatch_row)
+    swatch_note = Label.new()
+    swatch_note.name = "Paint note"
+    swatch_note.position = swatch_row.position
+    swatch_note.size = swatch_row.size
+    swatch_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    swatch_note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    swatch_note.add_theme_font_size_override("font_size",int(18.0*sc))
+    swatch_note.add_theme_color_override("font_color",STYLE.MUTED)
+    add_child(swatch_note)
 
     # One button per car in the collection.
     var n: int = CARS.ORDER.size()
@@ -115,10 +137,11 @@ func _ready() -> void:
     var bw: float = (0.90-gap*float(n-1))/float(n)
     for i in range(n):
         var v: String = CARS.ORDER[i]
-        paint_buttons[v] = _action(str(CARS.info(v)["short"]),0.05+float(i)*(bw+gap),0.663,bw,0.068,
+        # two lines (model / version) so the names stay readable with five cars on a phone
+        paint_buttons[v] = _action(str(CARS.info(v)["short"]).replace(" • ","\n"),0.05+float(i)*(bw+gap),0.663,bw,0.068,
             _choose.bind(v),sc)
         paint_buttons[v].name = "Car "+v
-        paint_buttons[v].add_theme_font_size_override("font_size",int((18.0 if n <= 3 else (14.0 if n == 4 else 12.5))*sc))
+        paint_buttons[v].add_theme_font_size_override("font_size",int((22.0 if n <= 3 else (19.0 if n == 4 else 17.0))*sc))
     # Car Factory cosmetics (prototype): SIGNATURE resets to the authentic
     # look, PAINT and WHEELS cycle presets. Cosmetic only: never physics.
     cosmetic_buttons["signature"] = _action("SIGNATURE",0.05,0.738,0.26,0.068,Callable(self,"_signature"),sc)
@@ -126,7 +149,8 @@ func _ready() -> void:
     cosmetic_buttons["wheels"] = _action("WHEELS",0.65,0.738,0.30,0.068,Callable(self,"_next_wheels"),sc)
     for key in cosmetic_buttons.keys():
         cosmetic_buttons[key].name = "Cosmetic "+key
-        cosmetic_buttons[key].add_theme_font_size_override("font_size",int(14.0*sc))
+        cosmetic_buttons[key].add_theme_font_size_override("font_size",int(19.0*sc))
+        cosmetic_buttons[key].clip_text = true
     # v0.1.35: the track is choosable from the garage (owner: "from the garage
     # you cannot pick a track"). The button shows the track DRIVE will use.
     track_button = _action("TRACK  ▸  "+BOOT.track_label(BOOT.current_track()),0.05,0.812,0.90,0.062,Callable(self,"_pick_track"),sc)
@@ -357,12 +381,13 @@ func _set_status() -> void:
         cosmetic_buttons["paint"].text = "PAINT: "+COSMETICS.paint_name(choice,prof)
         cosmetic_buttons["wheels"].text = "WHEELS: "+COSMETICS.wheel_name(choice)
     else:
-        cosmetic_buttons["paint"].text = "PAINT"
-        cosmetic_buttons["wheels"].text = "WHEELS"
+        cosmetic_buttons["paint"].text = "PAINT: ORIGINAL"
+        cosmetic_buttons["wheels"].text = "WHEELS: ORIGINAL"
+    _build_swatches(prof,factory)
     for key in cosmetic_buttons.keys():
         cosmetic_buttons[key].disabled = not factory
         STYLE.style_button(cosmetic_buttons[key],ui_unit,false)
-        cosmetic_buttons[key].modulate.a = 1.0 if factory else 0.35
+        cosmetic_buttons[key].modulate.a = 1.0 if factory else 0.55
     if title_label != null:
         title_label.text = "GARAGE  /  "+str(info["name"])
     if info_label != null:
@@ -370,6 +395,51 @@ func _set_status() -> void:
             float(info["wheelbase"]),str(info.get("body","WIDEBODY"))]
     for key in paint_buttons.keys():
         STYLE.style_button(paint_buttons[key],ui_unit,key == active_variant)
+
+## One swatch per paint preset of the selected car; the chosen one is ringed. A car without a palette (the R32
+## FLAME AI test car) says so in words instead of showing dead buttons.
+func _build_swatches(prof: Dictionary, factory: bool) -> void:
+    if swatch_row == null:
+        return
+    var list: Array = COSMETICS.paints(prof) if factory else []
+    var current: int = COSMETICS.paint_index(COSMETICS.current(active_variant,prof),prof) if factory else -1
+    if _swatch_variant != active_variant or swatch_row.get_child_count() != list.size():
+        _swatch_variant = active_variant
+        for c in swatch_row.get_children():
+            swatch_row.remove_child(c)
+            c.queue_free()
+        var n: int = maxi(1,list.size())
+        var sep: float = 10.0*ui_unit
+        var side: float = minf(swatch_row.size.y,(swatch_row.size.x-sep*float(n-1))/float(n)/1.35)
+        for i in range(list.size()):
+            var b := Button.new()
+            b.name = "Paint swatch %d" % i
+            b.tooltip_text = str((list[i] as Dictionary).get("name",""))
+            b.custom_minimum_size = Vector2(side*1.35,side)
+            b.focus_mode = Control.FOCUS_ALL
+            b.pressed.connect(_choose_paint.bind(i))
+            swatch_row.add_child(b)
+    for i in range(swatch_row.get_child_count()):
+        var b: Button = swatch_row.get_child(i)
+        var p: Dictionary = list[i]
+        var col: Color = Color.html(str(p["hex"])) if Color.html_is_valid(str(p["hex"])) else Color.GRAY
+        for state in ["normal","hover","pressed","focus"]:
+            var box := StyleBoxFlat.new()
+            box.bg_color = col
+            box.set_corner_radius_all(int(10.0*ui_unit))
+            var on: bool = i == current
+            box.border_color = STYLE.WHITE if on else (STYLE.PINK if state != "normal" else Color(1,1,1,0.25))
+            box.set_border_width_all(int((5.0 if on else 2.0)*ui_unit))
+            if str(p.get("livery_id","clean")) != "clean":
+                box.border_width_bottom = int(9.0*ui_unit) # livery preset: thicker lower edge
+            b.add_theme_stylebox_override(state,box)
+    swatch_note.visible = list.is_empty()
+    swatch_note.text = "" if factory else "THIS CAR HAS ITS FACTORY PAINT ONLY"
+
+func _choose_paint(index: int) -> void:
+    var prof: Dictionary = CARS.cosmetic_profile(active_variant)
+    if COSMETICS.supported(prof):
+        _apply_cosmetic(COSMETICS.choose_paint(active_variant,prof,index))
 
 func _signature() -> void:
     var prof: Dictionary = CARS.cosmetic_profile(active_variant)

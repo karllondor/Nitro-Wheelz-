@@ -1,3 +1,10 @@
+# v0.1.52 — Android UI rescue (issues #65, #59)
+
+- Every menu page scrolls inside the screen with BACK fixed in a footer; DEVELOPER is fully reachable on a phone. Android BACK closes an open card first, then goes to the previous page (it no longer closes the game from any screen).
+- SAVE, SAVE AS, RENAME and DELETE use a large in-game card (thumb-size buttons, name field above the keyboard) with the same protection against silent overwrite and delete.
+- A drag that starts on a button scrolls My Tracks / DEVELOPER and no longer presses that button; a still tap still presses it.
+- Garage: readable car / PAINT / WHEELS buttons and a row of paint swatches; the R32 FLAME test car says it has factory paint only. One DEVELOPER switch turns all diagnostic overlays off; the touch overlay has its own DIAG OFF button.
+
 # v0.1.51 — My Tracks review
 
 - Adds Rename, Delete and Track Trash to My Tracks and separate Open, Save and Save As actions to both editors. Existing track IDs, PBs and stars survive display-name changes.

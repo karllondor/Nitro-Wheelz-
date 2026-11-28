@@ -46,6 +46,25 @@ func _ready() -> void:
     _view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _view.draw.connect(_draw_view)
     add_child(_view)
+    # v0.1.52 (issue #65): the overlay can always be switched off where it is seen (the DEVELOPER switch was out of
+    # reach on a phone). Same setting as DEVELOPER > TOUCH DIAGNOSTICS; only this small button takes touches.
+    var s: Vector2 = get_viewport().get_visible_rect().size
+    var u: float = clampf(minf(s.x,s.y)/700.0,0.8,1.8)
+    var off := Button.new()
+    off.name = "Diagnostics off"
+    off.text = "DIAG OFF ✕"
+    off.focus_mode = Control.FOCUS_NONE
+    off.add_theme_font_size_override("font_size",int(18*u))
+    STYLE.style_button(off,u,true)
+    off.size = Vector2(190,58)*u
+    off.position = Vector2(s.x-off.size.x-10.0*u,s.y*0.16+6.0*u)
+    off.pressed.connect(turn_off)
+    add_child(off)
+
+## Switches the overlay off for good (DEVELOPER > TOUCH DIAGNOSTICS: OFF) and removes it from this screen.
+func turn_off() -> void:
+    set_enabled(false)
+    queue_free()
 
 func _process(delta: float) -> void:
     _hit_t -= delta

@@ -17,6 +17,7 @@ const PARK_PROGRESS = preload("res://scripts/park/park_progress.gd")
 const PARK_TUTORIAL = preload("res://scripts/park/park_tutorial.gd")
 const AVATAR = preload("res://scripts/ui/avatar.gd")
 const EDIT_TOOLS = preload("res://scripts/world/track_edit_tools.gd")
+const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll.gd")
 ## v0.1.35 flow (owner: "garage: no track, track: no car" was confusing): ONE
 ## RACE SETUP page (track + car + DRIVE) joins the track list and the garage.
 ##   main DRIVE -> setup;  setup TRACK -> track list (pick -> back to setup);
@@ -43,6 +44,12 @@ const TRACKS: Array = [
 
 var ui_unit: float = 1.0
 var page: VBoxContainer
+## v0.1.52 (issue #65 / #59): every page scrolls inside a bounded area (long DEVELOPER / MY TRACKS pages ran off the
+## bottom of a phone, BACK included) and BACK lives in a footer that never scrolls away.
+var page_scroll: NitroTouchScroll
+var footer: HBoxContainer
+var _column: VBoxContainer
+var _logo: TextureRect
 var page_name: String = ""
 var status_label: Label
 ## Tests / tools: do not really change scene; the request is recorded instead.
@@ -63,6 +70,7 @@ func _ready() -> void:
     add_child(center)
     center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var column := VBoxContainer.new()
+    _column = column
     column.custom_minimum_size = Vector2(s.x*(0.83 if portrait else 0.42),0)
     column.add_theme_constant_override("separation",int(12*ui_unit))
     center.add_child(column)
@@ -75,10 +83,22 @@ func _ready() -> void:
     logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
     column.add_child(logo)
+    _logo = logo
+    page_scroll = TOUCH_SCROLL.new()
+    page_scroll.name = "Page scroll"
+    page_scroll.unit = ui_unit
+    column.add_child(page_scroll)
     page = VBoxContainer.new()
     page.name = "Menu page"
+    page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     page.add_theme_constant_override("separation",int(12*ui_unit))
-    column.add_child(page)
+    page_scroll.add_child(page)
+    page.minimum_size_changed.connect(_fit_page)
+    footer = HBoxContainer.new()
+    footer.name = "Page footer"
+    footer.alignment = BoxContainer.ALIGNMENT_CENTER
+    footer.add_theme_constant_override("separation",int(12*ui_unit))
+    column.add_child(footer)
     status_label = Label.new()
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -117,16 +137,58 @@ func _ready() -> void:
     if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-tracks.once"):
         DirAccess.remove_absolute("user://qa-tracks.once")
         get_tree().root.add_child.call_deferred(load("res://tests/track_management_checks.gd").new())
+    if OS.has_feature("debug") and OS.has_feature("android") and FileAccess.file_exists("user://qa-uxrescue.once"):
+        DirAccess.remove_absolute("user://qa-uxrescue.once")
+        get_tree().root.add_child.call_deferred(load("res://tests/android_ux_checks.gd").new())
 
 func _clear_page() -> void:
-    for child in page.get_children():
-        page.remove_child(child)
-        child.queue_free()
+    for holder in [page,footer]:
+        for child in (holder as Node).get_children():
+            holder.remove_child(child)
+            child.queue_free()
     status_label.text = ""
+
+## Height of the scrolling page: its content, but never more than the screen minus the logo, the BACK footer and
+## the status / version lines (so BACK is always visible and the rest scrolls).
+func _fit_page() -> void:
+    if page_scroll == null or not is_inside_tree():
+        return
+    var h: float = get_viewport_rect().size.y
+    var sep: float = float(_column.get_theme_constant("separation"))
+    var used: float = h*0.05
+    var shown: int = 0
+    for c in _column.get_children():
+        var ctl: Control = c
+        if ctl == page_scroll or not ctl.visible:
+            continue
+        used += ctl.get_combined_minimum_size().y
+        shown += 1
+    used += sep*float(shown)
+    var room: float = maxf(h-used,220.0*ui_unit)
+    page_scroll.custom_minimum_size.y = minf(page.get_combined_minimum_size().y,room)
+    footer.visible = footer.get_child_count() > 0
+
+## Android BACK (android_back.gd turns it into ui_cancel) and Escape: the page's BACK, or leave the game from the
+## main menu on a phone (Android convention). Never on the welcome page (a name is required first).
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_cancel"):
+        get_viewport().set_input_as_handled()
+        go_back()
+
+func go_back() -> String:
+    for child in footer.get_children():
+        if child is Button and (child as Button).text.begins_with("◀") and not (child as Button).disabled:
+            (child as Button).pressed.emit()
+            return "back"
+    if page_name == "main" and OS.has_feature("mobile") and navigate_enabled:
+        get_tree().quit()
+        return "quit"
+    return "none"
 
 func show_page(which: String) -> void:
     _clear_page()
     page_name = which
+    page_scroll.scroll_vertical = 0
     match which:
         "drive": _drive_page()
         "track_trash": _track_trash_page()
@@ -138,11 +200,17 @@ func show_page(which: String) -> void:
         "settings": _settings_page()
         "dev": _dev_page()
         "elev": _elevation_page()
-        _: _main_page()
+        _:
+            page_name = "main"
+            _main_page()
+    footer.visible = footer.get_child_count() > 0
+    _fit_page()
     for child in page.get_children():
         if child is Button:
             (child as Button).grab_focus()
             break
+    # the focus must not scroll a long page away from its top
+    page_scroll.set_deferred("scroll_vertical",0)
 
 func _main_page() -> void:
     _profile_chip()
@@ -284,16 +352,14 @@ func _edit_track(path: String) -> void:
         f.close()
     _go("res://scenes/track_editor.tscn")
 
+## v0.1.52: the list is part of the page, which scrolls as a whole (page_scroll). The old nested 56 %-high
+## ScrollContainer fought the page for the finger and left little room on short phones.
 func _scroll_list() -> VBoxContainer:
-    var scroll := ScrollContainer.new()
-    scroll.name = "Track list"
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    scroll.custom_minimum_size.y = get_viewport_rect().size.y*0.56
-    page.add_child(scroll)
     var list := VBoxContainer.new()
+    list.name = "Track list"
     list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     list.add_theme_constant_override("separation",int(12*ui_unit))
-    scroll.add_child(list)
+    page.add_child(list)
     return list
 
 func _section(parent: Node, txt: String) -> void:
@@ -331,8 +397,33 @@ func _settings_page() -> void:
         call_deferred("show_page","settings"))
     _small("◀  BACK",func(): show_page("main"))
 
+## Diagnostic overlays drawn over the game (touch hitboxes + map rectangle, audio debug, terrain telemetry).
+static func active_overlays() -> PackedStringArray:
+    var out: PackedStringArray = []
+    if load("res://scripts/ui/touch_diagnostics.gd").enabled():
+        out.append("TOUCH")
+    if load("res://scripts/ui/audio_debug_overlay.gd").enabled():
+        out.append("AUDIO")
+    if bool(PHYS_DEV.load_settings().get("telemetry",false)):
+        out.append("TELEMETRY")
+    return out
+
+## v0.1.52 (issue #65): one switch that turns every diagnostic overlay off (the green / red outlines are the TOUCH
+## DIAGNOSTICS overlay, an intended developer tool; its switch used to be below the bottom of the phone screen).
+static func overlays_off() -> void:
+    load("res://scripts/ui/touch_diagnostics.gd").set_enabled(false)
+    load("res://scripts/ui/audio_debug_overlay.gd").set_enabled(false)
+    PHYS_DEV.set_value("telemetry",false)
+
 func _dev_page() -> void:
     _title("DEVELOPER")
+    var on: PackedStringArray = active_overlays()
+    var ov: Button = _big("DIAGNOSTIC OVERLAYS: "+(" + ".join(on)+" ON\nTAP TO TURN ALL OFF" if not on.is_empty() else "ALL OFF"),func():
+        overlays_off()
+        show_page("dev"))
+    ov.name = "Overlays off"
+    ov.disabled = on.is_empty()
+    STYLE.style_button(ov,ui_unit,not on.is_empty())
     if OS.has_feature("debug") and OS.has_feature("android"):
         _small("PARK DAMAGE FRAME TEST",func():
             var probe = load("res://tests/park_damage_capture.gd").new()
@@ -789,7 +880,14 @@ func _small(caption: String, action: Callable) -> Button:
     b.add_theme_font_size_override("font_size",int(17.0*ui_unit))
     STYLE.style_button(b,ui_unit)
     b.pressed.connect(action)
-    page.add_child(b)
+    if caption.begins_with("◀"):
+        # BACK sits in the footer under the scrolling page: always on screen, thumb size.
+        b.custom_minimum_size = Vector2(320.0,64.0)*ui_unit
+        b.add_theme_font_size_override("font_size",int(21.0*ui_unit))
+        footer.add_child(b)
+        footer.visible = true
+    else:
+        page.add_child(b)
     return b
 
 func _best(track_id: String) -> int:

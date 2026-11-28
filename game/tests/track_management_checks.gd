@@ -50,8 +50,8 @@ func _press(parent: Node, caption: String) -> void:
         button.pressed.emit()
     await get_tree().process_frame
 
-func _popup(parent: Node) -> ConfirmationDialog:
-    var popup := parent.get_node_or_null("Track file dialog") as ConfirmationDialog
+func _popup(parent: Node) -> NitroMobileModal:
+    var popup := parent.get_node_or_null("Track file dialog") as NitroMobileModal
     _check(popup != null,"Missing track file confirmation")
     return popup
 
@@ -59,7 +59,7 @@ func _confirm(parent: Node, title: Variant = null) -> void:
     var popup := _popup(parent)
     if popup != null:
         if title != null:
-            popup.get_node("Track name").text = title
+            (popup.find_child("Track name",true,false) as LineEdit).text = title
         popup.get_ok_button().pressed.emit()
     await get_tree().process_frame
 
@@ -143,9 +143,6 @@ func _exercise(boot: Node) -> void:
     if cancel != null:
         _check(cancel.dialog_text.contains(tag+" Renamed"),"Delete warning omits exact name")
         cancel.get_cancel_button().pressed.emit()
-        # Simulate the cancel signal emitted by the Window for embedded subwindows.
-        if is_instance_valid(cancel) and not cancel.is_queued_for_deletion():
-            cancel.canceled.emit()
     await get_tree().process_frame
     _check(FileAccess.file_exists(legacy),"Cancel removed the track")
     ProjectSettings.set_setting("nitro/selected_track",legacy)

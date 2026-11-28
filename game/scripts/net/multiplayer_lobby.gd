@@ -33,6 +33,7 @@ var last_scene: String = ""
 var _ping_clock: float = 0.0
 
 func _ready() -> void:
+    add_to_group("own_go_back") # Android BACK is handled in _notification below (android_back.gd leaves it alone).
     STYLE.ensure_settings()
     var s: Vector2 = get_viewport_rect().size
     var portrait: bool = s.y > s.x
