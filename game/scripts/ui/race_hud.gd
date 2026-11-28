@@ -309,9 +309,15 @@ func _minimap(rect: Rect2, u: float) -> void:
         _end_marker(rect,u,start_progress,STYLE.WHITE,false)
         _end_marker(rect,u,finish_progress,STYLE.GOLD,true)
     var dot: Vector2 = _map_point(point_at_progress(track_progress),rect)
-    draw_circle(dot,9.0*u,Color(STYLE.PINK.r,STYLE.PINK.g,STYLE.PINK.b,0.28))
-    draw_circle(dot,5.5*u,STYLE.PINK)
-    draw_arc(dot,5.5*u,0.0,TAU,20,STYLE.WHITE,1.4*u,true)
+    for primitive in map_marker_spec(u):
+        draw_circle(dot,float(primitive["radius"]),primitive["color"])
+
+## Issue #28 (owner v0.1.50): the player's dot on the minimap is a SOLID RED disc without a white stroke, the same red for every
+## HUD accent and for Club / Pro. A soft dark halo lifts it off the white route line and the dark map. Returned as circle
+## primitives (back to front) so the drawing and its test read the same numbers.
+const MAP_MARKER_RED: Color = Color(1.0,0.10,0.10)
+static func map_marker_spec(u: float) -> Array:
+    return [{"radius":10.0*u,"color":Color(0.0,0.0,0.0,0.45)},{"radius":7.0*u,"color":MAP_MARKER_RED}]
 
 func _map_point(p: Vector2, rect: Rect2) -> Vector2:
     return rect.get_center()+(p.rotated(-_map_rot)-_map_mid)*_map_scale
